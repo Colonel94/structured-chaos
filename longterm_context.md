@@ -29,10 +29,18 @@ keys (Anthropic/Cohere/Meta×/GitHub) into `.env`; record 3–5 noisy Gulf voice
 bilingual doc (Gate A5, `docs/recording-guide.md`); Meta Business verification (T2). Once Docker+keys
 land, Gate A goes green via the scripts and Phase 0 → Phase 0.5.
 
-**OPEN DECISION (flagged, not made):** repo topology — this folder sits inside the shared
-`…/Projects` git repo on branch `realestate-intelligence`; PREREQUISITES wants a dedicated private
-repo off `main`. `.gitignore` protects `.env` meanwhile. Recommendation in `PHASE0-READINESS.md`:
-`git init` a dedicated repo for `Structured Chaos/`. Owner picks; then wire remote + first commit.
+**Repo topology — RESOLVED (owner, 2026-08-10):** dedicated private repo, `git init`ed on `main`
+BEFORE any keys (so `.env` never touches a shared tree). First commit `555c0f9` (61 files). Parent
+`…/Projects` repo isolated via its local `.git/info/exclude` (non-invasive). **History checked clean:**
+real key prefix `sk-ant` never in history, no `.env` ever committed — **no rotation needed on git
+grounds** (only `.env.example` templates are tracked repo-wide). Remaining: owner creates the GitHub
+private remote and `git remote add` + push (part of the keys step).
+
+**Scaffold decision-audit — PASSED (owner-requested, 2026-08-10):** NO convergence τ / promotion N
+hardcoded anywhere; exactly TWO verticals (not six); taxonomy = the locked 8-archetype universal one.
+The only open-decision constants (SLA hours + auto-route τ) were in `assets/policy/default_policy.yaml`
+→ **neutralised to null placeholders** (status: PLACEHOLDER, version 0), tuned at Phase 6/8 on the
+scored set. Scaffold now stays decision-free.
 
 **What is DONE:**
 - Governing docs current & cross-consistent: `CLAUDE.md` (law, incl. §10 adversarial-review rubric +
