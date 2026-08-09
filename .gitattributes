@@ -1,0 +1,9 @@
+# Normalise line endings to LF in the repo. The deploy target is Linux containers;
+# CRLF leaking into scripts/entrypoints would break them. Windows checkouts stay usable.
+* text=auto eol=lf
+
+# Lockfiles + binaries are left to git's own handling.
+*.png binary
+*.jpg binary
+*.opus binary
+*.pdf binary

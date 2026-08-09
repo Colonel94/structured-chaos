@@ -1,0 +1,68 @@
+# Universal default priority/SLA/routing policy — STRUCTURE / INTERFACE ONLY (EDD §8 / §16.2).
+#
+# ⚠️ THE NUMBERS BELOW ARE ILLUSTRATIVE PLACEHOLDERS, NOT DECISIONS. Nothing consumes this
+#    file until the rules engine is built (Phase 6). Two classes of value here are still OPEN
+#    and MUST NOT be treated as committed defaults:
+#      • SLA hours + the category→priority levels  → set from the tenant's WRITTEN POLICY at
+#        Phase 6; a universal default ships then, tuned to real policy text, not guessed here.
+#      • auto-route / abstention confidence (τ)     → TUNED ON THE SCORED SET at Phase 6/8
+#        (BUILD-PLAN P6: "you cannot tune τ or N" before the scorer). Same class as the
+#        dedup τ=0.85/0.70 — never a hardcoded default. Left null on purpose below.
+#
+# What IS decided and safe to encode: the SHAPE (inputs → outputs), and the qualitative
+# ordering the design fixes — safety/health is deadline-bearing and escalates; an angry AND
+# incomplete case routes to a human; a record-vs-complaint contradiction goes to an agent,
+# never argued with the customer. The exact P-levels/hours are placeholders around that shape.
+#
+# Determinism law (CLAUDE.md §3): inputs = category + severity_signal + entities; outputs =
+# priority + sla_due + routing. Same inputs + same policy -> same result. Rules engine, never a model.
+version: 0            # 0 = placeholder; bumps to 1 when Phase 6 sets real values from policy text
+status: PLACEHOLDER   # not authoritative; see banner above
+
+# SLA clock STARTS AT first_contact_at, not at case completeness (trust gate).
+# Hours below are PLACEHOLDERS pending the tenant's written policy (Phase 6).
+priorities:
+  P1: { label: Critical, response_hours: null, resolve_hours: null }
+  P2: { label: High,     response_hours: null, resolve_hours: null }
+  P3: { label: Normal,   response_hours: null, resolve_hours: null }
+  P4: { label: Low,      response_hours: null, resolve_hours: null }
+
+# Qualitative ordering is design-decided; the exact level per archetype is a Phase-6 placeholder.
+category_priority:
+  safety_health:        P1   # deadline-bearing (EDD §16.2) — highest, decided
+  delivery_fulfilment:  P2   # (placeholder level)
+  billing_charge:       P2   # (placeholder level)
+  staff_conduct:        P2   # (placeholder level)
+  product_fault:        P3   # (placeholder level)
+  service_fault:        P3   # (placeholder level)
+  access_availability:  P3   # (placeholder level)
+  other:                P3   # (placeholder level)
+  UNCLEAR:              P3   # (placeholder level)
+
+# Severity signals bump priority regardless of category (design-decided directions).
+severity_escalation:
+  safety_health:    P1
+  vulnerable_party: P1
+  financial_harm:   P2
+
+# Deterministic routing. These route TARGETS are structural; the design-decided rules are the
+# emotion→human, safety→escalation, and contradiction→agent handoffs (concept §4 / EDD §16.1).
+routing:
+  default_queue: general_intake
+  rules:
+    - when: { emotion: angry, case_state: incomplete }   # decided: don't interrogate an angry incomplete case
+      route: human_triage
+    - when: { category: safety_health }                  # decided: deadline-bearing → escalate
+      route: escalation
+    - when: { contradiction_flag: true }                 # decided: record vs complaint → agent, never the customer
+      route: human_triage
+    - when: { category: billing_charge }                 # (placeholder target)
+      route: finance
+    - when: { category: staff_conduct }                  # (placeholder target)
+      route: management
+
+# Auto-route only high-confidence, unambiguous cases; ambiguous -> review (decided: never guess).
+# The THRESHOLD itself is τ — tuned on the scored set at Phase 6/8, NEVER a committed constant.
+auto_route:
+  min_confidence: null            # τ — DO NOT hardcode; tuned Phase 6/8 (BUILD-PLAN P6)
+  never_auto_route_if_ambiguous: true   # decided invariant

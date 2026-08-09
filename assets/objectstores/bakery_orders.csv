@@ -1,0 +1,13 @@
+order_id,customer_phone,customer_name,item,flavour,size,quantity,order_value_aed,payment_method,delivery_method,delivery_slot,promised_time,actual_delivery_time,driver,temp_on_arrival,status,ordered_at
+ORD-10231,+971501234567,Aisha Al Mansoori,Birthday cake,Red velvet,8-inch,1,220,card,delivery,17:00-18:00,17:00,18:42,Imran,ok,delivered,2026-08-08T10:12:00
+ORD-10232,+971552345678,Khalid Rahman,Cupcakes,Chocolate,box-of-12,1,90,cash,pickup,,,,,,collected,2026-08-08T11:30:00
+ORD-10233,+971568765432,Mariam Yousef,Wedding cake,Vanilla,3-tier,1,1450,card,delivery,14:00-15:00,14:00,14:20,Sami,ok,delivered,2026-08-07T09:00:00
+ORD-10234,+971503456789,Omar Farouk,Croissants,Plain,dozen,2,120,card,delivery,08:00-09:00,08:00,10:15,Imran,cold,delivered,2026-08-09T07:05:00
+ORD-10235,+971559876543,Layla Hassan,Cheesecake,Strawberry,10-inch,1,180,apple_pay,delivery,19:00-20:00,19:00,19:05,Sami,ok,delivered,2026-08-09T15:40:00
+ORD-10236,+971502223344,Fatima Noor,Macarons,Assorted,box-of-24,1,160,card,delivery,12:00-13:00,12:00,,Imran,,in_transit,2026-08-10T09:20:00
+ORD-10237,+971554445566,Yusuf Karimi,Brownies,Fudge,tray,1,75,cash,pickup,,,,,,collected,2026-08-06T13:00:00
+ORD-10238,+971506667788,Noura Saleh,Birthday cake,Lotus,10-inch,1,260,card,delivery,16:00-17:00,16:00,16:50,Rashed,melted,delivered,2026-08-05T11:00:00
+ORD-10239,+971558889900,Hamad Al Suwaidi,Donuts,Glazed,box-of-6,3,105,card,delivery,10:00-11:00,10:00,10:10,Sami,ok,delivered,2026-08-09T08:15:00
+ORD-10240,+971501112233,Sara Ibrahim,Custom cake,Pistachio,6-inch,1,190,card,delivery,18:00-19:00,18:00,,Imran,,cancelled,2026-08-08T14:30:00
+ORD-10241,+971553334455,Ali Reza,Baklava,Mixed,kg,2,140,cash,pickup,,,,,,collected,2026-08-07T16:20:00
+ORD-10242,+971505556677,Huda Mansour,Cookies,Oatmeal,box-of-18,1,85,apple_pay,delivery,13:00-14:00,13:00,13:35,Rashed,ok,delivered,2026-08-10T10:00:00

@@ -1,0 +1,36 @@
+# Universal starter taxonomy (EDD §16.2 / GOVERNED-CORE-SCHEMA.md §2).
+# Seeded and universal — identical for a bakery and a ministry. Day-one zero-shot target
+# so zero-config delivers value; every candidate has a nearest parent. Tenant sub-categories
+# are DISCOVERED automatically but NEVER auto-activate (a wrong category is a wrong deadline):
+# activation requires a human click + >=15 distinct cases + a mandatory SLA-policy mapping.
+version: 1
+archetypes:
+  - key: product_fault
+    label: Product fault
+    covers: [wrong item, missing item, defective, quality, freshness, spec mismatch]
+  - key: service_fault
+    label: Service fault
+    covers: [poor workmanship, incomplete work, repeat/recurring fault, service not delivered]
+  - key: delivery_fulfilment
+    label: Delivery / fulfilment
+    covers: [late, not delivered, wrong address, damaged in transit, no-show for a slot]
+  - key: billing_charge
+    label: Billing / charge
+    covers: [overcharge, wrong price, unexpected fee, refund not processed]
+  - key: access_availability
+    label: Access / availability
+    covers: [cannot book, unavailable, denied access, appointment problem]
+  - key: staff_conduct
+    label: Staff conduct
+    covers: [rudeness, unprofessional behaviour, dispute with staff]
+  - key: safety_health
+    label: Safety / health
+    covers: [allergen, injury risk, hygiene, gas/electrical hazard]
+    deadline_bearing: true
+  - key: other
+    label: Other
+    covers: [genuine catch-all]
+special:
+  - key: UNCLEAR
+    label: Unclear
+    note: Below the classification floor -> route, do not guess. Feeds the abstention SLA.

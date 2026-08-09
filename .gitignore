@@ -1,0 +1,38 @@
+# --- Secrets: NEVER commit. Trust gate: no keys, no customer data in the repo. ---
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# --- Python ---
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+dist/
+build/
+*.egg-info/
+
+# --- Node / UI ---
+node_modules/
+ui/dist/
+*.tsbuildinfo
+
+# --- Data & artifacts (originals live in object storage, never git) ---
+/data/
+/artifacts/
+*.sqlite
+*.duckdb
+
+# --- Local model caches (BGE-M3, PaddleOCR weights pulled at build) ---
+.cache/
+models/
+
+# --- OS / editor ---
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/

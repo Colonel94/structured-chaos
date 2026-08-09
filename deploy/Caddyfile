@@ -1,0 +1,7 @@
+# Reverse proxy for the external gate (Phase 9) / production. Local dev uses cloudflared
+# to tunnel the WhatsApp webhook straight to :8000; this Caddyfile is for a hosted target.
+# Automatic HTTPS. Replace the site address with the real domain when it exists.
+
+:80 {
+	reverse_proxy engine:8000
+}
