@@ -7,6 +7,17 @@ choice in verified 2026 research (URLs inline). Governed by `CLAUDE.md`; context
 *Version 1.1 — 2026-08-09. Status: design locked pending the open items in §14. v1.1 adds §16
 (review-pass addenda closing gaps G1–G11 found comparing v1.0 against the concept + winning condition).*
 
+> **⚠ OWNER OVERRIDE — 2026-08-10 (authoritative: `longterm_context.md` §0).** The PoC's LLM path is now
+> **LOCAL, on the owner's RTX 4070 — not cloud.** Wherever this document says *cloud-first PoC*, *Claude
+> Haiku* (extraction), *Cohere Transcribe* (ASR — incl. the forced-alignment provenance design in §4/§16.9),
+> or *Anthropic/Cohere API keys*, read instead: **faster-whisper** (ASR; word-level provenance via its own
+> timestamps + optional WhisperX alignment) · **a quantized instruct model via Ollama** (extraction) ·
+> **BGE-M3** (embeddings) — all local, no external call, no API keys, $0. The four-interface architecture
+> is unchanged; only which backend the PoC builds first flips to local. Logged consequence (§0): local
+> extraction quality < Haiku on the hard Gulf/code-switched slice, so the ≥95%/≥98% thresholds get harder
+> — measured at the Phase-0.5 spike. Substantive section rewrites below are deferred to the phase that
+> builds each component; **until then this banner overrides any cloud-first text that follows.**
+
 ---
 
 ## 0. Reading order & what this document is

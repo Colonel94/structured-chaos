@@ -1,10 +1,20 @@
 # Phased Build Plan — Adaptive Intake (PoC → winning condition)
 
-*The full build, Phase 0 → ship, for the cloud-first PoC. Each phase is an independently testable
-slice. Grounds in `TECH-SPEC.md` (stack), `SOLUTION-EDD.md` (design), `PRD.md` (requirements),
-`winning-condition.md` (the gate). Prerequisites: `PREREQUISITES.md`.*
+*The full build, Phase 0 → ship, for the PoC (LLM path: **local-on-the-4070** — see banner). Each phase
+is an independently testable slice. Grounds in `TECH-SPEC.md` (stack), `SOLUTION-EDD.md` (design),
+`PRD.md` (requirements), `winning-condition.md` (the gate). Prerequisites: `PREREQUISITES.md`.*
 
 *Version 1.0 — 2026-08-09.*
+
+> **⚠ OWNER OVERRIDE — 2026-08-10 (authoritative: `longterm_context.md` §0).** The PoC's LLM path is now
+> **LOCAL, on the owner's RTX 4070 — not cloud.** Wherever a phase below builds/uses *Claude Haiku*
+> (extraction), *Cohere Transcribe* (ASR), *Anthropic/Cohere API keys*, or a *per-case cloud-cost meter*,
+> read instead: **faster-whisper** (ASR) · **a quantized instruct model via Ollama** (extraction) ·
+> **BGE-M3** (embeddings) — all local, no external call, no API keys, $0 (so the cost-meter measures GPU
+> time/throughput, not API cents). Phase order and the four-interface architecture are unchanged; only the
+> first-built backend flips to local. Logged consequence (§0): local extraction quality < Haiku on the
+> hard Gulf/code-switched slice, so the ≥95%/≥98% thresholds get harder — the Phase-0.5 spike measures
+> this on real data first. **Until per-phase rewrites land, this banner overrides any cloud-first text.**
 
 ---
 

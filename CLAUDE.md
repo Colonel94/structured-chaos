@@ -49,11 +49,15 @@ against a local alternative first. "$0 budget" means: **no paid infra, no licenc
 no consultants.** See `longterm_context.md` §"$0 technical strategy" for the concrete stack. If a gap
 looks unclosable at $0, that is a signal to think harder, not to downgrade the promise.
 
-**Sequencing (v1.1, owner):** the PoC runs a **single cloud path** (Claude Haiku + Cohere API, cents
-scale) behind the backend interfaces; the **$0-local build on the 4070 is the clinic-#1 milestone**,
-not the PoC (see `TECH-SPEC.md` §0.1). This directive is not a mandate to build all-local now — it is
-the standard for *how* each gap gets closed *when* it is built. Cloud-at-cents for the PoC does not
-violate "$0"; building a paid local dependency, or punting a gap, would.
+**Sequencing (v1.2, owner override 2026-08-10 — supersedes v1.1):** the PoC runs the **LOCAL path on the
+RTX 4070** — faster-whisper (ASR) + a quantized instruct model via Ollama (extraction) + BGE-M3
+(embeddings) — behind the backend interfaces, **no external call, no API keys, literally $0.** *(This
+reverses the earlier v1.1 "single cloud path — Claude Haiku + Cohere API" sequencing; the cloud impls
+remain valid behind the same interfaces but are no longer what the PoC builds first.)* Logged
+consequence: local extraction quality < Claude Haiku on the hard Gulf/code-switched slice → the
+≥95%/≥98% thresholds get harder, measured at the Phase-0.5 spike. The four-interface architecture is
+unchanged; only the first-built backend flips to local. Building a paid dependency, or punting a gap,
+still violates the rule.
 
 ---
 
@@ -125,9 +129,10 @@ aspirations; they are the acceptance test. Build them in from the first commit, 
 - **Dual deployment, config-switchable.** The engine runs fully local/in-region on the 4070 with **no
   external call**, *and* in cloud/metered mode — chosen by config, never by code change. Every
   inference component (ASR, extraction LLM, embeddings, OCR) has a `local` and a `cloud` backend
-  behind one interface. Satisfies UAE PDPL residency and the $0 rule at once. **(v1.1 sequencing: the
-  PoC builds the CLOUD impls only; LOCAL impls are stubs, built at clinic customer #1 — TECH-SPEC §0.1.
-  The architecture is dual from day one; the local *build* is deferred.)**
+  behind one interface. Satisfies UAE PDPL residency and the $0 rule at once. **(v1.2 sequencing, owner
+  override 2026-08-10 — supersedes v1.1: the PoC builds the LOCAL impls (faster-whisper + Ollama + BGE-M3
+  on the 4070); the CLOUD impls remain behind the same interfaces but are no longer built first. The
+  architecture is dual from day one; the cloud path is now the deferred one.)**
 - **Both intake channels from the start.** WhatsApp-native + file/email drop. Ingest is
   channel-agnostic; a channel is an adapter producing the same normalised input.
 - **Stack: Python headless engine + React/Vite review UI; Postgres + pgvector + RLS.** All $0 / OSS.

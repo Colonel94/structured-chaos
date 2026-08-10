@@ -7,6 +7,15 @@
 *Version 1.1 — 2026-08-09. PoC / Phase 1 scope. v1.1 adds FR-13/14/15 and open decisions 6–8 from the
 review pass comparing v1.0 to the concept + winning condition.*
 
+> **⚠ OWNER OVERRIDE — 2026-08-10 (authoritative: `longterm_context.md` §0).** The PoC's LLM path is now
+> **LOCAL, on the owner's RTX 4070 — not cloud.** Wherever this document says *cloud-first PoC*, *Claude
+> Haiku* (extraction), *Cohere Transcribe* (ASR), or *Anthropic/Cohere API keys*, read instead:
+> **faster-whisper** (ASR) · **a quantized instruct model via Ollama** (extraction) · **BGE-M3**
+> (embeddings) — all local, no external call, no API keys, literally $0. Requirements are unchanged; only
+> the backend that satisfies them flips to local. Logged consequence (§0): local extraction quality <
+> Haiku on the hard Gulf/code-switched slice, so the ≥95%/≥98% thresholds get harder — measured at the
+> Phase-0.5 spike. **Until per-section rewrites land, this banner overrides any cloud-first text below.**
+
 ---
 
 ## 1. Product in one sentence

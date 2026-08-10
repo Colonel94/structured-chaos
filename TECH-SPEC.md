@@ -6,6 +6,16 @@ that covers it, with the local ($0/in-region) and cloud backends called out. Imp
 
 *Version 1.0 — 2026-08-09. Pin exact versions to latest-stable at build time; minimums shown as "X+".*
 
+> **⚠ OWNER OVERRIDE — 2026-08-10 (authoritative: `longterm_context.md` §0).** The PoC's LLM path is now
+> **LOCAL, on the owner's RTX 4070 — not cloud.** Wherever this document says *cloud-first PoC*, *Claude
+> Haiku* (extraction), *Cohere Transcribe* (ASR), or *Anthropic/Cohere API keys*, read instead:
+> **faster-whisper** (ASR) · **a quantized instruct model via Ollama** (extraction) · **BGE-M3**
+> (embeddings) — all local, no external call, no API keys, literally $0. The four-interface architecture
+> is unchanged; only which backend the PoC builds first flips to local. Logged consequence (§0): local
+> extraction quality < Haiku on the hard Gulf/code-switched slice, so the ≥95%/≥98% thresholds get harder
+> — measured at the Phase-0.5 spike. Substantive section rewrites below are deferred to the phase that
+> builds each component; **until then this banner overrides any cloud-first text that follows.**
+
 ---
 
 ## 0. Principles this stack obeys

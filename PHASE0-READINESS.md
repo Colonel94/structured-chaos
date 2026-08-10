@@ -6,15 +6,20 @@ voice). When Gate A is all green, run `BUILD-PLAN.md` Phase 0. Last updated: 202
 
 ---
 
-## TL;DR — what's left for you (≈30–45 min of mechanical work)
-1. **Install Docker Desktop** (the only missing local tool besides cloudflared/gh).
-2. **Get 5 API keys/accounts** (Anthropic, Cohere, Meta WhatsApp ×3 values, GitHub repo) → paste into `.env`.
-3. **Record 5 things**: 3–5 Gulf voice notes in a noisy room + 1 photo of a stamped bilingual doc
-   (see `docs/recording-guide.md`). This is the highest-leverage hour in the project.
-4. Run the verify commands in §"Gate A commands" below. All green → start Phase 0.
+## TL;DR — what's left for you (mostly done; ~1 hour of your own recording + one reboot)
+1. ✅ **GitHub repo** created + pushed (`Colonel94/structured-chaos`). ✅ **Docker Desktop** installed (v4.85.0).
+2. **One reboot:** enable WSL2 — `wsl --install --no-distribution` in an **admin** PowerShell, then reboot
+   (Docker's engine backend; the assistant runs non-elevated, so this step is yours).
+3. **~~5 API keys~~ → none for the LLM.** Owner override 2026-08-10: the PoC runs the LLM **local on the
+   4070** — no Anthropic/Cohere keys. Only WhatsApp (Meta) is still a key, and only *if/when* the WhatsApp
+   channel is built (file/email drop is the $0 day-one channel).
+4. **Record 5 things**: 3–5 Gulf voice notes in a noisy room + 1 photo of a stamped bilingual doc
+   (see `docs/recording-guide.md`). Highest-leverage hour in the project.
+5. After the reboot the assistant brings up the containers, pulls the local models, and runs the verify
+   commands. All green → Phase 0 → Phase 0.5.
 
 Everything else — scaffold, config, containers definition, CI, smoke/verify scripts, sample data,
-policy, taxonomy — is **built and, where runnable without keys/Docker, verified live** (see §"Verified").
+policy, taxonomy — is **built and, where runnable without Docker, verified live** (see §"Verified").
 
 ---
 
@@ -27,35 +32,32 @@ policy, taxonomy — is **built and, where runnable without keys/Docker, verifie
 | UI: `pnpm install` · `vitest` · `vite build` (pnpm 9) | ✅ **1 test passed**, build 26 modules |
 | Toolchain present | ✅ Python 3.12.10, uv 0.11.6, Node 24, pnpm 9 (pinned), ffmpeg 8.1 |
 
-**Cannot be verified here without your action:** Anthropic/Cohere 200 (need keys), `docker compose up`
-+ Postgres/MinIO (Docker not installed), BGE-M3/PaddleOCR (run in container), WhatsApp webhook (Meta
-account + tunnel), spike recordings (your voice/environment).
+**Cannot be verified here without your action:** `docker compose up` + Postgres/MinIO (**needs the WSL2
+reboot** — Docker itself is now installed), local models on the 4070 (faster-whisper / Ollama / BGE-M3 /
+PaddleOCR — pulled + run after WSL2 is up), WhatsApp webhook (only if that channel is built), spike
+recordings (your voice/environment). **No Anthropic/Cohere step — the LLM path is local now.**
 
 ---
 
 ## Gate A — blocking to START Phase 0
 
-### A1 · Keys 1–5 in `.env`; gitignored; Anthropic + Cohere smoke = 200
-- [ ] **Anthropic key** → https://console.anthropic.com/settings/keys — paste `ANTHROPIC_API_KEY`.
-- [ ] **Cohere key** → https://dashboard.cohere.com/api-keys — paste `COHERE_API_KEY`.
-- [ ] **GitHub private repo** → create, then see §"Repo topology" below (there's a decision to make).
+### A1 · Source control + config (no LLM API keys — local flip)
+- [x] **GitHub private repo** created + scaffold pushed — `Colonel94/structured-chaos`, `origin` wired.
 - [x] `.env.example` template written; `.gitignore` protects `.env` (done).
-- **Do:** `cp .env.example .env`, fill keys, then:
-  ```
-  uv run --project engine python scripts/smoke_anthropic.py   # expect PASS
-  uv run --project engine python scripts/smoke_cohere.py      # expect PASS
-  ```
+- [ ] ~~Anthropic / Cohere keys + smoke calls~~ — **removed** (owner override 2026-08-10). The PoC LLM
+      path is local on the 4070; see **A4** for the local-model load check that replaces the smoke calls.
 
 ### A2 · `docker compose up` → Postgres+pgvector + MinIO; SELECT 1 + bucket write
-- [ ] **Install Docker Desktop** → https://www.docker.com/products/docker-desktop/ (WSL2 backend).
+- [x] **Docker Desktop installed** (v4.85.0, CLI `docker 29.6.2`).
+- [ ] **Enable WSL2 (admin + reboot):** `wsl --install --no-distribution`, reboot, launch Docker Desktop.
 - [x] `deploy/docker-compose.yml` (pgvector/pgvector:pg16 + minio) + `deploy/Dockerfile` written.
-- **Do:**
+- **Do (assistant runs this after your reboot):**
   ```
   docker compose -f deploy/docker-compose.yml up -d db minio
   uv run --project engine python scripts/verify_infra.py      # expect PASS(pg) + PASS(minio)
   ```
 
-### A3 · WhatsApp test number → tunnelled webhook receives a message
+### A3 · WhatsApp test number → tunnelled webhook  *(now OPTIONAL / parallel-track — file/email drop is the $0 day-one channel; do this only if building WhatsApp for the PoC)*
 - [ ] **Meta developer account + WhatsApp Business app** → https://developers.facebook.com/apps
       (add WhatsApp product; note the **test number**, add ≤5 verified recipients).
 - [ ] Generate a **permanent System-User token** (System Users → Generate token), not the 24h temp
@@ -66,8 +68,10 @@ account + tunnel), spike recordings (your voice/environment).
 - *Note:* the webhook route itself is Phase 3 — this box only proves the tunnel + number receive.
       **Production** WhatsApp needs Meta **Business verification** (track T2) — start it now, it's slow.
 
-### A4 · BGE-M3 embeds a test string; PaddleOCR reads a test image (in the container)
+### A4 · Local models load on the 4070 (replaces the old Anthropic/Cohere smoke)
 - [x] `scripts/test_embed.py` + `scripts/test_ocr.py` written (container-only, §3 caution honoured).
+- [ ] **faster-whisper** transcribes a test clip · **Ollama** returns a completion (extraction model) —
+      pulled/run after the WSL2 reboot; **needs CUDA 12 + cuDNN 9** on the 4070.
 - **Do (after A2, in-container so Windows stays clean):**
   ```
   docker compose -f deploy/docker-compose.yml build engine
@@ -94,25 +98,17 @@ account + tunnel), spike recordings (your voice/environment).
 
 ---
 
-## Repo topology — the one decision I did NOT make for you
-This folder currently lives inside a **single shared git repo rooted at `…/Projects`**, on branch
-`realestate-intelligence`, alongside NextLife, Project X, etc. `PREREQUISITES.md` wants a **dedicated
-private repo, branched off `main`, that never commits `.env`**. The `.gitignore` here already protects
-`.env` even inside the shared repo, so nothing leaks meanwhile — but this project should get its own
-repo before Phase 0 commits start. Options, my recommendation first:
-
-1. **(Recommended) Dedicated repo for `Structured Chaos/`.** `cd "Structured Chaos" && git init`, add a
-   GitHub private remote, first commit = this scaffold. Clean history, clean CI, true project isolation
-   (CLAUDE.md §5). The parent repo should then ignore this subtree.
-2. Keep it in the shared repo on a dedicated branch — simplest, but bleeds unrelated history/CI and
-   muddies the "private repo" trust boundary. Not advised for a seven-figure-standard build.
-
-Tell me which and I'll wire it (init, remote, `.gitignore` in the parent, first commit).
+## Repo topology — RESOLVED (2026-08-10)
+Dedicated private repo, `git init`ed on `main` **before any keys touched the tree**, first commit =
+scaffold. Now pushed to the GitHub private remote **`Colonel94/structured-chaos`** (`origin`, `main`
+tracking). History verified clean (no `.env` ever committed; only `.env.example` templates tracked). The
+parent `…/Projects` tree is isolated via its local `.git/info/exclude`. Nothing left to decide here.
 
 ---
 
 ## What Phase 0 then is (mostly pre-satisfied here)
 Phase 0's exit gate is *"`docker compose up` healthy; CI green on an empty test; config loads a fake
-backend."* The scaffold above already delivers the CI + fake-backend halves (verified). Phase 0 proper
-becomes: flip Docker on, drop in keys, confirm `docker compose up` healthy end-to-end, push so GitHub
-Actions runs green — then straight into **Phase 0.5 de-risk spike** with your recordings.
+backend."* The scaffold above already delivers the CI + fake-backend halves (verified) and the repo is
+pushed. Phase 0 proper becomes: **WSL2 reboot → `docker compose up` healthy end-to-end → pull the local
+models to the 4070** (GitHub Actions already runs on push) — then straight into **Phase 0.5 de-risk
+spike** with your recordings.

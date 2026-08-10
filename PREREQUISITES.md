@@ -1,8 +1,10 @@
-# Prerequisite Setup — Adaptive Intake (PoC, cloud-first)
+# Prerequisite Setup — Adaptive Intake (PoC, LOCAL-first on the 4070)
 
-*Setup for the **cloud-first PoC** (TECH-SPEC §0.1): a single cloud path behind the four backend
-interfaces. The local/on-prem stack is **deferred to clinic customer #1** — its prerequisites are in §8,
-flagged so nobody wastes a day installing CUDA/Ollama now.*
+*Setup for the **local-first PoC** (owner override 2026-08-10, `longterm_context.md` §0): the LLM path
+runs **on the owner's RTX 4070** behind the four backend interfaces — faster-whisper (ASR) + a quantized
+instruct model via Ollama (extraction) + BGE-M3 (embeddings), **no external call, no API keys, $0.** The
+cloud impls stay valid behind the same interfaces but are no longer what the PoC builds first. The heavy
+on-prem/residency extras (WORM, UAE VPS, PHI gate) remain **deferred to clinic customer #1** (§8).*
 
 *Version 1.2 — 2026-08-09 (owner adversarial review). **Readiness is TWO gates (§9), not one:** a small
 start-blocking set gets Phase 0 moving; the heavier items (object stores, papers, data, verifications)
@@ -15,17 +17,15 @@ them; verify licences per pinned version (§3).*
 ## 1. Accounts & API keys (put every key in a gitignored `.env`)
 | # | Account / key | For | Cost | Notes |
 |---|---|---|---|---|
-| 1 | **Anthropic API key** | Claude Haiku 4.5 — PoC extraction backend | cents — see note | `claude-haiku-4-5`; enable prompt caching |
-| 2 | **Cohere API key** | Transcribe Arabic — PoC ASR backend | cents at eval scale | best clean-licence Gulf-Arabic ASR |
-| 3 | **Meta developer account + WhatsApp Business app** | WhatsApp channel (dev) | free **test number** | ≤5 verified test recipients; **permanent System-User token**. **Production needs Meta Business verification — a long-lead track (T2), START NOW (BUILD-PLAN)** |
-| 4 | **A public webhook URL for dev** | WhatsApp inbound webhook | free | **cloudflared** tunnel (or ngrok free) → local FastAPI |
-| 5 | **GitHub private repo** | source, CI | free | branch off `main`; never commit `.env` |
-| 6 | *(optional)* **Groq** / **Deepgram** | ASR eval baseline only | free tier / $200 credit | comparator, not the product path |
+| 1 | **GitHub private repo** | source, CI | free | ✅ **DONE** — `Colonel94/structured-chaos` (private), `origin` wired, scaffold pushed |
+| 2 | *(only if building the WhatsApp channel)* **Meta developer account + WhatsApp Business app** | WhatsApp channel (dev) | free **test number** | ≤5 verified recipients; **permanent System-User token**. Production needs Meta **Business verification** — long-lead track (T2). **Not day-one: file/email drop is the $0 self-serve channel; WhatsApp is parallel-track.** |
+| 3 | *(with #2)* **A public webhook URL for dev** | WhatsApp inbound webhook | free | **cloudflared** tunnel (or ngrok free) → local FastAPI |
+| 4 | *(optional, eval only)* **Groq** / **Deepgram** | ASR baseline comparator | free tier / $200 credit | measures faster-whisper against a hosted baseline; **never the product path** |
 
-> **Cost is measured, not estimated.** The old "~$1.30 / 200 cases" is a floor that ignores vision
-> extraction, Phase-6 self-consistency, and **backfill re-extraction (replays the pipeline over history
-> on every promotion)** — real cost is materially higher. **Instrument cost-per-case from Phase 2** and
-> let the measured number, not this estimate, decide whether per-case pricing survives.
+> **~~Anthropic + Cohere API keys are GONE~~** (owner override 2026-08-10). Extraction runs on a local
+> Ollama model, ASR on local faster-whisper — **no metered LLM spend in the PoC**, so the old "~$1.30 /
+> 200 cases" cost line is moot. The cost-per-case meter now tracks **GPU time/throughput on the 4070**;
+> if a cloud backend is ever switched on later, **instrument cost from that point** rather than estimating.
 
 **Do NOT create now (deferred to clinic #1, §8):** any UAE VPS, on-prem S3, or GPU cloud.
 
@@ -45,6 +45,13 @@ them; verify licences per pinned version (§3).*
 ---
 
 ## 3. Model & library assets to pull once
+- **The local LLM path (NOW primary — owner override 2026-08-10; was §8-deferred):**
+  - **faster-whisper large-v3** (int8/fp16 on the 4070) — Gulf-Arabic ASR; segment timestamps are native,
+    word-level provenance via optional **WhisperX / wav2vec2 forced-alignment**. **Needs CUDA 12 + cuDNN 9.**
+  - **Ollama** + a **quantized instruct model** (e.g. Qwen3-14B-Instruct GGUF, Q4 ≈ 9 GB — fits the 12 GB
+    4070) — the extraction / semantic-discovery LLM. Reserve model calls for *semantic* work only.
+  - These replace the Anthropic/Cohere cloud backends for the PoC; the cloud impls stay behind the
+    interfaces for later (dual architecture unchanged).
 - **BGE-M3** embeddings (via **FlagEmbedding** or sentence-transformers) — ~1.1 GB, **CPU-capable**;
   runs on the owner's box (faster on the 4070 if present, not required).
 - **PaddleOCR (PP-OCRv6)** weights — Arabic OCR for images/scanned PDFs.
@@ -66,7 +73,8 @@ them; verify licences per pinned version (§3).*
 - Monorepo layout per TECH-SPEC §4 (`engine/`, `ui/`, `deploy/`, `tests/`).
 - `deploy/docker-compose.yml` (Postgres + pgvector + MinIO + app) and `Caddyfile`.
 - `.env.example` (keys from §1) + `pydantic-settings` config carrying the **backend switch**
-  (`local` | `cloud`) per interface — PoC runs all-cloud; local impls are stubs.
+  (`local` | `cloud`) per interface — **PoC runs all-LOCAL on the 4070**; the cloud impls stay behind the
+  interfaces (owner override 2026-08-10).
 - CI (GitHub Actions): ruff/black/mypy + pytest (Postgres via testcontainers) + Vitest/Playwright.
 
 ---
@@ -117,19 +125,26 @@ Summarised in EDD §6.
 ---
 
 ## 8. DEFERRED prerequisites — do NOT set up now (trigger: clinic customer #1)
-CUDA 12 + cuDNN 9 · **Ollama** + Qwen3-14B GGUF · self-hosted Cohere weights + wav2vec2 forced-align ·
-MinIO object-lock/WORM on-prem · UAE VPS + Postfix (residency-safe email) · the strict PHI-at-promotion
-gate · the separate local-stack eval bar. These are the local-deployment milestone (EDD §16.9), not the PoC.
+*(CUDA 12 + cuDNN 9 · Ollama + Qwen GGUF · faster-whisper are **no longer here** — the local flip promoted
+them to §3 as the PoC's primary path.)* Still deferred: self-hosted Cohere weights (only if the cloud ASR
+backend is ever wanted) · MinIO object-lock/WORM on-prem · UAE VPS + Postfix (residency-safe email) · the
+strict PHI-at-promotion gate · the separate local-stack eval bar (a local 14B ≠ Claude → its own threshold
+set). These are the on-prem/residency milestone (EDD §16.9), not the PoC.
 
 ---
 
 ## 9. Definition of ready — TWO gates (don't let a paper block a health endpoint)
 
 **Gate A — blocking to START Phase 0 (must be true before the first commit):**
-- [ ] Keys 1–5 in `.env`; `.env` is gitignored; a smoke call to Anthropic and Cohere returns 200.
-- [ ] `docker compose up` brings up Postgres+pgvector + MinIO; `SELECT 1` and a bucket write succeed.
-- [ ] WhatsApp test number receives a message to the tunnelled webhook.
-- [ ] BGE-M3 embeds a test string; PaddleOCR reads a test image (**both in the container**, §3 caution).
+- [x] GitHub private repo created + scaffold pushed (`Colonel94/structured-chaos`).
+- [x] Docker Desktop installed (v4.85.0). **Pending:** WSL2 backend — `wsl --install --no-distribution`
+      (admin) + reboot; then `docker compose up` brings up Postgres+pgvector + MinIO (`SELECT 1` + bucket
+      write succeed).
+- [ ] **Local models load on the 4070:** faster-whisper transcribes a test clip · Ollama returns a
+      completion · BGE-M3 embeds a test string · PaddleOCR reads a test image (**in the container**, §3).
+      *(Replaces the old "Anthropic/Cohere smoke = 200" — no API keys in the local PoC.)*
+- [ ] *(only if building WhatsApp now)* test number receives a message to the tunnelled webhook —
+      otherwise file/email drop is the day-one channel and this moves to a parallel track.
 - [ ] De-risk spike inputs recorded (3–5 Gulf voice notes + 1 stamped bilingual doc, §6) — for Phase 0.5.
 
 **Gate B — needed before Phase 4/5 (NOT before Phase 0; runs on calendar tracks meanwhile):**

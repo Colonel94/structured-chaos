@@ -284,7 +284,8 @@ PRD §10 — do not take the original numbers at face value):**
 
 Allowed-to-be-missing / never-ship-without: see `CLAUDE.md` §9 and winning-condition §6.
 
-**Build execution (PoC), full plan in `BUILD-PLAN.md` — cloud-first, adversarially sequenced (v1.2):**
+**Build execution (PoC), full plan in `BUILD-PLAN.md` — LOCAL-first (LLM on the 4070; owner override
+2026-08-10, §0), adversarially sequenced (v1.2):**
 **Parallel calendar tracks from day zero** (T1 design-partner outreach · T2 Meta Business verification ·
 T3 ground-truth collection with signed consent + eval-set ownership) — these are lead time, not build
 time. Phases: 0 scaffold · **0.5 de-risk spike** (real noisy Gulf voice→transcript, stamped bilingual
@@ -322,12 +323,13 @@ citations verified real; τ=0.85/0.70 are unvalidated defaults — tune on the s
 
 ## 9. The $0 technical strategy (how the hard gaps get closed for free)
 
-> **Sequencing note (v1.1 — read first):** this section is the **local-stack** strategy, which is
-> **deferred to clinic customer #1** (§10.2 refinement / EDD §16.9 / BUILD-PLAN). The **PoC builds the
-> CLOUD impl of each interface only** (Cohere API + Claude Haiku + BGE-M3 self-hosted, cents scale);
-> local impls are stubs. Everything below describes *how each gap gets closed at $0 when the local
-> stack is built* — not what the PoC installs now. It stays here because the interfaces exist from day
-> one and the local build is a real milestone, not a maybe.
+> **Sequencing note (v1.2, owner override 2026-08-10 — supersedes the v1.1 note; read first):** this
+> **local-stack strategy is now the PoC's PRIMARY path**, not a clinic-#1 deferral. The **PoC builds the
+> LOCAL impl of each inference interface** — faster-whisper (ASR) + a quantized Ollama instruct model
+> (extraction) + BGE-M3 (embeddings), on the 4070, no external call, no API keys, $0. The CLOUD impls
+> (Cohere / Claude Haiku) remain behind the same interfaces but are the deferred path now. What stays
+> clinic-#1 is the on-prem/residency tax only (WORM, UAE VPS, PHI gate, separate local-eval bar).
+> Everything below describes how each gap is closed at $0 — which is exactly what the PoC now installs.
 
 Standing rule: **hit a hard gap → engineer a working free solution, never punt to a paid vendor.**
 Hardware available: user's RTX 4070 (12 GB VRAM) — enough to run the local models below. The only
@@ -404,8 +406,10 @@ the debate. Change one only if new, disqualifying data emerges — and record wh
    any service/delivery biz down to a cake shop — the opposite end from a health tenant — so the local
    architecture tax is deferred to the segment that needs it. Deferred with local: strict PHI-at-
    promotion gate, a **separate per-deployment eval bar** (local 14B ≠ Claude), and the on-prem test
-   target. PoC cloud path = Cohere API + Claude Haiku + BGE-M3 self-hosted, cents scale, segment-level
-   provenance. `TECH-SPEC.md` §0.1/§3/§16.9.
+   target. ~~PoC cloud path = Cohere API + Claude Haiku + BGE-M3, cents scale~~ **→ OWNER OVERRIDE
+   2026-08-10 (§0): the PoC path is LOCAL — faster-whisper + Ollama instruct + BGE-M3 on the 4070, $0,
+   no API keys; the cloud impls stay behind the interfaces as the deferred path.** `TECH-SPEC.md`
+   §0.1/§3/§16.9.
 3. **Intake channels — DECIDED: both WhatsApp-native AND file/email drop, from the start.** The
    ingest layer is channel-agnostic; a channel is an adapter that produces the same normalised input.
    WhatsApp via free tier/sandbox; file/email drop for instant self-serve. Extraction never depends on
@@ -426,9 +430,10 @@ the debate. Change one only if new, disqualifying data emerges — and record wh
    parent with the candidate recorded. Actionable floor is derived (three unknowns day one → grows per
    category). Universal default SLA policy ships; written policy is optional override, not a gate.
    Design: `SOLUTION-EDD.md` §16.2 / PRD FR-14.
-8. **ASR = start Cohere Transcribe Arabic (Apache-2.0).** Audar is more accurate but non-Apache weights.
-   Cohere has **no native timestamps** → word-level provenance via **mandatory forced-alignment**
-   (wav2vec2/faster-whisper), segment-level as accepted fallback. EDD §4.
+8. **ASR — OWNER OVERRIDE 2026-08-10 (§0): local faster-whisper large-v3 on the 4070** (word-level
+   provenance native / via WhisperX-wav2vec2 alignment; $0, no API). ~~Was: start Cohere Transcribe Arabic
+   (Apache-2.0); no native timestamps → mandatory forced-alignment.~~ Cohere stays available as the
+   deferred cloud backend behind the ASR interface. EDD §4.
 9. **Metric hard-rule:** the ASR-WER and "200@0.95" figures are feasibility evidence only — **never in
    buyer material or as a winning-condition target.** Arabic metric re-anchored to **field-level
    extraction accuracy** (winning-condition §4 row updated).
