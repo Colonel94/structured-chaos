@@ -24,10 +24,27 @@ default policy YAML, starter taxonomy YAML) all written. **Verified live:** engi
 `pytest` (4 passed) + `ruff`/`black`/`mypy --strict` (19 files clean); UI `pnpm(9) install`/`vitest`
 (1 passed)/`vite build`. See `PHASE0-READINESS.md` for the live Gate-A checklist.
 
-**Blocked on OWNER-ONLY external items (can't be done from here):** install Docker Desktop; get 5
-keys (Anthropic/Cohere/Meta×/GitHub) into `.env`; record 3–5 noisy Gulf voice notes + 1 stamped
-bilingual doc (Gate A5, `docs/recording-guide.md`); Meta Business verification (T2). Once Docker+keys
-land, Gate A goes green via the scripts and Phase 0 → Phase 0.5.
+**UPDATE (2026-08-10, owner override):** **Docker Desktop INSTALLED by assistant** (v4.85.0, CLI
+`docker 29.6.2`). **LLM path flipped CLOUD → LOCAL-ON-4070 for the PoC** (owner: "use the LLM on my
+device, $0"). This reverses the cloud-first sequencing in decisions #2/#8 below: PoC now builds the
+LOCAL backends first — faster-whisper (ASR) + quantized instruct model via Ollama (extraction) +
+BGE-M3 (embeddings), all on the RTX 4070, no external call. **Consequence (logged, not hidden):**
+local extraction quality < Claude Haiku on the hard Gulf-code-switched slice → the ≥95%/≥98%
+thresholds get harder; Phase-0.5 spike measures this on real data before building upstream. **Upside:**
+Anthropic + Cohere keys drop off the critical path entirely — the spike no longer waits on any API key.
+
+**GitHub — DONE (2026-08-10):** private repo **`github.com/Colonel94/structured-chaos`** created +
+scaffold pushed (`main` @ `130a4ec`), `origin` remote wired, `main` tracks `origin/main`. Auth via PAT
+(`gh auth login --with-token`); account **Colonel94**. **SECURITY NOTE:** two PATs were pasted into the
+session transcript during setup (both now compromised — owner to revoke at github.com/settings/tokens
+and, if desired, mint a fresh one; current gh auth uses the second, `ghp_fTfJ…`, scopes repo/read:org/workflow).
+
+**Remaining OWNER-KEYBOARD item (only this one left; one-time, needs admin which the non-elevated
+assistant process lacks):** **WSL2** — run `wsl --install --no-distribution` in an *admin* PowerShell
++ reboot (Docker's engine backend). Once it lands, the assistant brings up docker-compose
+(pgvector+MinIO), then pulls the local models to the 4070. **No longer blocking (dropped by the local flip):** Anthropic/Cohere keys. **Still
+parallel calendar tracks, not blockers:** Gate-A5 recordings, Meta Business verification (only if/when
+WhatsApp channel is built — file/email drop is the $0 self-serve channel for the PoC).
 
 **Repo topology — RESOLVED (owner, 2026-08-10):** dedicated private repo, `git init`ed on `main`
 BEFORE any keys (so `.env` never touches a shared tree). First commit `555c0f9` (61 files). Parent
@@ -54,12 +71,13 @@ scored set. Scaffold now stays decision-free.
   reference sets only, never seeded into a live schema** (else the convergence moat is faked — §10.1 /
   CLAUDE.md §10-Q3). Was next-action #3; now done.
 
-**Locked, do-not-relitigate (one-liners; detail in §10):** domain-agnostic single engine · **cloud-first
-PoC**, local stack deferred to clinic #1 · **build/eval TWO verticals** (bakery + home maintenance);
-six is the market map, not the build list · universal manager register report · **two moats** =
-self-converging schema + voice-first Gulf-Arabic · **regulator-shaped output is PARKED — do NOT raise
-it until the owner does** (`_parked/`) · ASR = Cohere API (cloud); extraction = Claude Haiku · trust
-spine (RLS/provenance/idempotency) built FIRST · regression after every phase.
+**Locked, do-not-relitigate (one-liners; detail in §10):** domain-agnostic single engine · ~~cloud-first
+PoC~~ → **LOCAL-first PoC on the 4070 (owner override 2026-08-10, see §0 UPDATE)** · **build/eval TWO
+verticals** (bakery + home maintenance); six is the market map, not the build list · universal manager
+register report · **two moats** = self-converging schema + voice-first Gulf-Arabic · **regulator-shaped
+output is PARKED — do NOT raise it until the owner does** (`_parked/`) · ASR = ~~Cohere API (cloud)~~
+**local faster-whisper**; extraction = ~~Claude Haiku~~ **local quantized instruct model (Ollama)** ·
+trust spine (RLS/provenance/idempotency) built FIRST · regression after every phase.
 
 **Next actions (owner picks — don't assume):**
 1. Start the **three parallel calendar tracks** now (T1 design-partner outreach · T2 Meta Business
