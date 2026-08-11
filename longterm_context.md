@@ -16,6 +16,17 @@ be corrected (except the two research-backed spec deltas in §6, which supersede
 
 ## 0. Current state & next actions  ← read this first every session; keep it current
 
+**UPDATE (2026-08-12) — ENGLISH-FIRST focus (owner directive).** For now, build/verify the **English
+path only**; do **not** sink time into Arabic quality. This is a *sequencing* call, not a moat reversal:
+the Gulf-Arabic voice moat (§3) stays locked and the **capability is retained in code** (faster-whisper
+is multilingual; OCR is `OCR_LANG`-switchable, default `en`) — it's simply deprioritised until the owner
+re-raises it. Concrete effects: **Gate-A5 Gulf recordings are deprioritised** (Phase-0.5 spikes #1/#2 can
+run on English inputs meanwhile); **OCR default flipped to English** (`lang="en"` PP-OCRv5 — newer/better model;
+`OCR_LANG=ar` still selects the Arabic path). *(Verified 2026-08-12: the paddle-3.x oneDNN workaround
+is NOT Arabic-specific — English PP-OCRv5 hits the same bug, so `FLAGS_use_mkldnn=0` stays for both.)*
+If this is meant as a permanent moat change (not just
+"for now"), the owner will say so; until then it is treated as reversible focus.
+
 **Where we are (2026-08-10):** Design complete (v1.2) **and the Phase-0 scaffold is built + locally
 verified.** `GOVERNED-CORE-SCHEMA.md` done. Repo skeleton, config (local|cloud|fake backend switch),
 4 backend interfaces (cloud=Phase-2 lazy, local=loud stub, fake=live), `/health`, docker-compose
@@ -33,18 +44,46 @@ local extraction quality < Claude Haiku on the hard Gulf-code-switched slice →
 thresholds get harder; Phase-0.5 spike measures this on real data before building upstream. **Upside:**
 Anthropic + Cohere keys drop off the critical path entirely — the spike no longer waits on any API key.
 
+**UPDATE (2026-08-11) — GATE A IS GREEN; local models pulled + verified live on the 4070.** WSL2 is
+up (Docker engine healthy, Linux containers). Done + verified this session:
+- **A2 infra:** `docker compose up` → `pgvector/pgvector:pg16` + `minio` healthy; `verify_infra.py` →
+  **PASS(pg)** (SELECT 1 + `CREATE EXTENSION vector`) + **PASS(minio)** (bucket write/read/delete).
+- **A4 local models — all four load + run:** **Ollama `qwen3:14b`** returns a completion on the GPU
+  (note: qwen3 is a *reasoning* model — emits `<think>…`; extraction must pass `think:false`/`/no_think`).
+  **BGE-M3** embeds (dim=1024). **faster-whisper large-v3** transcribes **on the GPU (`device=cuda`)**.
+  **PaddleOCR** reads Arabic+English.
+- **Phase 0.5 — Spike #3 (Arabic-RTL PDF via WeasyPrint): PASS, visually verified** (correct shaping/
+  joining, RTL column order, bidi with embedded Latin/numbers). One of the three killers is dead, and
+  it needed no owner input. **Spikes #1 (Gulf voice→transcript) and #2 (stamped bilingual doc→fields)
+  are STAGED, not proven** — the toolchain runs (proved on synthetic English clip + Arabic text image)
+  but the *real* proof needs the **Gate-A5 owner recordings** (`data/spike/audio|docs`, ~1 hr; still
+  the only real blocker). Do NOT mark #1/#2 green until real inputs run.
+
+**Fixes/decisions logged this session (not silent):** Dockerfile had two build-breakers — a bash
+`<(…)` process-substitution `/bin/sh` can't parse, and deps installed before `COPY engine/` (project
+wheel needs `app/`) — both fixed; added `libgomp1` for paddlepaddle. Added the missing **`asr`
+dep-group (faster-whisper)** + wrote `test_asr.py`/`test_ollama.py` (the two Gate-A smokes the scaffold
+lacked). **PaddleOCR pin `>=2.9`→`>=3.7,<4`**: 3.x changed the API — Arabic is `arabic_PP-OCRv3_mobile_rec`
+via `lang="ar"`+`ocr_version="PP-OCRv3"`, and needs `FLAGS_use_mkldnn=0` to dodge a paddle-3.x PIR/oneDNN
+inference bug (`test_ocr.py`/`spike2` updated). **GPU faster-whisper on the Windows host:** CT2 ignores
+`add_dll_directory` for its lazy cuBLAS load → `scripts/cuda_win.py` colocates the CUDA-12/cuDNN-9 DLLs
+next to the ct2 module (reproducible: `nvidia-*-cu12` added to the `asr` group behind a `win32` marker).
+Flipped stale cloud-oriented `.env.example`→local; created local `.env`. **Regression: engine `pytest`
+4-passed, `ruff`/`black` clean on new files.** Docker db+minio left running.
+
 **GitHub — DONE (2026-08-10):** private repo **`github.com/Colonel94/structured-chaos`** created +
 scaffold pushed (`main` @ `130a4ec`), `origin` remote wired, `main` tracks `origin/main`. Auth via PAT
 (`gh auth login --with-token`); account **Colonel94**. **SECURITY NOTE:** two PATs were pasted into the
 session transcript during setup (both now compromised — owner to revoke at github.com/settings/tokens
 and, if desired, mint a fresh one; current gh auth uses the second, `ghp_fTfJ…`, scopes repo/read:org/workflow).
 
-**Remaining OWNER-KEYBOARD item (only this one left; one-time, needs admin which the non-elevated
-assistant process lacks):** **WSL2** — run `wsl --install --no-distribution` in an *admin* PowerShell
-+ reboot (Docker's engine backend). Once it lands, the assistant brings up docker-compose
-(pgvector+MinIO), then pulls the local models to the 4070. **No longer blocking (dropped by the local flip):** Anthropic/Cohere keys. **Still
-parallel calendar tracks, not blockers:** Gate-A5 recordings, Meta Business verification (only if/when
-WhatsApp channel is built — file/email drop is the $0 self-serve channel for the PoC).
+**Remaining OWNER-KEYBOARD item (only this one left):** **Gate-A5 spike recordings** — 3–5 noisy Gulf
+voice notes + 1 stamped bilingual photo, ~1 hr, per `docs/recording-guide.md`; drop into `data/spike/audio`
++ `data/spike/docs` (staged, gitignored). Then the assistant runs `spike/spike1_asr.py` + `spike/spike2_doc.py`
+for the real Phase-0.5 verdict (spike scripts are written + toolchain-verified; only real inputs are missing).
+*(DONE this session, no longer owner items: WSL2 + Docker engine; docker-compose up; all four local models
+pulled to the 4070.)* **Still parallel calendar tracks, not blockers:** Meta Business verification (only if/
+when WhatsApp channel is built — file/email drop is the $0 self-serve channel for the PoC).
 
 **Repo topology — RESOLVED (owner, 2026-08-10):** dedicated private repo, `git init`ed on `main`
 BEFORE any keys (so `.env` never touches a shared tree). First commit `555c0f9` (61 files). Parent

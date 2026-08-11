@@ -1,7 +1,7 @@
 [project]
 name = "adaptive-intake-engine"
 version = "0.0.0"
-description = "Adaptive Intake — headless extraction engine (cloud-first PoC)"
+description = "Adaptive Intake — headless extraction engine (local-first PoC on the 4070)"
 requires-python = ">=3.12"
 
 # --- Core (host-safe: pure-python / wheels; a `uv sync` of this is fast) ---
@@ -35,7 +35,12 @@ dev = [
     "types-pyyaml",
 ]
 embed = ["FlagEmbedding>=1.3"]                       # BGE-M3 (pulls torch) — CPU-capable
-ocr   = ["paddleocr>=2.9", "paddlepaddle>=2.6"]      # container-only
+asr = [
+    "faster-whisper>=1.0",                                # Gulf-Arabic ASR (CTranslate2). MIT. CPU-capable.
+    "nvidia-cublas-cu12; sys_platform == 'win32'",        # CUDA 12 runtime for GPU on the Windows-host 4070
+    "nvidia-cudnn-cu12>=9,<10; sys_platform == 'win32'",  # (scripts/cuda_win.py colocates the DLLs so CT2 finds them)
+]
+ocr   = ["paddleocr>=3.7,<4", "paddlepaddle>=3,<4"]  # container-only. Arabic=arabic_PP-OCRv3_mobile_rec via lang="ar"+ocr_version="PP-OCRv3"; needs FLAGS_use_mkldnn=0 (paddle-3.x PIR/oneDNN bug)
 pdf   = ["pdfplumber>=0.11", "pypdfium2>=4.30"]      # pypdfium2, NOT PyMuPDF (AGPL)
 vad   = ["silero-vad>=5.1"]                          # pin + verify licence on version (§3)
 report = ["weasyprint>=63.0"]                        # container-only (GTK/Pango)

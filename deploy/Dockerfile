@@ -2,10 +2,14 @@
 # the whole reason we containerise instead of installing on the Windows host (§3).
 FROM python:3.12-slim
 
-# System libs: WeasyPrint (Pango/Cairo/GDK-Pixbuf), PaddleOCR/ffmpeg (libGL, glib), fonts (Arabic).
+# System libs:
+#   WeasyPrint    -> Pango/Cairo/GDK-Pixbuf
+#   PaddleOCR     -> libGL, glib, libgomp (OpenMP runtime for paddlepaddle)
+#   ffmpeg        -> audio decode (opus/m4a/ogg) on the ASR path
+#   fonts-noto*   -> Arabic + Latin glyphs for RTL PDF rendering (spike 3 / register report)
 RUN apt-get update && apt-get install -y --no-install-recommends \
       libpango-1.0-0 libpangocairo-1.0-0 libcairo2 libgdk-pixbuf-2.0-0 libffi-dev \
-      libgl1 libglib2.0-0 ffmpeg \
+      libgl1 libglib2.0-0 libgomp1 ffmpeg \
       fonts-noto fonts-noto-core fonts-noto-cjk \
     && rm -rf /var/lib/apt/lists/*
 
@@ -13,16 +17,17 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 
 WORKDIR /app
-COPY engine/pyproject.toml ./engine/pyproject.toml
-
-# Install core + the container-only heavy groups (ocr, pdf, report, embed, vad).
-RUN cd engine && uv pip install --system \
-      --group ocr --group pdf --group report --group embed --group vad \
-      -r <(uv pip compile pyproject.toml 2>/dev/null || true) || \
-    (cd engine && uv sync --group ocr --group pdf --group report --group embed --group vad)
-
+# Copy source BEFORE install so `uv pip install .` can build the project wheel
+# (hatchling needs app/ present) — and so container-only heavy groups resolve.
 COPY engine/ ./engine/
 COPY scripts/ ./scripts/
+
+# Install the project (core runtime deps) + the container-only heavy groups, into the
+# system interpreter. sh-safe: no bash process-substitution (the old `<(...)` broke here).
+RUN cd engine && uv pip install --system \
+      --group embed --group ocr --group pdf --group report --group vad \
+      .
+
 WORKDIR /app/engine
 ENV PYTHONPATH=/app/engine
 
