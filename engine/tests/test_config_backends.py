@@ -24,11 +24,25 @@ def test_fake_backends_selected() -> None:
     assert isinstance(registry.get_blob(cfg), FakeBlob)
 
 
-def test_local_backend_is_a_loud_stub() -> None:
-    cfg = _fake_cfg()
-    cfg.asr_backend = Backend.local
-    with pytest.raises(NotImplementedError):
-        registry.get_asr(cfg)
+def test_local_backends_are_wired() -> None:
+    """LOCAL is the PoC's built path now (owner override) — the interfaces resolve to the real
+    local impls. Instantiation is cheap: the heavy models load lazily on first call, not here.
+    """
+    from app.backends.cloud.blob_minio import MinioBlob
+    from app.backends.local.asr_whisper import WhisperASR
+    from app.backends.local.embed_bge import BGEEmbedding
+    from app.backends.local.llm_ollama import OllamaLLM
+
+    cfg = Settings(
+        asr_backend=Backend.local,
+        llm_backend=Backend.local,
+        embedding_backend=Backend.local,
+        blob_backend=Backend.local,
+    )
+    assert isinstance(registry.get_asr(cfg), WhisperASR)
+    assert isinstance(registry.get_llm(cfg), OllamaLLM)
+    assert isinstance(registry.get_embedding(cfg), BGEEmbedding)
+    assert isinstance(registry.get_blob(cfg), MinioBlob)
 
 
 @pytest.mark.asyncio

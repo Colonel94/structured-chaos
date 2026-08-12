@@ -75,6 +75,12 @@ class Settings(BaseSettings):
 
     bge_model: str = Field(default="BAAI/bge-m3")
 
+    # --- local model backends (PoC primary path — on the 4070, $0, no external call) ---
+    ollama_host: str = "http://localhost:11434"
+    ollama_model: str = "qwen3:14b"  # reasoning model → extraction must disable "think"
+    whisper_model: str = "large-v3"
+    whisper_device: str = "auto"  # auto → cuda if available else cpu
+
     @property
     def database_url(self) -> str:
         """Runtime connection as the RLS-enforced `app_rw` role (the engine uses this)."""
