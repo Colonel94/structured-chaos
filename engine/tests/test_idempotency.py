@@ -111,8 +111,7 @@ def test_field_current_rebuilds_from_logs(
             prompt_version="p1",
             run_id=uuid4(),
             confidence=0.7,
-            source_document_id=doc,
-            source_span=span,
+            citations=[api.Citation(source_document_id=doc, role="primary", locator=span)],
         )
         ext2 = api.record_extraction(
             s,
@@ -124,8 +123,7 @@ def test_field_current_rebuilds_from_logs(
             prompt_version="p1",
             run_id=uuid4(),
             confidence=0.9,
-            source_document_id=doc,
-            source_span=span,
+            citations=[api.Citation(source_document_id=doc, role="primary", locator=span)],
         )
         n = api.rebuild_field_current(s, case)
         row = s.execute(

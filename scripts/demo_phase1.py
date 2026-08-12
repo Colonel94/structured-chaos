@@ -63,19 +63,29 @@ def main() -> int:
         tenant_ministry = api.create_tenant(adm, f"Demo Ministry {suffix}")
     print(f"Created tenants: bakery={tenant_bakery}  ministry={tenant_ministry}\n")
 
-    # --- 1. A case + a fully-provenanced extracted value -----------------------------------
-    print("1. Case creation + complete provenance")
+    # --- 1. A case + a value drawn from MANY sources (provenance is a bridge) ---------------
+    print("1. Case creation + multi-source provenance (citations, with roles)")
     with tenant_session(tenant_bakery) as s:
         case = api.create_case(s, channel="whatsapp", first_contact_at=_now())
-        doc = api.add_source_document(
+        voice = api.add_source_document(
             s, case_id=case, sha256="d" * 64, blob_key="d" * 64, mime="audio/ogg",
-            channel="whatsapp", byte_size=2048, received_at=_now(),
+            channel="whatsapp", byte_size=2048, received_at=_now(), doc_kind="message",
         )
+        order = api.add_source_document(  # object-store row, snapshotted + content-hashed
+            s, case_id=case, sha256="a1" * 32, blob_key="a1" * 32, mime="application/json",
+            channel="file_drop", byte_size=128, received_at=_now(), doc_kind="object_snapshot",
+        )
+        # "delivered 102 min late" is DERIVED from the order's promised time + the complaint;
+        # the voice note is the primary source. One value, three citations, distinct roles.
         ext = api.record_extraction(
-            s, case_id=case, field_path="fault", value="cake arrived melted",
+            s, case_id=case, field_path="fault", value="cake arrived melted, 102 min late",
             model="qwen3:14b", model_version="q4_k_m", prompt_version="p1", run_id=uuid4(),
-            confidence=0.82, source_document_id=doc,
-            source_span={"t_start": 3.2, "t_end": 6.8},
+            confidence=0.82,
+            citations=[
+                api.Citation(voice, "primary", {"t_start": 3.2, "t_end": 6.8}, 0.9),
+                api.Citation(order, "derived_from", {"field": "promised_time"}, 0.6),
+                api.Citation(order, "contradicts", {"field": "status=on_time"}, None),
+            ],
         )
         api.rebuild_field_current(s, case)
         row = s.execute(
@@ -83,17 +93,23 @@ def main() -> int:
                  "WHERE case_id=:c AND field_path='fault'"),
             {"c": case},
         ).one()
-        prov = s.execute(
-            text("SELECT model, model_version, source_document_id, source_span, confidence "
-                 "FROM field_extraction WHERE id=:e"),
+        cites = s.execute(
+            text("SELECT c.role, sd.doc_kind FROM extraction_citation c "
+                 "JOIN source_document sd ON sd.id = c.source_document_id "
+                 "WHERE c.extraction_id = :e ORDER BY c.role"),
             {"e": ext},
-        ).one()
+        ).all()
+    roles = {r for r, _ in cites}
     check("case created immediately", case is not None)
-    check("value projected into field_current", row[0] == "cake arrived melted", f"value={row[0]!r}")
+    check("value projected into field_current", row[0].startswith("cake arrived melted"))
     check(
-        "value traces to source + model + span + confidence",
-        prov[2] is not None and prov[3] is not None and prov[4] is not None,
-        f"model={prov[0]} doc={str(prov[2])[:8]}… span={prov[3]} conf={prov[4]}",
+        "value traces to MANY sources with roles",
+        roles == {"primary", "derived_from", "contradicts"},
+        f"citations={[(r, k) for r, k in cites]}",
+    )
+    check(
+        "a looked-up value cites an object-store snapshot, not a message",
+        any(k == "object_snapshot" for _, k in cites),
     )
 
     # --- 2. Tenant isolation ----------------------------------------------------------------

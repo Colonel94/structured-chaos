@@ -52,8 +52,13 @@ def _seed(admin_session: Session, app_factory: sessionmaker[Session]) -> tuple[U
             prompt_version="p1",
             run_id=uuid4(),
             confidence=0.9,
-            source_document_id=doc,
-            source_span={"page": 1, "bbox": [0, 0, 10, 10]},
+            citations=[
+                api.Citation(
+                    source_document_id=doc,
+                    role="primary",
+                    locator={"page": 1, "bbox": [0, 0, 10, 10]},
+                )
+            ],
         )
         corr = api.record_correction(
             s,
@@ -118,32 +123,23 @@ def test_app_role_denied_update_delete_on_append_only(
         s.execute(text("DELETE FROM field_extraction WHERE id=:id"), {"id": ext})
 
 
-def test_provenance_is_required(admin_session: Session, app_factory: sessionmaker[Session]) -> None:
-    """No extracted value may exist without complete provenance — a NULL source_span / source doc
-    / confidence is rejected by the schema (CLAUDE.md §3)."""
+def test_confidence_is_required(admin_session: Session, app_factory: sessionmaker[Session]) -> None:
+    """An extracted value must carry a confidence (NOT NULL) — the schema refuses a value the model
+    gave no confidence for (CLAUDE.md §3). (Source provenance is now the citation bridge — its
+    "≥1 citation" invariant is proven in test_trust_coverage.)"""
     tenant = api.create_tenant(admin_session, "Provenance-Co")
     admin_session.commit()
     with tenant_session(tenant, factory=app_factory) as s:
         case = api.create_case(s, channel="file_drop", first_contact_at=_now())
-        doc = api.add_source_document(
-            s,
-            case_id=case,
-            sha256="b" * 64,
-            blob_key="b" * 64,
-            mime="text/plain",
-            channel="file_drop",
-            byte_size=1,
-            received_at=_now(),
-        )
-    # A raw insert missing source_span must fail the NOT NULL constraint.
+    # A raw insert with NULL confidence must fail the NOT NULL constraint.
     with pytest.raises(DBAPIError), tenant_session(tenant, factory=app_factory) as s:
         s.execute(
             text(
                 "INSERT INTO field_extraction "
                 "(tenant_id, case_id, field_path, value, model, model_version, prompt_version, "
-                " confidence, run_id, source_document_id) "
+                " confidence, run_id) "
                 "VALUES (NULLIF(current_setting('app.tenant_id', true),'')::uuid, :c, 'fault', "
-                " '\"x\"'::jsonb, 'm', 'v', 'p', 0.5, gen_random_uuid(), :doc)"
+                " '\"x\"'::jsonb, 'm', 'v', 'p', NULL, gen_random_uuid())"
             ),
-            {"c": case, "doc": doc},
+            {"c": case},
         )

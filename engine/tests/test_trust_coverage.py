@@ -10,6 +10,7 @@ from uuid import uuid4
 
 import pytest
 from sqlalchemy import text
+from sqlalchemy.engine import Engine
 from sqlalchemy.exc import DBAPIError
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -81,8 +82,11 @@ def test_rerunning_same_extraction_returns_same_row(
             "prompt_version": "p",
             "run_id": run_id,
             "confidence": 0.5,
-            "source_document_id": doc,
-            "source_span": {"char_start": 0, "char_end": 1},
+            "citations": [
+                api.Citation(
+                    source_document_id=doc, role="primary", locator={"char_start": 0, "char_end": 1}
+                )
+            ],
         }
         first = api.record_extraction(s, **kw)
         second = api.record_extraction(s, **kw)  # same (run_id, field_path) → no dupe
@@ -176,16 +180,16 @@ def test_confidence_out_of_range_rejected(
     tenant = api.create_tenant(admin_session, "Conf-Co")
     admin_session.commit()
     with tenant_session(tenant, factory=app_factory) as s:
-        case, doc = _case_with_doc(s)
+        case = api.create_case(s, channel="file_drop", first_contact_at=_now())
     with pytest.raises(DBAPIError), tenant_session(tenant, factory=app_factory) as s:
         s.execute(
             text(
                 "INSERT INTO field_extraction (tenant_id, case_id, field_path, value, model, "
-                "model_version, prompt_version, confidence, run_id, source_document_id, source_span) "
+                "model_version, prompt_version, confidence, run_id) "
                 "VALUES (NULLIF(current_setting('app.tenant_id',true),'')::uuid, :c, 'f', '\"x\"'::jsonb, "
-                "'m','v','p', 1.5, gen_random_uuid(), :d, '{}'::jsonb)"
+                "'m','v','p', 1.5, gen_random_uuid())"
             ),
-            {"c": case, "d": doc},
+            {"c": case},
         )
 
 
@@ -271,3 +275,152 @@ def test_meter_records_from_backend_last_usage(
     assert cost["calls"] == 1
     assert cost["tokens_in"] == 40
     assert cost["wall_ms"] == pytest.approx(250.0)
+
+
+# ---- 0004: provenance is a bridge — many sources per value, with roles ------------------------
+
+
+def test_extraction_requires_at_least_one_citation(
+    admin_session: Session, app_factory: sessionmaker[Session]
+) -> None:
+    """No value exists without provenance — an empty citation list is refused at the boundary."""
+    tenant = api.create_tenant(admin_session, "NoCite-Co")
+    admin_session.commit()
+    with tenant_session(tenant, factory=app_factory) as s:
+        case = api.create_case(s, channel="file_drop", first_contact_at=_now())
+        with pytest.raises(ValueError, match="at least one source"):
+            api.record_extraction(
+                s,
+                case_id=case,
+                field_path="fault",
+                value="x",
+                model="m",
+                model_version="v",
+                prompt_version="p",
+                run_id=uuid4(),
+                confidence=0.5,
+                citations=[],
+            )
+
+
+def test_value_cites_many_sources_incl_a_contradiction(
+    admin_session: Session, app_factory: sessionmaker[Session]
+) -> None:
+    """delay = 102 min is derived from the order snapshot AND the complaint message; a record that
+    disagrees is cited with role 'contradicts' — the conflict is stored, not recomputed later."""
+    tenant = api.create_tenant(admin_session, "MultiCite-Co")
+    admin_session.commit()
+    with tenant_session(tenant, factory=app_factory) as s:
+        case = api.create_case(s, channel="whatsapp", first_contact_at=_now())
+        complaint = api.add_source_document(
+            s,
+            case_id=case,
+            sha256="1" * 64,
+            blob_key="1" * 64,
+            mime="text/plain",
+            channel="whatsapp",
+            byte_size=20,
+            received_at=_now(),
+            doc_kind="message",
+        )
+        order = api.add_source_document(  # an object-store row, snapshotted + content-hashed
+            s,
+            case_id=case,
+            sha256="2" * 64,
+            blob_key="2" * 64,
+            mime="application/json",
+            channel="file_drop",
+            byte_size=64,
+            received_at=_now(),
+            doc_kind="object_snapshot",
+        )
+        ext = api.record_extraction(
+            s,
+            case_id=case,
+            field_path="delay_minutes",
+            value=102,
+            model="m",
+            model_version="v",
+            prompt_version="p",
+            run_id=uuid4(),
+            confidence=0.8,
+            citations=[
+                api.Citation(order, "derived_from", {"field": "promised_time"}, 0.6),
+                api.Citation(complaint, "primary", {"char_start": 0, "char_end": 20}, 0.9),
+                api.Citation(order, "contradicts", {"field": "actual_time"}, None),
+            ],
+        )
+        roles = (
+            s.execute(
+                text("SELECT role FROM extraction_citation WHERE extraction_id = :e ORDER BY role"),
+                {"e": ext},
+            )
+            .scalars()
+            .all()
+        )
+        kinds = (
+            s.execute(
+                text(
+                    "SELECT DISTINCT sd.doc_kind FROM extraction_citation c "
+                    "JOIN source_document sd ON sd.id = c.source_document_id "
+                    "WHERE c.extraction_id = :e"
+                ),
+                {"e": ext},
+            )
+            .scalars()
+            .all()
+        )
+    assert set(roles) == {"contradicts", "derived_from", "primary"}
+    assert "object_snapshot" in kinds  # a looked-up value cites a snapshot, not a message
+
+
+def test_citations_are_immutable(
+    admin_session: Session, app_factory: sessionmaker[Session], admin_engine: Engine
+) -> None:
+    tenant = api.create_tenant(admin_session, "CiteImmut-Co")
+    admin_session.commit()
+    with tenant_session(tenant, factory=app_factory) as s:
+        case, doc = _case_with_doc(s)
+        ext = api.record_extraction(
+            s,
+            case_id=case,
+            field_path="fault",
+            value="x",
+            model="m",
+            model_version="v",
+            prompt_version="p",
+            run_id=uuid4(),
+            confidence=0.5,
+            citations=[api.Citation(doc, "primary", {"char_start": 0, "char_end": 1})],
+        )
+        cid = s.execute(
+            text("SELECT id FROM extraction_citation WHERE extraction_id = :e"), {"e": ext}
+        ).scalar_one()
+    # even the superuser can't rewrite provenance
+    with pytest.raises(DBAPIError), admin_engine.begin() as conn:
+        conn.execute(text("UPDATE extraction_citation SET role='primary' WHERE id=:i"), {"i": cid})
+
+
+def test_citations_are_tenant_isolated(
+    admin_session: Session, app_factory: sessionmaker[Session]
+) -> None:
+    tenant_a = api.create_tenant(admin_session, "CiteA")
+    tenant_b = api.create_tenant(admin_session, "CiteB")
+    admin_session.commit()
+    with tenant_session(tenant_a, factory=app_factory) as s:
+        case, doc = _case_with_doc(s)
+        api.record_extraction(
+            s,
+            case_id=case,
+            field_path="fault",
+            value="x",
+            model="m",
+            model_version="v",
+            prompt_version="p",
+            run_id=uuid4(),
+            confidence=0.5,
+            citations=[api.Citation(doc, "primary")],
+        )
+    with tenant_session(tenant_b, factory=app_factory) as s:
+        seen = s.execute(text("SELECT count(*) FROM extraction_citation")).scalar_one()
+    assert seen == 0
