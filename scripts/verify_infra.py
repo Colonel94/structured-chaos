@@ -26,25 +26,37 @@ def _load_env() -> None:
             os.environ.setdefault(k.strip(), v.strip())
 
 
+def _dsn(user_key: str, pw_key: str, default_user: str) -> str:
+    return (
+        f"host={os.environ.get('POSTGRES_HOST', 'localhost')} "
+        f"port={os.environ.get('POSTGRES_PORT', '5432')} "
+        f"dbname={os.environ.get('POSTGRES_DB', 'adaptive_intake')} "
+        f"user={os.environ.get(user_key, default_user)} "
+        f"password={os.environ.get(pw_key, '')}"
+    )
+
+
 def check_postgres() -> bool:
+    """Two roles, deliberately (EDD §7.1): the runtime `app_rw` connects and SELECTs (proving the
+    least-privilege role works), and the `intake_admin` superuser installs pgvector — a superuser-
+    only op that app_rw must NOT be able to do. app_rw failing to CREATE EXTENSION is the RLS
+    role split working as designed, not an infra fault."""
     try:
         import psycopg
     except ImportError:
         print("SKIP(pg): psycopg not installed (uv sync the engine core).")
         return False
-    dsn = (
-        f"host={os.environ.get('POSTGRES_HOST', 'localhost')} "
-        f"port={os.environ.get('POSTGRES_PORT', '5432')} "
-        f"dbname={os.environ.get('POSTGRES_DB', 'adaptive_intake')} "
-        f"user={os.environ.get('POSTGRES_USER', 'app_rw')} "
-        f"password={os.environ.get('POSTGRES_PASSWORD', '')}"
-    )
     try:
-        with psycopg.connect(dsn, connect_timeout=5) as conn, conn.cursor() as cur:
+        with psycopg.connect(
+            _dsn("POSTGRES_USER", "POSTGRES_PASSWORD", "app_rw"), connect_timeout=5
+        ) as conn, conn.cursor() as cur:
             cur.execute("SELECT 1")
             assert cur.fetchone()[0] == 1
+        with psycopg.connect(
+            _dsn("POSTGRES_ADMIN_USER", "POSTGRES_ADMIN_PASSWORD", "intake_admin"), connect_timeout=5
+        ) as conn, conn.cursor() as cur:
             cur.execute("CREATE EXTENSION IF NOT EXISTS vector")
-        print("PASS(pg): SELECT 1 ok; pgvector extension available.")
+        print("PASS(pg): app_rw SELECT 1 ok; pgvector installed by intake_admin.")
         return True
     except Exception as e:  # noqa: BLE001 - surface any connection/permission error
         print(f"FAIL(pg): {e}")
