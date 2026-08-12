@@ -106,19 +106,19 @@ Phase 1 ✅ · Phases 2–9 ⏳.
 
 ---
 
-## Phase 2 — Headless engine skeleton + 4 backend interfaces ⏳ IN PROGRESS (units 1–2 done; unit 3 next)
+## Phase 2 — Headless engine skeleton + 4 backend interfaces ✅ DONE
 **Goal:** the FastAPI engine + the four `Protocol` interfaces (ASR/LLM/Embedding/Blob), local impls built (per override; cloud stubbed), orchestrated by Procrastinate.
 
-**Automated tests that SHOULD exist to satisfy the exit gate**
-- [ ] TODO — trivial ingest→persist job flows through **Procrastinate in one transaction**; kill mid-run → **no orphan / no phantom** job or row (transactional enqueue). ⏳ **unit 3, next session** (needs Procrastinate schema + `app_rw` grants + `SQLAlchemyPsycopg2Connector` transactional defer + a worker; verify live, don't rush).
+**Automated tests**
+- [x] `test_queue.py::test_enqueue_commits_atomically_with_the_write` + `test_rollback_leaves_no_phantom_job_or_orphan_case` — a job is deferred on the **same psycopg3 transaction** as the business write: commit → case+job persist; **rollback → no phantom job, no orphan case** (transactional enqueue). ✅ **unit 3 (`c5967a9`)**.
 - [x] `test_config_backends.py::test_local_backends_are_wired` — the local impls (faster-whisper / Ollama / BGE-M3; blob: MinIO) resolve behind the interfaces. **Live:** `scripts/verify_backends_local.py` → Ollama real completion + schema-constrained extraction (fault+desired_outcome). ✅ **unit 1 (`d9e0e33`)**.
 - [x] `test_cost_meter.py` — **cost-per-case meter** logs tokens/audio-seconds/GPU-time (`wall_ms`) against a `case_id` and **reports a per-case figure**; aggregation per case; tenant-isolated. ✅ **unit 2 (`8ba8f84`)**.
-- [x] pipeline stage contract is **idempotent/retryable** — the Phase-1 `claim_stage`/`complete_stage` ledger (crash-reclaimable) is the contract Procrastinate tasks will plug into. ✅ (Phase 1)
-- [ ] TODO — dedicated **low-priority backfill queue** exists and is separately schedulable. ⏳ unit 3.
+- [x] pipeline stage contract is **idempotent/retryable** — the Phase-1 `claim_stage`/`complete_stage` ledger (crash-reclaimable) is what Procrastinate task bodies plug into (Phase 3). ✅ (Phase 1)
+- [x] `test_queue.py::test_backfill_uses_its_own_low_priority_queue` — dedicated **low-priority backfill queue** exists and is separately schedulable. ✅ **unit 3**.
 
 **Manual / live checks**
 - [x] `uv run --project engine python scripts/verify_backends_local.py` → 2/2 (LLM); `--full` adds BGE+whisper. Ollama must be running.
-- [ ] Run a worker + enqueue a job; kill the worker mid-job → inspect DB for orphans/phantoms. ⏳ unit 3.
+- [x] Transactional enqueue proven live (spike) + `scripts/bootstrap_procrastinate.py` applied the queue schema to the live DB. *Worker-side kill-mid-run/no-lost-job is Procrastinate's own at-least-once + row-lock guarantee; the enqueue atomicity we implement is what's tested.*
 
 **Exit gate (verbatim):** *"a trivial job flows ingest→persist through Procrastinate in one transaction (kill mid-run → no orphan/phantom); each interface's cloud impl returns a real response; local stubs raise `NotImplemented`; **the cost meter reports a per-case $ figure.**"* *(Local override: the **local** impl is the one built + returning a real response for the PoC; the cost meter reports GPU-time, not API cents.)*
 **Regression gate:** Phase 1 spine + the transactional-enqueue no-orphan test.

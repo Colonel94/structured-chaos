@@ -65,8 +65,8 @@ verified live this session:**
 **Next:** Phase 2 — headless engine skeleton + the 4 backend interfaces wired through Procrastinate +
 the cost-per-case meter (local-first: faster-whisper / Ollama / BGE-M3). Recordings stay parked.
 
-**UPDATE (2026-08-12) — PHASE 2 IN PROGRESS: units 1–2 DONE + verified live; unit 3 (Procrastinate)
-deferred.** Also delivered `TEST-PLAN.md` (per-phase test plan, 0→9, mapped to BUILD-PLAN exit gates)
+**UPDATE (2026-08-12) — PHASE 2 DONE (all 3 units, verified live).** Also delivered `TEST-PLAN.md`
+(per-phase test plan, 0→9, mapped to BUILD-PLAN exit gates)
 and `scripts/demo_phase1.py` (hands-on Phase-1 trust demo, 14/14 live). Practice adopted (owner,
 memory [[commit-fixes-directly]]): **fixes are committed directly, no asking.**
 - **Unit 1 — local backends behind the 4 interfaces (`d9e0e33`):** `backends/local/` = OllamaLLM
@@ -80,13 +80,19 @@ memory [[commit-fixes-directly]]): **fixes are committed directly, no asking.**
   (tokens/audio-seconds/wall_ms/$; RLS + composite FK), `store/meter.py`
   (`record_backend_call`/`meter_usage`/`case_cost`). Local path $=0; **wall_ms (GPU time) is the real
   per-case figure.** 2 tests (aggregation + tenant isolation). **20 tests green; ruff/black/mypy clean.**
-- **Unit 3 — Procrastinate transactional enqueue + backfill queue + no-orphan test — NOT DONE (next
-  session).** Deliberately deferred, not rushed: it needs applying Procrastinate's own schema,
-  granting least-priv `app_rw` on the queue tables, the SQLAlchemy connector's low-level
-  connection-sharing transactional-defer API (class is `SQLAlchemyPsycopg2Connector`, needs
-  `psycopg2-binary`), and a worker to prove kill-mid-run→no-orphan **live**. Verify-before-load-bearing
-  (CLAUDE.md §10) — build it with real verification, don't ship it half-proven. The idempotency
-  ledger it plugs into (`claim_stage`/`complete_stage`, crash-reclaimable) already exists + is tested.
+- **Unit 3 — Procrastinate transactional enqueue + backfill queue (`c5967a9`):** `app/queue.py` on
+  the **native `SyncPsycopgConnector` (psycopg3)** — NOT the SQLAlchemy/psycopg2 connector (it
+  double-escapes `%` for psycopg2 paramstyle and errors on a psycopg3 conn; discovered via a spike, so
+  **psycopg2-binary is NOT a dependency**). `defer_in_transaction(session, task, …)` runs the enqueue
+  INSERT on the session's raw psycopg3 connection → **atomic with the business write** (rollback→no
+  phantom job + no orphan case; commit→both persist; proven live + 3 tests). Two queues: `default` +
+  low-priority `backfill`. Procrastinate owns its schema → `apply_procrastinate_schema()` (idempotent,
+  applied to the live DB via `scripts/bootstrap_procrastinate.py`), with `app_rw` grants **scoped to
+  `procrastinate_*` objects only** (never broadens app_rw on the trust-spine tables). Tasks are the
+  queue contract; **bodies wire in Phase 3**, guarded by the Phase-1 `claim_stage` ledger. Worker-side
+  kill-mid-run safety is Procrastinate's own at-least-once+row-lock guarantee; the enqueue atomicity we
+  implement is what's tested. **23 tests green.** **Next: Phase 3** (intake + normalise: file-drop
+  first, then WhatsApp; ffmpeg/VAD → local ASR/OCR; conversation windowing).
 **Careful-note:** a stray `black` run that included a repo-root script path used black's default
 width 88 (missed `engine/pyproject.toml`'s 100) and reflowed committed files; reverted. **Always run
 `black`/`ruff` from `engine/` on `app tests` only** — never pass external `../scripts/...` paths to black.
