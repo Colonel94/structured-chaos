@@ -58,12 +58,13 @@ def get_embedding(cfg: Settings = settings) -> EmbeddingBackend:
 
 
 def get_blob(cfg: Settings = settings) -> BlobStore:
+    # Blob storage is infra (S3 API), not an inference model — MinIO serves both the local
+    # (on-prem MinIO) and cloud (S3) deployments; only the endpoint differs. So there is no
+    # "half-built local path" to guard against here: local and cloud both use MinioBlob.
     match cfg.blob_backend:
         case Backend.fake:
             return fake.FakeBlob()
-        case Backend.cloud:
-            from .cloud.blob_minio import MinioBlob  # Phase 2
+        case Backend.cloud | Backend.local:
+            from .cloud.blob_minio import MinioBlob
 
             return cast(BlobStore, MinioBlob(cfg))
-        case Backend.local:
-            _stub("Blob")

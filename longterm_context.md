@@ -27,6 +27,44 @@ is NOT Arabic-specific — English PP-OCRv5 hits the same bug, so `FLAGS_use_mkl
 If this is meant as a permanent moat change (not just
 "for now"), the owner will say so; until then it is treated as reversible focus.
 
+**UPDATE (2026-08-12) — PHASE 1 (trust spine) BUILT + VERIFIED LIVE; Gate-A5 recordings PARKED
+(owner directive this session).** The owner parked the ~1 hr voice/photo recording (the only
+owner-keyboard item) — spikes #1/#2 stay STAGED, un-proven, deferred until re-raised — and directed
+"work everything else." So Phase 0.5 does not fully close (spike #3 PASS; #1/#2 parked), and the build
+proceeded to **Phase 1 — the trust spine**, which has zero dependency on the recordings. **Done +
+verified live this session:**
+- **RLS role footgun fixed.** The scaffold made the app's `app_rw` the DB **superuser** (would silently
+  bypass RLS). Split into `intake_admin` (superuser; migrations/bootstrap only) + `app_rw`
+  (`NOSUPERUSER NOBYPASSRLS`; the engine's runtime role). Verified live: `pg_roles` shows app_rw
+  `rolsuper=f, rolbypassrls=f`. Required a one-time `docker compose down -v` (volume held only prior
+  verification scratch — no real data). Compose superuser renamed → `intake_admin`; `.env`/`.env.example`
+  carry `POSTGRES_ADMIN_USER/PASSWORD`; `config.py` has `admin_database_url`.
+- **Alembic + migration `0001_trust_spine`** (hand-authored DDL — security objects can't be autogen'd):
+  `tenant` + `case_record` + `source_document` + `field_extraction` + `field_correction` +
+  `field_current` (projection) + `stage_execution` (idempotency ledger). **RLS** `ENABLE`+`FORCE`+
+  fail-closed `NULLIF` policies (separate `USING`/`WITH CHECK`) on every tenant table; **append-only
+  immutability triggers** (raise on UPDATE/DELETE) on the 3 logs; **least-privilege grants**
+  (append-only tables get SELECT/INSERT only; case UPDATE is column-scoped, never `tenant_id`); a
+  monotonic `seq` IDENTITY on the logs so "latest" is deterministic (fixed a real bug: `now()` is
+  txn-constant → same-txn rows tie).
+- **Store layer:** `store/db.py` (`tenant_session` → `set_config('app.tenant_id', …, true)`, txn-local
+  so it can't leak under PgBouncer); `store/api.py` (create case, immutable content-addressed source
+  doc, `record_extraction`/`record_correction` with full provenance, `rebuild_field_current`,
+  `compute_idempotency_key`/`claim_stage`); MinIO content-addressed **write-once** blob store
+  (`backends/cloud/blob_minio.py`, routed for BOTH local+cloud since blob is infra not a model);
+  `obs/logging.py` structlog **PII-redaction** processor (no customer data in logs).
+- **Trust gates GREEN (live, testcontainers Postgres):** cross-tenant read=0 + positive control +
+  cross-tenant write rejected (`WITH CHECK`) + unset-context reads 0 (fail-closed) + `app_rw` proven
+  non-super/non-bypass; append-only UPDATE/DELETE raise even for the superuser (trigger, not just
+  grant); idempotent replay skips + `field_current` recomputes from logs (correction-beats-extraction);
+  PII never in logs; live MinIO content-addressing/write-once/roundtrip. **Full suite 13 passed (incl.
+  Phase-0 regression 4); `ruff`/`black` clean; `mypy --strict` clean (24 files).** Config now loads the
+  repo-root `.env` by absolute path (was CWD-relative → broke `alembic` from `engine/`).
+- **Env restored:** Docker back up (db+minio healthy). **Unpushed Phase-0 commit `617721b` PUSHED** to
+  `origin/main`. An adversarial trust-spine review (subagent) runs at phase close per CLAUDE.md §10.
+**Next:** Phase 2 — headless engine skeleton + the 4 backend interfaces wired through Procrastinate +
+the cost-per-case meter (local-first: faster-whisper / Ollama / BGE-M3). Recordings stay parked.
+
 **Where we are (2026-08-10):** Design complete (v1.2) **and the Phase-0 scaffold is built + locally
 verified.** `GOVERNED-CORE-SCHEMA.md` done. Repo skeleton, config (local|cloud|fake backend switch),
 4 backend interfaces (cloud=Phase-2 lazy, local=loud stub, fake=live), `/health`, docker-compose

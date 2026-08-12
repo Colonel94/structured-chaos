@@ -6,17 +6,17 @@ voice). When Gate A is all green, run `BUILD-PLAN.md` Phase 0. Last updated: 202
 
 ---
 
-## TL;DR — Gate A is GREEN except A5; only ~1 hour of your own recording is left
+## TL;DR — Gate A GREEN except A5; A5 (recordings) PARKED by owner 2026-08-12 → build proceeded to Phase 1
 1. ✅ **GitHub repo** + ✅ **Docker Desktop** + ✅ **WSL2/Docker engine** + ✅ **infra up** (pg+pgvector,
    MinIO verified) + ✅ **all four local models pulled & run on the 4070** (Ollama qwen3:14b, faster-whisper
-   large-v3 on GPU, BGE-M3, PaddleOCR). Done + verified live this session (2026-08-11).
+   large-v3 on GPU, BGE-M3, PaddleOCR). Done + verified live (2026-08-11).
 2. **~~API keys~~ → none for the LLM** (local flip). WhatsApp (Meta) only *if/when* that channel is built.
-3. **The one thing left for you — record 5 things** (Gate A5, ~1 hr, highest-leverage hour in the project):
-   3–5 Gulf voice notes in a noisy room + 1 photo of a stamped bilingual doc, per `docs/recording-guide.md`.
-   Drop them in `data/spike/audio/` + `data/spike/docs/` (folders staged, gitignored).
-4. Then the assistant runs `spike/spike1_asr.py` + `spike/spike2_doc.py` for the **real** Phase-0.5 verdict.
-   **Spike #3 (Arabic-RTL PDF) is already PASS** (no input needed). Spikes #1/#2 are staged — toolchain
-   proven, awaiting your real inputs.
+3. **Gate A5 (record 5 things) — PARKED by owner (2026-08-12).** 3–5 Gulf voice notes + 1 stamped
+   bilingual photo → `data/spike/audio/` + `data/spike/docs/` (staged, gitignored) per
+   `docs/recording-guide.md`. Deferred until the owner re-raises it; **Phase-0.5 spikes #1/#2 stay STAGED,
+   un-proven**. Everything that does NOT need recordings proceeds — see §"Phase 1" in `longterm_context.md` §0.
+4. **Spike #3 (Arabic-RTL PDF) is PASS** (no input needed). **Phase 1 (trust spine) is BUILT + verified
+   live** (RLS isolation, immutable provenance, idempotency, PII-safe logs — 13 tests green). Next: Phase 2.
 
 Everything else — scaffold, config, containers definition, CI, smoke/verify scripts, sample data,
 policy, taxonomy — is **built and, where runnable without Docker, verified live** (see §"Verified").

@@ -8,16 +8,19 @@ name: adaptive-intake
 services:
   db:
     image: pgvector/pgvector:pg16
+    # The container superuser is `intake_admin` (migrations/bootstrap). The least-privilege
+    # runtime role `app_rw` is created by Alembic migration 0001 (NOSUPERUSER, NOBYPASSRLS)
+    # so RLS is enforced against the engine. See engine/app/config.py for the rationale.
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-adaptive_intake}
-      POSTGRES_USER: ${POSTGRES_USER:-app_rw}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change_me_local_only}
+      POSTGRES_USER: ${POSTGRES_ADMIN_USER:-intake_admin}
+      POSTGRES_PASSWORD: ${POSTGRES_ADMIN_PASSWORD:-change_me_admin_local}
     ports:
       - "${POSTGRES_PORT:-5432}:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-app_rw} -d ${POSTGRES_DB:-adaptive_intake}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_ADMIN_USER:-intake_admin} -d ${POSTGRES_DB:-adaptive_intake}"]
       interval: 5s
       timeout: 5s
       retries: 10

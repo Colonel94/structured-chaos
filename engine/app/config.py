@@ -8,9 +8,14 @@ TECH-SPEC §0.1). The PoC runs all-cloud; local impls are stubs; tests use `fake
 from __future__ import annotations
 
 from enum import StrEnum
+from pathlib import Path
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+# Absolute path to the repo-root `.env`, so config loads identically from any CWD
+# (repo root, engine/, a test runner, alembic). engine/app/config.py → parents[2] = repo root.
+_ENV_FILE = Path(__file__).resolve().parents[2] / ".env"
 
 
 class Backend(StrEnum):
@@ -20,12 +25,17 @@ class Backend(StrEnum):
 
 
 class Settings(BaseSettings):
-    # Loads from process env or a repo-root `.env` (gitignored). extra="ignore" so the
-    # shared `.env` template can carry keys a given process does not use.
-    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
+    # Loads from process env (which overrides) or the repo-root `.env` (gitignored).
+    # extra="ignore" so the shared `.env` template can carry keys a given process does not use.
+    model_config = SettingsConfigDict(
+        env_file=str(_ENV_FILE), env_file_encoding="utf-8", extra="ignore"
+    )
 
     app_env: str = "dev"
     log_level: str = "INFO"
+    # Stamped into every idempotency key (§7.3) so a code change forces a fresh run
+    # instead of silently colliding with a prior one. Bump on any extraction-behaviour change.
+    code_version: str = "0.1.0"
 
     # --- backend switch (one per interface) ---
     asr_backend: Backend = Backend.cloud
@@ -45,11 +55,17 @@ class Settings(BaseSettings):
     whatsapp_app_secret: str = ""
 
     # --- postgres ---
+    # TWO roles, deliberately (EDD §7.1). The engine connects as the least-privilege
+    # `app_rw` (NOSUPERUSER, NOBYPASSRLS) so RLS is actually enforced against it; migrations
+    # and role bootstrap run as the superuser `intake_admin`. A single superuser here would
+    # silently bypass RLS and make the tenant-isolation gate unprovable.
     postgres_host: str = "localhost"
     postgres_port: int = 5432
     postgres_db: str = "adaptive_intake"
-    postgres_user: str = "app_rw"
+    postgres_user: str = "app_rw"  # runtime app role — RLS-enforced
     postgres_password: str = ""
+    postgres_admin_user: str = "intake_admin"  # superuser — migrations/bootstrap only
+    postgres_admin_password: str = ""
 
     # --- minio / s3 ---
     minio_endpoint: str = "http://localhost:9000"
@@ -61,8 +77,17 @@ class Settings(BaseSettings):
 
     @property
     def database_url(self) -> str:
+        """Runtime connection as the RLS-enforced `app_rw` role (the engine uses this)."""
         return (
             f"postgresql+psycopg://{self.postgres_user}:{self.postgres_password}"
+            f"@{self.postgres_host}:{self.postgres_port}/{self.postgres_db}"
+        )
+
+    @property
+    def admin_database_url(self) -> str:
+        """Privileged connection as `intake_admin` — migrations and role bootstrap only."""
+        return (
+            f"postgresql+psycopg://{self.postgres_admin_user}:{self.postgres_admin_password}"
             f"@{self.postgres_host}:{self.postgres_port}/{self.postgres_db}"
         )
 
