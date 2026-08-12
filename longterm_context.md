@@ -65,6 +65,42 @@ verified live this session:**
 **Next:** Phase 2 — headless engine skeleton + the 4 backend interfaces wired through Procrastinate +
 the cost-per-case meter (local-first: faster-whisper / Ollama / BGE-M3). Recordings stay parked.
 
+**UPDATE (2026-08-12) — PHASES 0-1-2 ADVERSARIAL CROSS-PHASE REVIEW done; real gaps closed (`5bcc659`).**
+Three independent reviewers (compliance / integration / coverage). **Verdict: Phase 0 & 1 genuinely
+met** (verified live: rolbypassrls=false, all 6 immutability triggers incl. TRUNCATE, provenance
+NOT NULL, composite FKs, crash-reclaim — enforced *and* tested). **Phase 2 was PARTIAL → now closed.**
+Fixed this pass: **(CRITICAL)** CI silently skipped the DB trust-suite if Docker hiccuped → could ship
+an RLS regression green; conftest now HARD-FAILS under CI (`REQUIRE_DB`/`CI` env), CI sets `REQUIRE_DB=1`.
+**(meter)** was never wired to a real call (`backend_call` empty) → `meter.meter_backend()` added +
+proven LIVE (`scripts/verify_meter.py`: a real qwen3:14b call now lands a `backend_call` row).
+**(FakeBlob)** was key-addressed while MinioBlob is content-addressed (Phase-3 green-then-404 trap) →
+FakeBlob now content-addressed; migration `0003` adds `CHECK(blob_key = sha256)`. **(coverage +15 tests)**
+idempotent conflict-returns, composite-FK cross-tenant rejection, fail_stage re-claim, CHECK
+constraints, case-created-state, correction-only projection, cloud-backends-raise, nested/list PII,
+queue-args-IDs-only. **(config)** docstring said "all-cloud" + defaulted to cloud (ImportError on fresh
+checkout) → fixed to local. **Suite 23→38 green.**
+
+**DEFERRED to Phase 3+ (documented, NOT rushed — decide before building on them):**
+1. **F5 — provenance cardinality (the #1 Phase-3 decision).** `field_extraction.source_document_id` is
+   single (NOT NULL, composite FK). Phase-3 extraction fuses MANY messages/files per value. Decide
+   BEFORE the first real `field_extraction` row: (a) "one message = one source_document, cite the
+   anchor message" rule in the Phase-3 spec, or (b) a value↔many-sources bridge table. (b) is more
+   faithful to the "trace to the exact sentence" moat claim; (a) is lighter. Migrating the immutable,
+   RLS'd, trigger-guarded append-only table LATER is the most expensive change in the repo — so choose now.
+2. **F7 — `docker compose up` runs the engine against an UNMIGRATED DB** (no alembic/bootstrap in the
+   container path; app_rw role doesn't even exist yet). Only survived because dev runs via `uv` + manual
+   `alembic upgrade`. Add an idempotent init service/entrypoint (alembic upgrade + apply_procrastinate_schema
+   as intake_admin, depends_on db healthy) when the engine container becomes the entrypoint. Contradicts
+   the winning-condition setup gate until fixed.
+3. **F8 — `field_current` has no auto-refresh** (rebuild is manual). Before the review UI (Phase 7) reads
+   it, either funnel every extract/correct through one stage that rebuilds, or make it trigger-maintained
+   (AFTER INSERT on the logs). Decide at Phase 4.
+4. **A-MED — ASR/embed local wrappers unproven live** (only the LLM wrapper ran end-to-end; faster-whisper/
+   BGE-M3 proven at the library level Gate-A4, wrappers are thin). Prove when the Phase-3 pipeline calls them
+   (or `verify_backends_local --full` after `uv sync --group asr --group embed`).
+5. **M3 — GUC pool-reuse leak test** (nice-to-have): the fail-closed-unset direction is tested; add a
+   pool_size=1 same-connection-reuse test to prove `set_config(...,true)` doesn't leak across checkouts.
+
 **UPDATE (2026-08-12) — PHASE 2 DONE (all 3 units, verified live).** Also delivered `TEST-PLAN.md`
 (per-phase test plan, 0→9, mapped to BUILD-PLAN exit gates)
 and `scripts/demo_phase1.py` (hands-on Phase-1 trust demo, 14/14 live). Practice adopted (owner,

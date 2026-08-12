@@ -112,8 +112,10 @@ building everything upstream of it. Prove them cold, first, so the plan can chan
 - **Goal:** real input in → normalised text/media out, both channels, with segment-level provenance.
 - **Build:** **file-drop first** (WhatsApp chat-export parser in-house + uploads), then **WhatsApp test
   number** (webhook + 2-step media fetch, download-on-receipt within the 5-min URL); normalise: ffmpeg
-  + silero-vad + **Cohere API ASR** (segment-level timestamps) + **PaddleOCR** + **pdfplumber/pypdfium2**;
-  conversation windowing (24h gap + state + new-vs-follow-up classifier).
+  + silero-vad + ~~**Cohere API ASR**~~ **→ local `WhisperASR` (faster-whisper large-v3), already built in
+  Phase 2** (segment-level timestamps native) + **PaddleOCR** + **pdfplumber/pypdfium2**;
+  conversation windowing (24h gap + state + new-vs-follow-up classifier). **⚠ Decide F5 (provenance
+  cardinality, longterm_context §0) before writing the first real `field_extraction` row.**
 - **Subagents:** **Parallelise (fan-out).** The three channel adapters (file, WhatsApp, email-poll) are
   independent → one subagent each, then integrate. *Plus one research agent* to re-verify current
   WhatsApp Cloud API limits/media rules at build time (they change). Normalisation pipeline: single-context.

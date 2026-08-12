@@ -48,7 +48,7 @@ Phase 1 ✅ · Phases 2–9 ⏳.
 **Automated tests**
 - [x] `tests/test_health.py::test_health_ok` — app boots, `/health` returns `status:"ok"` + the four backend keys `{asr, llm, embedding, blob}`.
 - [x] `tests/test_config_backends.py::test_fake_backends_selected` — config loads the **fake** backend for all four interfaces.
-- [x] `tests/test_config_backends.py::test_local_backend_is_a_loud_stub` — a `local` backend raises `NotImplementedError` (loud stub, not silent).
+- [x] `tests/test_config_backends.py::test_local_backends_are_wired` — the `local` backends resolve behind the interfaces (was `test_local_backend_is_a_loud_stub`; the local-first override made local the built path, so it no longer stubs). Plus `test_cloud_inference_backends_are_not_built_yet` — `cloud` ASR/LLM/embed raise until built.
 - [x] `tests/test_config_backends.py::test_fake_embedding_is_1024d` — fake embedding returns BGE-M3 dimensionality (1024).
 - [x] CI green on the empty/scaffold suite (ruff/black/mypy strict + pytest + Vitest). Verified: engine **4 passed**, mypy strict 19 files; UI **1 vitest passed**, `vite build` ok.
 
