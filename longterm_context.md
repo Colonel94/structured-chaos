@@ -80,13 +80,19 @@ constraints, case-created-state, correction-only projection, cloud-backends-rais
 queue-args-IDs-only. **(config)** docstring said "all-cloud" + defaulted to cloud (ImportError on fresh
 checkout) → fixed to local. **Suite 23→38 green.**
 
-**DEFERRED to Phase 3+ (documented, NOT rushed — decide before building on them):**
-1. **F5 — provenance cardinality (the #1 Phase-3 decision).** `field_extraction.source_document_id` is
-   single (NOT NULL, composite FK). Phase-3 extraction fuses MANY messages/files per value. Decide
-   BEFORE the first real `field_extraction` row: (a) "one message = one source_document, cite the
-   anchor message" rule in the Phase-3 spec, or (b) a value↔many-sources bridge table. (b) is more
-   faithful to the "trace to the exact sentence" moat claim; (a) is lighter. Migrating the immutable,
-   RLS'd, trigger-guarded append-only table LATER is the most expensive change in the repo — so choose now.
+**F5 — RESOLVED + IMPLEMENTED (owner decision 2026-08-12, `3f59913`):** provenance is a **value↔many-sources
+bridge**, not one-source-per-value. My earlier "one-message rule" was wrong on the design's own facts
+(delay=102min is derived from the order record + complaint time; looked-up fields cite an object-store
+row, not a message; "cite the anchor" fails audit). Migration `0004`: dropped
+`field_extraction.source_document_id`/`source_span`; added `extraction_citation`
+(field_extraction─<citation>─source_document, **role** ∈ primary|corroborating|derived_from|**contradicts**,
+locator, weight — append-only + immutable + RLS'd) + `source_document.doc_kind`
+(message|file|**object_snapshot** — object-store rows snapshotted+content-hashed are source documents too).
+`record_extraction` now requires ≥1 citation (invariant moved from NOT-NULL column → boundary check).
+Human corrections stay the human citation (`field_correction.reviewer_id`). weight stored, not yet computed
+into confidence. Done pre-real-data (the bridge is cheap now, unreconstructable later). 42 tests green.
+
+**Still DEFERRED to Phase 3+ (documented, NOT rushed):**
 2. **F7 — `docker compose up` runs the engine against an UNMIGRATED DB** (no alembic/bootstrap in the
    container path; app_rw role doesn't even exist yet). Only survived because dev runs via `uv` + manual
    `alembic upgrade`. Add an idempotent init service/entrypoint (alembic upgrade + apply_procrastinate_schema
