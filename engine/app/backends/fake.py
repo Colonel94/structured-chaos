@@ -36,12 +36,17 @@ class FakeEmbedding:
 
 
 class FakeBlob:
+    """Content-addressed + write-once, exactly like MinioBlob — the fake MUST enforce the same
+    contract the real backend imposes, or a Phase-3 test written against an advisory `key` would
+    pass here and 404 against MinIO. The effective key is sha256(data); `key` is advisory only."""
+
     def __init__(self) -> None:
         self._store: dict[str, bytes] = {}
 
     async def put(self, key: str, data: bytes, *, content_type: str) -> str:
-        self._store[key] = data
-        return key
+        digest = hashlib.sha256(data).hexdigest()
+        self._store.setdefault(digest, data)  # write-once: never overwrite
+        return digest
 
     async def get(self, key: str) -> bytes:
         return self._store[key]

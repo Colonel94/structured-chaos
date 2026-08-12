@@ -24,6 +24,10 @@ jobs:
       - name: Mypy
         run: uv run mypy app
       - name: Pytest
+        # REQUIRE_DB makes the DB-backed trust suite a hard failure if the container can't start —
+        # the trust spine must never silently skip to green in CI (CLAUDE.md §6a).
+        env:
+          REQUIRE_DB: "1"
         run: uv run pytest -q
 
   ui:

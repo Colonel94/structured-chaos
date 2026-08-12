@@ -45,6 +45,21 @@ def test_local_backends_are_wired() -> None:
     assert isinstance(registry.get_blob(cfg), MinioBlob)
 
 
+@pytest.mark.parametrize("getter", ["get_asr", "get_llm", "get_embedding"])
+def test_cloud_inference_backends_are_not_built_yet(getter: str) -> None:
+    """Selecting `cloud` for ASR/LLM/embed fails loudly — those impls are the deferred path and
+    their modules don't exist. This guards against a half-built cloud module silently resolving.
+    (Blob's cloud path IS built — MinIO — so it's excluded.)"""
+    cfg = Settings(
+        asr_backend=Backend.cloud,
+        llm_backend=Backend.cloud,
+        embedding_backend=Backend.cloud,
+        blob_backend=Backend.cloud,
+    )
+    with pytest.raises(ImportError):
+        getattr(registry, getter)(cfg)
+
+
 @pytest.mark.asyncio
 async def test_fake_embedding_is_1024d() -> None:
     vecs = await FakeEmbedding().embed(["hello", "world"])

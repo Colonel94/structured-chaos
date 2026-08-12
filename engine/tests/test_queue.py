@@ -85,3 +85,26 @@ def test_backfill_uses_its_own_low_priority_queue(
             )
         ).scalar_one()
     assert queue_name == BACKFILL_QUEUE
+
+
+def test_job_args_carry_ids_only_never_content(
+    admin_session: Session, app_factory: sessionmaker[Session]
+) -> None:
+    """The queue is un-RLS'd, un-redacted infra — job args must carry only IDs, never customer
+    content, or a job row becomes a cross-tenant / PII leak channel (bypasses the isolation +
+    no-PII-in-logs gates at once). Establish + enforce the invariant now, before Phase-3 stages
+    are tempted to stuff normalised text into args."""
+    tenant = api.create_tenant(admin_session, "Queue-Args")
+    admin_session.commit()
+    with tenant_session(tenant, factory=app_factory) as s:
+        case = api.create_case(s, channel="file_drop", first_contact_at=_now())
+        defer_in_transaction(s, persist, tenant_id=str(tenant), case_id=str(case))
+        defer_in_transaction(
+            s, backfill, queue=BACKFILL_QUEUE, tenant_id=str(tenant), field_path="flavour"
+        )
+    allowed = {"tenant_id", "case_id", "field_path", "idempotency_key", "stage"}
+    with tenant_session(tenant, factory=app_factory) as s:
+        all_args = s.execute(text("SELECT args FROM procrastinate_jobs")).scalars().all()
+    for args in all_args:
+        stray = set(args.keys()) - allowed
+        assert not stray, f"job args carry non-id keys (leak risk): {stray}"

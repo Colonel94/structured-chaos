@@ -4,12 +4,14 @@ A real Postgres (pgvector image) is spun up once per session via testcontainers,
 Alembic migration is applied (so the tests exercise the real RLS/trigger/grant DDL, not a
 hand-rolled copy), and two engines are handed out: an **admin** engine (superuser — creates
 tenants) and an **app** engine that connects as the least-privilege ``app_rw`` role the
-migration created. Tests that need the DB depend on these fixtures; if Docker is unavailable
-they skip rather than fail, so the non-DB suite still runs anywhere.
+migration created. Tests that need the DB depend on these fixtures; locally they skip if Docker is
+unavailable (so the non-DB suite runs anywhere), but under CI a missing DB is a HARD FAILURE — the
+trust spine must never silently skip its way to green (see `_REQUIRE_DB`).
 """
 
 from __future__ import annotations
 
+import os
 from collections.abc import Iterator
 from pathlib import Path
 
@@ -22,8 +24,27 @@ from app.store.db import make_engine
 
 _ENGINE_DIR = Path(__file__).resolve().parents[1]
 
+# In CI (GitHub sets CI=true) the trust-spine suite MUST run — a missing DB is a hard failure, not
+# a silent skip. Otherwise a broken testcontainers import or a Docker hiccup would let an RLS /
+# immutability / idempotency regression ship green, voiding CLAUDE.md §6a. Locally (no CI / no
+# REQUIRE_DB) the DB tests still skip so the non-DB suite runs anywhere.
+_REQUIRE_DB = os.environ.get("CI") == "true" or os.environ.get("REQUIRE_DB") == "1"
+
+
+def _no_db(reason: str) -> None:
+    if _REQUIRE_DB:
+        pytest.fail(f"DB-backed trust tests are required here but the DB is unavailable: {reason}")
+    pytest.skip(reason)
+
+
 try:
-    from testcontainers.postgres import PostgresContainer
+    # Prefer the non-deprecated location; fall back to the classic one on older testcontainers.
+    try:
+        from testcontainers.community.postgres import (
+            PostgresContainer,  # type: ignore[import-not-found]
+        )
+    except Exception:  # noqa: BLE001
+        from testcontainers.postgres import PostgresContainer
 
     _HAS_TC = True
 except Exception:  # noqa: BLE001  # pragma: no cover - import guard
@@ -32,9 +53,9 @@ except Exception:  # noqa: BLE001  # pragma: no cover - import guard
 
 @pytest.fixture(scope="session")
 def pg() -> Iterator[None]:
-    """Start Postgres, point the global settings at it, and apply migration 0001."""
+    """Start Postgres, point the global settings at it, and apply the migrations + queue schema."""
     if not _HAS_TC:
-        pytest.skip("testcontainers not installed")
+        _no_db("testcontainers not installed")
 
     try:
         container = PostgresContainer(
@@ -45,7 +66,7 @@ def pg() -> Iterator[None]:
         )
         container.start()
     except Exception as exc:  # noqa: BLE001  # Docker not running / image unavailable
-        pytest.skip(f"Docker/Postgres unavailable: {exc}")
+        _no_db(f"Docker/Postgres unavailable: {exc}")
 
     # Repoint the global settings at the container so the migration + app engines all agree.
     settings.postgres_host = container.get_container_host_ip()

@@ -79,6 +79,32 @@ def meter_usage(
     )
 
 
+def meter_backend(
+    session: Session,
+    *,
+    backend: object,
+    interface: str,
+    backend_name: str,
+    model: str,
+    case_id: UUID | None = None,
+    cost_usd: float = 0.0,
+) -> None:
+    """Record a backend's ``last_usage`` after a call — the seam that closes the loop
+    backend-call → meter row. Call it **immediately after** the awaited backend call, on the same
+    per-work-unit backend instance (see backends/local single-flight contract), so usage is not
+    clobbered by a concurrent call. Real pipeline stages (Phase 3) call this after each backend."""
+    usage = getattr(backend, "last_usage", {}) or {}
+    meter_usage(
+        session,
+        interface=interface,
+        backend=backend_name,
+        model=model,
+        usage=usage,
+        case_id=case_id,
+        cost_usd=cost_usd,
+    )
+
+
 def case_cost(session: Session, case_id: UUID) -> dict[str, float]:
     """Aggregate usage for a case: call count, tokens, audio-seconds, total wall/GPU time, and $.
     RLS scopes this to the current tenant — another tenant reading the same case_id gets zeros."""

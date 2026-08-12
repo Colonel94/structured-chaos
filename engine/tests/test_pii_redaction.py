@@ -29,3 +29,20 @@ def test_pii_never_appears_in_logs(capsys: pytest.CaptureFixture[str]) -> None:
     assert "redacted" in out
     assert "case_ingested" in out
     assert "abc-123" in out
+
+
+def test_pii_redacted_in_nested_and_list_structures(capsys: pytest.CaptureFixture[str]) -> None:
+    """The redaction recurses: PII under a nested dict's sensitive key, and email/phone inside a
+    list, must not leak. (Locks the recursion the 'no customer data in logs' gate depends on.)"""
+    configure_logging("INFO")
+    log = get_logger("test")
+    log.info(
+        "nested_event",
+        payload={"phone": "+971501234567", "note": "ring back on +971 50 111 2222"},
+        attachments=["email ahmed@example.com", "invoice 9988776655"],
+    )
+    out = capsys.readouterr().out
+    assert "971501234567" not in out  # nested sensitive key → wholesale redacted
+    assert "ahmed@example.com" not in out  # email inside a list → masked
+    assert "9988776655" not in out  # long digit run inside a list → masked
+    assert "111 2222" not in out  # spaced phone in a nested value → masked

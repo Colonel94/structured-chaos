@@ -2,7 +2,9 @@
 
 Every inference component (ASR / LLM / Embedding / Blob) sits behind one interface with
 a `local` and a `cloud` backend, chosen by config, never by a code change (CLAUDE.md §4,
-TECH-SPEC §0.1). The PoC runs all-cloud; local impls are stubs; tests use `fake`.
+TECH-SPEC §0.1). The PoC runs all-LOCAL on the 4070 (owner override 2026-08-10):
+faster-whisper / Ollama / BGE-M3 / MinIO. The cloud impls are the deferred path (ASR/LLM/embed
+cloud modules are not built yet). Tests use `fake`.
 """
 
 from __future__ import annotations
@@ -37,11 +39,13 @@ class Settings(BaseSettings):
     # instead of silently colliding with a prior one. Bump on any extraction-behaviour change.
     code_version: str = "0.1.0"
 
-    # --- backend switch (one per interface) ---
-    asr_backend: Backend = Backend.cloud
-    llm_backend: Backend = Backend.cloud
-    embedding_backend: Backend = Backend.cloud
-    blob_backend: Backend = Backend.cloud
+    # --- backend switch (one per interface) — default LOCAL (the committed PoC path); the .env
+    #     sets these explicitly. Defaulting to `cloud` here would ImportError on a fresh checkout,
+    #     since the cloud ASR/LLM/embed impls are not built yet. ---
+    asr_backend: Backend = Backend.local
+    llm_backend: Backend = Backend.local
+    embedding_backend: Backend = Backend.local
+    blob_backend: Backend = Backend.local
 
     # --- cloud credentials (empty until Gate A; smoke scripts assert 200) ---
     anthropic_api_key: str = ""
