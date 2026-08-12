@@ -65,6 +65,12 @@ def pg() -> Iterator[None]:
     cfg.set_main_option("sqlalchemy.url", settings.admin_database_url)
     command.upgrade(cfg, "head")
 
+    # Procrastinate owns/versions its own schema — apply it (+ app_rw grants) alongside the
+    # Alembic-managed trust spine, so the transactional-enqueue tests have a queue to defer into.
+    from app.queue import admin_conninfo, apply_procrastinate_schema
+
+    apply_procrastinate_schema(admin_conninfo())
+
     try:
         yield None
     finally:
