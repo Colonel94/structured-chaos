@@ -16,38 +16,55 @@ be corrected (except the two research-backed spec deltas in §6, which supersede
 
 ## 0. Current state & next actions  ← read this first every session; keep it current
 
-> ### ⇢ SESSION HANDOFF — read this box first (2026-08-13). The dated UPDATE blocks below are the audit trail; THIS is the current truth.
+> ### ⇢ SESSION HANDOFF — read this box first (2026-08-13, Phase 3). The dated UPDATE blocks below are the audit trail; THIS is the current truth.
 >
-> **Status:** Phases **0, 1, 2 DONE + verified live.** Phase 0.5 partial (spike #3 PASS; #1/#2 STAGED,
-> parked on Gate-A5 recordings). A **3-reviewer adversarial cross-phase review** ran — verdict Phase 0/1
-> genuinely met, Phase 2 gaps all closed. **F5 (provenance model) RESOLVED + built:** value↔many-sources
-> **citation bridge** (`extraction_citation`, roles incl. `contradicts`; object-store rows are
-> `object_snapshot` source_documents), migration `0004`.
+> **Status:** Phases **0, 1, 2, 3 DONE + verified live.** Phase 0.5 partial (spike #3 PASS; #1/#2 STAGED,
+> parked on Gate-A5 recordings). F5 (provenance citation bridge) built, migration `0004`.
 >
-> **Numbers:** **42 tests green** (run CI-mode: `REQUIRE_DB=1`), 4 migrations, ~2.5k LOC. `origin/main` @
-> **`bb10ca5`**, working tree clean, all pushed to `github.com/Colonel94/structured-chaos`.
+> **Phase 3 (this session) — file-drop intake + normalisation, EN-first:** in-house WhatsApp chat-export
+> parser (`app/intake/whatsapp_export.py` — iOS+Android, multi-line, attachments, media-omitted, bidi,
+> locale-locking, **UTC-aware times**; NOT whatstk/GPL) + generic upload (`upload.py`); channel-agnostic
+> `InboundMessage` (`models.py`). **Normalisation** (`app/normalise/`): router by MIME → audio
+> (faster-whisper + bundled silero `vad_filter`, segment spans) · ocr (PaddleOCR, **container-only**,
+> EN PP-OCRv5) · pdf (pdfplumber text-layer + pypdfium2 rasterise→OCR) · text passthrough — every fragment
+> carries a provenance span in the exact `Citation` locator shape. **Windowing** (`windowing.py`): 24h idle
+> gap + close-state + LLM classifier for the gray band, biases NEW when unsure. **Ingest orchestrator**
+> (`ingest.py`): windows each msg, stores text+attachments as immutable content-addressed
+> `source_document`s, **transactionally enqueues** the normalise stage; message-content dedup → re-ingest
+> is a no-op. **Pipeline** (`pipeline.py` `normalise_source_document`, claim→work→complete ledger) wired as
+> the real `pipeline.normalise` task in `queue.py`. Migrations **`0005` normalised_content** (derived,
+> RLS'd, spans) + **`0006` case_record.contact_ref** (windowing anchor).
+> **A-MED CLOSED:** `WhisperASR` now calls `enable_cuda_win()` + `vad_filter`; **proven live on the GPU**
+> transcribing real speech with segment timestamps. **F7 CLOSED:** compose `migrate` one-shot
+> (`app/init_db.py`) runs alembic + procrastinate schema before the engine serves.
+>
+> **Numbers:** **63 tests green** (was 42; run CI-mode `REQUIRE_DB=1`), **6 migrations**, ~4k LOC. Latest
+> commit `8759a34` on `main` (feat), + a docs(handoff) commit; push to `github.com/Colonel94/structured-chaos`.
+> ruff/black/mypy --strict clean.
 >
 > **Environment (Windows host):** Docker `db`+`minio` healthy. **Ollama may be DOWN after a reboot →
-> start `Ollama app.exe`** (models `qwen3:14b` etc. are on the 4070). Migrate a fresh DB with
-> `cd engine && uv run alembic upgrade head` + `python scripts/bootstrap_procrastinate.py`.
+> start `Ollama app.exe`** (qwen3:14b on the 4070). Migrate a fresh DB: `cd engine && uv run alembic
+> upgrade head` + `python scripts/bootstrap_procrastinate.py` (or, in compose, the new `migrate` service).
+> Phase-3 host deps: `uv sync --group asr --group pdf` (OCR stays container-only). **Gotcha:** run
+> `black`/`ruff` from `engine/` on `app tests` ONLY. Windows console: prefix `PYTHONIOENCODING=utf-8` for
+> scripts that print non-ASCII.
 >
-> **Run/verify:** tests → `cd engine && uv run pytest` (spins its own Postgres via testcontainers; add
-> `REQUIRE_DB=1` to fail-not-skip like CI). Live checks → `scripts/verify_infra.py` · `verify_blob.py` ·
-> `verify_backends_local.py` (`--full` for BGE+whisper) · `verify_meter.py` · `demo_phase1.py` (15/15,
-> the hands-on trust demo). **Gotcha:** run `black`/`ruff` from `engine/` on `app tests` ONLY — never pass
-> a repo-root `../scripts/...` path to black (it drops to width 88 and reflows committed files).
+> **Run/verify:** tests → `cd engine && REQUIRE_DB=1 uv run pytest`. OCR/PDF-image are container-only:
+> `docker compose -f deploy/docker-compose.yml build engine` then run a one-off (mounts break on the
+> "Structured Chaos" space → rebuild rather than `-v` the source). Live spine proof this session: an
+> Android export split into 2 cases (windowing), immutable docs, transactional jobs, idempotent replay,
+> per-case transcript projection.
 >
-> **NEXT → Phase 3 — Intake + normalisation** (`BUILD-PLAN.md`): **file-drop first** (WhatsApp chat-export
-> parser + uploads), then WhatsApp test number; normalise ffmpeg + silero-vad + **local `WhisperASR`
-> (built)** + **PaddleOCR** + pypdfium2; conversation windowing (new-vs-follow-up). Wire real task bodies
-> into the Procrastinate queue, each guarded by the `claim_stage`/`complete_stage` ledger. Provenance is
-> settled — extractions cite the bridge; every inbound message/file is a `source_document`.
+> **NEXT → Phase 4 — Extraction + self-converging schema (the moat) + light PII gate + the scorer**
+> (`BUILD-PLAN.md`). Reads `get_case_normalised_text(case)`; GBNF/JSON-constrained extraction →
+> closed-world grounding → BGE-M3/pgvector dedup (τ) → recurrence promotion + backfill; convergence graded
+> on REAL collected data, never author-generated. Build the scorer here, not Phase 8.
 >
-> **Still deferred (cheap, pick up in/after Phase 3):** F7 — `docker compose up` must run alembic +
-> bootstrap before serving (init step/entrypoint); F8 — `field_current` auto-refresh (trigger or funnel
-> through one stage) before the Phase-7 UI reads it; A-MED — prove the ASR/embed wrappers live
-> (`verify_backends_local --full`); M3 — a GUC pool-reuse leak test. **Parked:** Gate-A5 owner recordings
-> (spikes #1/#2). **Standing practice:** commit fixes directly, no asking ([[commit-fixes-directly]]).
+> **Still deferred (cheap):** **F8** — `field_current` auto-refresh (decide at Phase 4, before the review
+> UI reads it); **A-MED(embed)** — BGE-M3 wrapper still only library-proven (lands when Phase-4 dedup calls
+> it); **M3** — GUC pool-reuse leak test. **Deferred within Phase 3:** WhatsApp live webhook (needs Meta
+> test number, track T2) + email drop (needs UAE mailbox) — file-drop is the $0 PoC channel. **Parked:**
+> Gate-A5 owner recordings (spikes #1/#2). **Standing practice:** commit fixes directly ([[commit-fixes-directly]]).
 > **Status page (private):** https://claude.ai/code/artifact/4c909fb2-b42e-4f3e-96d2-e7367b366635
 
 **UPDATE (2026-08-12) — ENGLISH-FIRST focus (owner directive).** For now, build/verify the **English

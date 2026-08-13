@@ -109,6 +109,14 @@ building everything upstream of it. Prove them cold, first, so the plan can chan
 - **Regression gate:** Phase 1 spine + the transactional-enqueue no-orphan test.
 
 ## Phase 3 — Intake + normalisation
+- **STATUS (2026-08-13): DONE + verified live (EN-first, file-drop).** In-house WhatsApp export parser
+  (iOS/Android) + upload adapter; normalisation router (audio=faster-whisper+vad_filter · ocr=PaddleOCR
+  container-only · pdf=pdfplumber+pypdfium2 · text) with Citation-shaped provenance spans; conversation
+  windowing (24h/close-state/LLM classifier, biases NEW); ingest orchestrator (immutable content-addressed
+  source docs + transactional normalise enqueue + re-ingest dedup); `pipeline.normalise` stage on the
+  claim/complete ledger; migrations `0005` normalised_content + `0006` contact_ref. **A-MED + F7 closed.**
+  63 tests green; live E2E proof (2-case windowing split, projection, idempotent replay); ASR proven on GPU.
+  Deferred within: WhatsApp live webhook (Meta test number, T2) + email drop (UAE mailbox). Commit `8759a34`.
 - **Goal:** real input in → normalised text/media out, both channels, with segment-level provenance.
 - **Build:** **file-drop first** (WhatsApp chat-export parser in-house + uploads), then **WhatsApp test
   number** (webhook + 2-step media fetch, download-on-receipt within the 5-min URL); normalise: ffmpeg
