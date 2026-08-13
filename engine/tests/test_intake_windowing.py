@@ -79,3 +79,37 @@ async def test_classifier_malformed_output_fails_safe_to_new() -> None:
     prior = PriorCase(uuid4(), "actionable", now - timedelta(hours=48), prior_text="x")
     d = await decide_window(_msg(now), prior, llm=_FakeLLM(malformed=True))
     assert d.action == "new"  # never merge on a guess
+
+
+class _RaisingLLM:
+    async def complete(self, prompt: str, *, schema: dict[str, object] | None = None) -> str:
+        raise RuntimeError("ollama timeout")
+
+
+class _NullJsonLLM:
+    async def complete(self, prompt: str, *, schema: dict[str, object] | None = None) -> str:
+        return "null"  # valid JSON, but not an object → .get would AttributeError if uncaught
+
+
+async def test_classifier_backend_exception_fails_safe_not_aborts() -> None:
+    # M1: a backend timeout / non-dict JSON must fail safe to a new case, never propagate and abort
+    # the whole ingest batch.
+    now = datetime.now(UTC)
+    prior = PriorCase(uuid4(), "actionable", now - timedelta(hours=48), prior_text="x")
+    d1 = await decide_window(_msg(now), prior, llm=_RaisingLLM())
+    d2 = await decide_window(_msg(now), prior, llm=_NullJsonLLM())
+    assert d1.action == "new" and d1.method == "classifier"
+    assert d2.action == "new" and d2.method == "classifier"
+
+
+async def test_far_past_backlog_message_is_not_folded_unboundedly() -> None:
+    # L1: a message far BEFORE the case's last activity (out-of-order backlog) is outside the ±24h
+    # window → ambiguous, not an automatic follow_up.
+    now = datetime.now(UTC)
+    prior = PriorCase(uuid4(), "incomplete", now)  # last activity = now
+    backlog = _msg(now - timedelta(days=30))  # 30 days older than last activity → gap ≈ -30d
+    d = await decide_window(backlog, prior, llm=None)
+    assert d.action == "new"  # not a silent unbounded fold-in
+    # a message just before last activity (within 24h) still follows the open case
+    recent = _msg(now - timedelta(hours=2))
+    assert (await decide_window(recent, prior)).action == "follow_up"

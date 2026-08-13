@@ -38,9 +38,23 @@ be corrected (except the two research-backed spec deltas in §6, which supersede
 > transcribing real speech with segment timestamps. **F7 CLOSED:** compose `migrate` one-shot
 > (`app/init_db.py`) runs alembic + procrastinate schema before the engine serves.
 >
-> **Numbers:** **63 tests green** (was 42; run CI-mode `REQUIRE_DB=1`), **6 migrations**, ~4k LOC. Latest
-> commit `8759a34` on `main` (feat), + a docs(handoff) commit; push to `github.com/Colonel94/structured-chaos`.
-> ruff/black/mypy --strict clean.
+> **Numbers:** **71 tests green + 1 skipped** (container-only multimodal; was 42; run CI-mode
+> `REQUIRE_DB=1`), **6 migrations**, ~4.5k LOC. `main` @ latest (feat + fixes + docs); push to
+> `github.com/Colonel94/structured-chaos`. ruff/black/mypy --strict clean.
+>
+> **ADVERSARIAL CROSS-PHASE REVIEW (2026-08-13) — done, all real gaps closed.** 3 independent reviewers
+> (trust-spine / correctness / exit-gate). **Trust spine + Phase-2 enqueue: genuinely intact, not
+> regressed.** Real gaps found + FIXED this pass: **GAP-1** cost-meter had ZERO production callers →
+> now wired into normalise (ASR/OCR) + the windowing classifier, per-case `backend_call` recorded;
+> **H1** content-only dedup dropped legit repeated messages → now a stage-ledger key on
+> (sender+time+content); **H2** captioned Android media was dropped → attachment matched on the first
+> line, caption kept; **H3** scanned-PDF OCR-unavailable was marked done-forever → now `degraded` →
+> `fail_stage` (re-claimable in the container); **H4/M5** tiny-text-layer scanned PDFs misread →
+> boilerplate-strip + keep partial text; **H5** locale re-locked mid-file → order detected once for the
+> whole file; **M1** classifier backend error aborted ingest → fail-safe to new; **L1/L2/M4** negative-gap
+> guard / NaN→None confidence / zip basename-collision. **GAP-2** OCR/PDF had no automated test → added a
+> container-gated multimodal test (skips on host). Documented-as-PoC-acceptable (real but scale/opt-in):
+> M2 classifier cross-call empty context (safe-split bias), M3/M6 batch/stage transaction hold.
 >
 > **Environment (Windows host):** Docker `db`+`minio` healthy. **Ollama may be DOWN after a reboot →
 > start `Ollama app.exe`** (qwen3:14b on the 4070). Migrate a fresh DB: `cd engine && uv run alembic

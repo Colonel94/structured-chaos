@@ -10,6 +10,10 @@ from .interfaces import Transcript, TranscriptSegment
 
 
 class FakeASR:
+    def __init__(self) -> None:
+        # Mirrors the real backends' `last_usage` so the cost-meter path is exercised in tests.
+        self.last_usage: dict[str, float] = {"wall_ms": 1.0, "audio_seconds": 1.0}
+
     async def transcribe(self, audio: bytes, *, mime: str) -> Transcript:
         return Transcript(
             language="ar",

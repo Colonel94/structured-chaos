@@ -29,9 +29,10 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from ..backends.interfaces import BlobStore, LLMBackend
 from ..backends.registry import get_blob
+from ..config import settings
 from ..obs.logging import get_logger
 from ..queue import defer_in_transaction, normalise_document
-from ..store import api
+from ..store import api, meter
 from ..store.db import SessionFactory, tenant_session
 from .models import InboundMessage
 from .windowing import PriorCase, decide_window
@@ -56,16 +57,24 @@ def _sha(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
 
 
-def _identity_sha(msg: InboundMessage) -> str | None:
-    """The content hash that identifies a message for idempotency: its text if any, else its first
-    real attachment. ``None`` when nothing is storable (an all-missing-media message), which is left
-    to create a case reflecting that something arrived we couldn't retain."""
+def _message_key(msg: InboundMessage) -> str | None:
+    """A per-message idempotency key = hash(sender + sent_at + content). Re-uploading the SAME export
+    yields identical keys (skipped), but a customer legitimately repeating a message ("ok", "still
+    broken") at a different time yields a different key (processed) — the H1 fix. Content-only keying
+    over-matched: it dropped repeated messages tenant-wide and could fail to open a new case. ``None``
+    when nothing is storable (an all-missing-media message), which is left to create a case."""
+    content: str | None = None
     if msg.text:
-        return _sha(msg.text.encode("utf-8"))
-    for att in msg.attachments:
-        if att.data and not att.missing:
-            return _sha(att.data)
-    return None
+        content = _sha(msg.text.encode("utf-8"))
+    else:
+        for att in msg.attachments:
+            if att.data and not att.missing:
+                content = _sha(att.data)
+                break
+    if content is None:
+        return None
+    material = f"{msg.sender}\x1f{msg.sent_at.isoformat()}\x1f{content}"
+    return _sha(material.encode("utf-8"))
 
 
 async def ingest_messages(
@@ -81,6 +90,11 @@ async def ingest_messages(
     All writes + enqueues run in a single tenant transaction, so the whole batch is atomic. Windowing
     is applied per sender in ascending ``sent_at`` order; within the batch, an in-memory view of the
     case being built is used so a run of messages folds into one case without a DB round-trip each.
+
+    PoC-scale note (M3): the whole batch runs in one tenant transaction spanning every ``blob.put``
+    and (opt-in) classifier call. For typical exports (<~100 messages) this is fine and gives all-or-
+    nothing atomicity; the scale path is to commit per bounded chunk. Blobs are content-addressed +
+    write-once, so a rollback leaves only unreferenced (harmless, dedup-safe) objects.
     """
     blob = blob or get_blob()
     result = IngestResult()
@@ -98,10 +112,13 @@ async def ingest_messages(
             building: PriorCase | None = None
 
             for msg in msgs:
-                # Idempotency: a message whose exact content was already ingested is a no-op —
-                # no new case, no new document (regression gate: re-ingest → no dup case).
-                identity = _identity_sha(msg)
-                if identity is not None and api.source_document_exists(session, identity):
+                # Idempotency (regression gate: re-ingest → no dup case): claim a per-message key
+                # on the Phase-1 stage ledger. A re-uploaded export re-claims a 'done' key → skipped;
+                # a genuinely new message (incl. a repeated phrase at a new time) gets a fresh key.
+                msg_key = _message_key(msg)
+                if msg_key is not None and not api.claim_stage(
+                    session, stage="intake_message", idempotency_key=msg_key, case_id=None
+                ):
                     continue
 
                 prior = building or _load_prior(session, sender)
@@ -125,6 +142,17 @@ async def ingest_messages(
                     method=decision.method,
                     case_id=str(case_id),
                 )
+                # Meter the windowing classifier's LLM call against the case (GAP-1 completeness):
+                # it only fires in the ambiguous gray band, and only when an llm is provided.
+                if decision.method == "classifier" and llm is not None:
+                    meter.meter_backend(
+                        session,
+                        backend=llm,
+                        interface="llm",
+                        backend_name=settings.llm_backend.value,
+                        model=settings.ollama_model,
+                        case_id=case_id,
+                    )
 
                 accumulated: list[str] = [prior.prior_text] if (prior and building) else []
 
@@ -162,6 +190,11 @@ async def ingest_messages(
                     )
                     result.source_document_ids.append(sdid)
 
+                # Mark the message ingested (claim → done). Same transaction as the writes, so a
+                # crash rolls back the claim too; a successful commit makes a re-upload a no-op.
+                if msg_key is not None:
+                    api.complete_stage(session, idempotency_key=msg_key)
+
                 # Advance the in-memory building view for the next message in this run.
                 building = PriorCase(
                     case_id=case_id,
@@ -174,7 +207,13 @@ async def ingest_messages(
 
 def _load_prior(session: Session, sender: str) -> PriorCase | None:
     """Build the windowing context from the sender's latest DB case (its state, last activity, and a
-    recent text slice for the classifier)."""
+    recent text slice for the classifier).
+
+    Known limitation (M2): ``prior_text`` comes from ``normalised_content``, populated by the deferred
+    normalise stage — so on a cross-call follow-up arriving before that stage has run, the classifier
+    sees empty prior context and (by its safe bias) tends to open a new case. This degrades toward the
+    cheap-to-fix direction (split, not wrong-merge); sourcing the slice from raw message text is a
+    Phase-4+ improvement. Intra-batch runs are unaffected (they use the in-memory building view)."""
     if not sender:
         return None
     found = api.latest_case_for_contact(session, contact_ref=sender)

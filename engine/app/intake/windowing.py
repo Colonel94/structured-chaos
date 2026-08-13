@@ -91,10 +91,14 @@ async def _classify(message: InboundMessage, prior: PriorCase, llm: LLMBackend) 
     try:
         raw = await llm.complete(prompt, schema=_CLASSIFIER_SCHEMA)
         verdict = json.loads(raw)
+        if not isinstance(verdict, dict):
+            raise TypeError("classifier verdict was not a JSON object")
         decision = verdict.get("decision")
         reason = str(verdict.get("reason", ""))[:300]
-    except (json.JSONDecodeError, ValueError, KeyError, TypeError):
-        return _new("classifier returned no usable verdict → default new", "classifier")
+    except Exception:  # noqa: BLE001 — ANY failure (backend timeout, transport error, non-dict
+        # JSON, missing key) must fail safe to a new case, never abort the ingest batch. Merging on
+        # a guess is the unrecoverable error; splitting is cheaply re-linked by a human.
+        return _new("classifier unavailable/unusable → default new", "classifier")
     if decision == "follow_up":
         return _follow(prior.case_id, reason or "classifier: same issue", "classifier")
     return _new(reason or "classifier: new issue", "classifier")
@@ -125,10 +129,15 @@ async def decide_window(
             return _new("closed case, no classifier available → default new", "terminal_state")
         return await _classify(message, prior, llm)
 
-    # Open case.
-    if gap <= OPEN_IDLE:
+    # Open case. Use |gap| so an out-of-order/backlog message that predates the case's last activity
+    # (negative gap) doesn't fold in unboundedly (L1): only messages within 24h *either side* of the
+    # activity window are the same conversation deterministically; anything further (long future
+    # silence OR far-past backlog) is ambiguous.
+    if abs(gap) <= OPEN_IDLE:
         return _follow(prior.case_id, "within 24h of open-case activity", "idle_gap")
-    # Long silence on an open case → new issue or resumed thread? Ambiguous → classify.
+    # Far from the case's activity window → new issue or resumed thread? Ambiguous → classify.
     if llm is None:
-        return _new("open case idle >24h, no classifier → default new", "idle_gap")
+        return _new(
+            "open case, message outside 24h window, no classifier → default new", "idle_gap"
+        )
     return await _classify(message, prior, llm)

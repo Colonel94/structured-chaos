@@ -32,6 +32,9 @@ async def normalise_audio(
         for seg in transcript.segments
         if seg.text
     ]
+    # last_usage (wall_ms / audio_seconds) is read here, on the same instance we just awaited, so the
+    # pipeline can meter this ASR call against the case (cost-per-case, EDD/BUILD-PLAN Phase 2).
+    usage = dict(getattr(asr, "last_usage", {}) or {})
     return NormalisedContent(
         source_document_id=source_document_id,
         text=" ".join(s.text for s in spans),
@@ -40,4 +43,6 @@ async def normalise_audio(
         stage="normalise.audio",
         model="faster-whisper",
         model_version=settings.whisper_model,
+        usage=usage,
+        interface="asr",
     )

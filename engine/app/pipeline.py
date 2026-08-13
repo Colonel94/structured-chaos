@@ -19,7 +19,7 @@ from .backends.registry import get_blob
 from .config import settings
 from .normalise.router import normalise
 from .obs.logging import get_logger
-from .store import api
+from .store import api, meter
 from .store.db import SessionFactory, tenant_session
 
 log = get_logger(__name__)
@@ -90,6 +90,34 @@ async def normalise_source_document(
             model_version=content.model_version,
             meta=content.meta,
         )
+
+        # Cost-per-case meter (GAP-1 / Phase-2 invariant): record the inference call against the case
+        # when this stage used a metered backend (ASR/OCR). Local backends → $0; wall_ms / audio-
+        # seconds / tokens are the real per-case figure. Recorded in the same tenant transaction.
+        if content.interface in ("asr", "ocr") and content.usage:
+            backend_name = settings.asr_backend.value if content.interface == "asr" else "local"
+            meter.meter_usage(
+                session,
+                interface=content.interface,
+                backend=backend_name,
+                model=content.model,
+                usage=content.usage,
+                case_id=case_id,
+            )
+
+        if content.degraded:
+            # Normalisation was incomplete (e.g. OCR unavailable on this host). Leave the stage
+            # re-claimable (H3) so a capable environment re-runs it, instead of committing an empty
+            # 'done'. The partial text we did extract is already persisted above.
+            api.fail_stage(session, idempotency_key=key)
+            log.info(
+                "normalise.degraded",
+                source_document_id=str(source_document_id),
+                stage=content.stage,
+                reason=content.meta.get("ocr") or content.meta.get("pdf") or "incomplete",
+            )
+            return content.text or None
+
         api.complete_stage(session, idempotency_key=key)
         log.info(
             "normalise.done",

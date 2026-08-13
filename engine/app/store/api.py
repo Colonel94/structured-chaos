@@ -119,17 +119,6 @@ def latest_case_for_contact(
     return UUID(str(row[0])), str(row[1]), row[2]
 
 
-def source_document_exists(session: Session, sha256: str) -> bool:
-    """Whether a source document with these exact bytes already exists for the current tenant —
-    the idempotency check that makes re-ingesting the same content a no-op (no duplicate case).
-    RLS scopes it to the tenant, matching the ``UNIQUE (tenant_id, sha256)`` constraint."""
-    row = session.execute(
-        text("SELECT 1 FROM source_document WHERE sha256 = :sha LIMIT 1"),
-        {"sha": sha256},
-    ).first()
-    return row is not None
-
-
 def get_source_document(
     session: Session, source_document_id: UUID
 ) -> tuple[UUID, str, str, str] | None:

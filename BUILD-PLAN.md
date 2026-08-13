@@ -104,8 +104,10 @@ building everything upstream of it. Prove them cold, first, so the plan can chan
 - **Subagents:** *Optional, short research spike* to confirm current Anthropic structured-output + Cohere
   transcription request shapes. Implementation: single-context.
 - **Exit gate:** a trivial job flows ingest→persist through Procrastinate in one transaction (kill mid-run
-  → no orphan/phantom); each interface's cloud impl returns a real response; local stubs raise
-  `NotImplemented`; **the cost meter reports a per-case $ figure.**
+  → no orphan/phantom); each interface's impl returns a real response; **the cost meter reports a per-case
+  $ figure.** *(v1.2 reality, per the banner: the **LOCAL** impls are built (faster-whisper/Ollama/BGE-M3);
+  the CLOUD impls are the deferred path and raise `ImportError` if selected — the inverse of the original
+  cloud-first wording. The meter's per-case wiring into the real ASR/OCR pipeline landed in Phase 3, GAP-1.)*
 - **Regression gate:** Phase 1 spine + the transactional-enqueue no-orphan test.
 
 ## Phase 3 — Intake + normalisation

@@ -37,7 +37,13 @@ class NormalisedSpan:
 class NormalisedContent:
     """The full normalisation result for one source document. ``text`` is the concatenation used by
     extraction; ``spans`` preserve where each part came from; ``stage`` names the normaliser (for
-    idempotency-key + provenance); ``model``/``model_version`` identify the ASR/OCR engine used."""
+    idempotency-key + provenance); ``model``/``model_version`` identify the ASR/OCR engine used.
+
+    ``usage`` + ``interface`` carry the backend's cost figures (ASR/OCR wall_ms / audio-seconds /
+    tokens) so the pipeline can record a per-case ``backend_call`` on the cost meter — ``interface``
+    is 'asr' | 'ocr' | 'none' (the last for cheap non-inference paths: text passthrough, PDF text
+    layer). ``degraded`` marks a result that could not fully normalise (e.g. OCR unavailable on the
+    host) so the pipeline leaves the stage re-claimable instead of committing an empty 'done'."""
 
     source_document_id: str
     text: str
@@ -47,3 +53,6 @@ class NormalisedContent:
     model: str
     model_version: str
     meta: dict[str, str] = field(default_factory=dict)
+    usage: dict[str, float] = field(default_factory=dict)
+    interface: str = "none"  # 'asr' | 'ocr' | 'none' — which metered interface produced this
+    degraded: bool = False  # true → normalisation incomplete; do not mark the stage done

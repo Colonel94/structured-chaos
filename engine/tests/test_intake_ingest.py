@@ -8,15 +8,19 @@ and idempotent; re-ingesting the same content creates no duplicate case or docum
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
+
 import pytest
 from sqlalchemy import text
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.backends.fake import FakeBlob
+from app.config import Backend, settings
 from app.intake.ingest import ingest_messages
+from app.intake.models import InboundAttachment, InboundMessage
 from app.intake.whatsapp_export import parse_export_text
 from app.pipeline import normalise_source_document
-from app.store import api
+from app.store import api, meter
 from app.store.db import tenant_session
 
 pytestmark = pytest.mark.usefixtures("pg")
@@ -82,6 +86,85 @@ async def test_ingest_windows_stores_normalises_and_is_idempotent(
         ndocs = s.execute(text("SELECT count(*) FROM source_document")).scalar_one()
     assert ncases == 2
     assert ndocs == 4
+
+
+async def test_normalise_records_cost_per_case_on_the_meter(
+    admin_session: Session, app_factory: sessionmaker[Session], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """GAP-1: a normalise stage that runs a backend (ASR) must record a per-case backend_call, or
+    case_cost() silently measures zero. Uses the fake ASR backend (deterministic last_usage)."""
+    monkeypatch.setattr(settings, "asr_backend", Backend.fake)
+    tenant = api.create_tenant(admin_session, "Meter-Co")
+    admin_session.commit()
+    blob = FakeBlob()
+    voice = InboundMessage(
+        channel="file_drop",
+        sender="+9715",
+        sent_at=datetime(2026, 8, 13, 10, 0, tzinfo=UTC),
+        attachments=(InboundAttachment("note.ogg", "audio/ogg", b"AUDIOBYTES"),),
+    )
+    res = await ingest_messages(tenant, [voice], blob=blob, factory=app_factory)
+    for sdid in res.source_document_ids:
+        await normalise_source_document(tenant, sdid, blob=blob, factory=app_factory)
+
+    with tenant_session(tenant, factory=app_factory) as s:
+        cost = meter.case_cost(s, res.case_ids[0])
+    assert cost["calls"] >= 1  # the ASR call was metered against the case (was 0 before the fix)
+    assert cost["audio_seconds"] > 0
+
+
+async def test_repeated_message_is_not_dropped_by_dedup(
+    admin_session: Session, app_factory: sessionmaker[Session]
+) -> None:
+    """H1: content-only dedup wrongly dropped a legitimately repeated message. A customer sending the
+    same short text at a different time must still be ingested (a fresh idempotency key)."""
+    tenant = api.create_tenant(admin_session, "Repeat-Co")
+    admin_session.commit()
+    blob = FakeBlob()
+    m1 = InboundMessage("file_drop", "+9715", datetime(2026, 8, 13, 10, 0, tzinfo=UTC), text="ok")
+    m2 = InboundMessage("file_drop", "+9715", datetime(2026, 8, 20, 10, 0, tzinfo=UTC), text="ok")
+    r1 = await ingest_messages(tenant, [m1], blob=blob, factory=app_factory)
+    r2 = await ingest_messages(tenant, [m2], blob=blob, factory=app_factory)
+    assert len(r1.source_document_ids) == 1
+    assert len(r2.source_document_ids) == 1  # the second "ok" is NOT dropped
+    # But re-ingesting the exact same message (same time+content) is still a no-op.
+    r3 = await ingest_messages(tenant, [m1], blob=blob, factory=app_factory)
+    assert r3.source_document_ids == []
+
+
+async def test_scanned_pdf_without_ocr_stays_reclaimable(
+    admin_session: Session, app_factory: sessionmaker[Session]
+) -> None:
+    """H3: an image-only PDF normalised where OCR is unavailable (this host has no paddle) must leave
+    the normalise stage re-claimable ('failed'), not commit an empty 'done' that a container re-run
+    would skip forever."""
+    from io import BytesIO
+
+    from PIL import Image, ImageDraw
+
+    img = Image.new("RGB", (500, 200), "white")
+    ImageDraw.Draw(img).text((40, 80), "scanned invoice content", fill="black")
+    buf = BytesIO()
+    img.save(buf, "PDF")  # an image-only PDF (no digital text layer)
+
+    tenant = api.create_tenant(admin_session, "ScanPDF-Co")
+    admin_session.commit()
+    blob = FakeBlob()
+    msg = InboundMessage(
+        channel="file_drop",
+        sender="+9715",
+        sent_at=datetime(2026, 8, 13, 10, 0, tzinfo=UTC),
+        attachments=(InboundAttachment("invoice.pdf", "application/pdf", buf.getvalue()),),
+    )
+    res = await ingest_messages(tenant, [msg], blob=blob, factory=app_factory)
+    for sdid in res.source_document_ids:
+        await normalise_source_document(tenant, sdid, blob=blob, factory=app_factory)
+
+    with tenant_session(tenant, factory=app_factory) as s:
+        status = s.execute(
+            text("SELECT status FROM stage_execution WHERE stage = 'normalise'")
+        ).scalar_one()
+    assert status == "failed"  # re-claimable in a capable (container) environment, not 'done'
 
 
 async def test_normalised_content_is_tenant_isolated(

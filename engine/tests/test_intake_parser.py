@@ -85,6 +85,39 @@ def test_parse_export_zip_autodetects_transcript_and_media() -> None:
     assert msgs[0].attachments[0].data == b"IMAGE"
 
 
+def test_captioned_media_keeps_both_attachment_and_caption() -> None:
+    # H2: Android exports a captioned photo as the marker line + the caption on the next line.
+    text = (
+        "13/08/2026, 14:05 - Ahmed: IMG-20260813-WA0001.jpg (file attached)\n"
+        "Here is the broken item, see the crack"
+    )
+    msgs = parse_export_text(text, attachments={"IMG-20260813-WA0001.jpg": b"JPG"})
+    assert len(msgs) == 1
+    assert len(msgs[0].attachments) == 1
+    assert msgs[0].attachments[0].data == b"JPG"  # the photo is NOT dropped
+    assert msgs[0].text == "Here is the broken item, see the crack"  # caption preserved
+
+
+def test_us_locale_read_consistently_no_midfile_flip() -> None:
+    # H5: a US MM/DD export must read under one calendar; message 2 (01/15) forces MM/DD and messages
+    # 1 and 3 must not end up interpreted under a different (DD/MM) calendar.
+    text = (
+        "01/02/2026, 10:00 - A: first\n"
+        "01/15/2026, 11:00 - A: second\n"
+        "01/03/2026, 12:00 - A: third"
+    )
+    dates = [(m.sent_at.month, m.sent_at.day) for m in parse_export_text(text)]
+    assert dates == [(1, 2), (1, 15), (1, 3)]  # all MM/DD: Jan 2, Jan 15, Jan 3
+
+
+def test_intl_ddmm_locale_still_detected() -> None:
+    dates = [
+        (m.sent_at.month, m.sent_at.day)
+        for m in parse_export_text("13/08/2026, 10:00 - A: x\n03/08/2026, 11:00 - A: y")
+    ]
+    assert dates == [(8, 13), (8, 3)]  # DD/MM: 13 Aug, 3 Aug
+
+
 def test_parse_export_dispatches_by_extension() -> None:
     txt = b"13/08/2026, 10:00 - X: hi"
     assert parse_export("chat.txt", txt)[0].text == "hi"

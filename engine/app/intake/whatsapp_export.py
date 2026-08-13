@@ -13,9 +13,9 @@ handling anyway. Two export dialects are supported:
 Robustness rules that matter on real exports:
 - **Continuation lines** (a line that doesn't start with a timestamp) belong to the previous
   message — WhatsApp messages are multi-line. Never drop them.
-- **Locale ambiguity** (``MM/DD`` vs ``DD/MM``) is real and unresolvable per-line; we try a fixed
-  ladder of formats and, once a file's first timestamp parses, *lock that format* for the file so a
-  day ≤12 doesn't silently flip interpretation mid-thread.
+- **Locale ambiguity** (``MM/DD`` vs ``DD/MM``) is real and unresolvable per-line; we decide the date
+  order ONCE for the whole file from all its timestamps (a field >12 disambiguates), then read the
+  entire thread under that one calendar — never re-deciding mid-file.
 - **System messages** (no ``Sender:`` after the timestamp) are dropped — they carry no customer text.
 - Media not included in the export is recorded as a ``missing`` attachment, never silently lost.
 """
@@ -57,25 +57,38 @@ _MEDIA_OMITTED = re.compile(
     r"^(?:<Media omitted>|<وسائط مستبعدة>|image omitted|audio omitted)", re.IGNORECASE
 )
 
-# Timestamp format ladder — first one that parses the file's first timestamp is locked for the file.
-_TS_FORMATS = (
-    "%d/%m/%Y, %H:%M:%S",
-    "%d/%m/%Y, %H:%M",
-    "%m/%d/%Y, %H:%M:%S",
-    "%m/%d/%Y, %H:%M",
-    "%d/%m/%y, %H:%M:%S",
-    "%d/%m/%y, %H:%M",
-    "%m/%d/%y, %H:%M:%S",
-    "%m/%d/%y, %H:%M",
-    "%d/%m/%Y, %I:%M:%S %p",
-    "%d/%m/%Y, %I:%M %p",
-    "%m/%d/%Y, %I:%M:%S %p",
-    "%m/%d/%Y, %I:%M %p",
-    "%d/%m/%y, %I:%M:%S %p",
-    "%d/%m/%y, %I:%M %p",
-    "%m/%d/%y, %I:%M:%S %p",
-    "%m/%d/%y, %I:%M %p",
-)
+# Extracts the first two numeric fields of a date to decide day/month order for the whole file.
+_DATE_RE = re.compile(r"(\d{1,4})[/.-](\d{1,2})[/.-]\d{2,4}")
+
+
+def _detect_day_first(ts_strings: list[str]) -> bool:
+    """Decide DD/MM vs MM/DD for the WHOLE file from ALL timestamps, once — the only robust way to
+    resolve the ambiguity (a per-line guess flips mid-thread). A first field >12 proves day-first; a
+    second field >12 proves month-first. Count the unambiguous evidence; default to day-first
+    (international) on a tie or no evidence. The order is then FIXED for the file — never re-decided
+    per line (that silent re-lock was the H5 bug: messages 1 and 3 read under different calendars).
+    """
+    day_first = month_first = 0
+    for t in ts_strings:
+        m = _DATE_RE.search(_norm_ts(t))
+        if not m:
+            continue
+        a, b = int(m.group(1)), int(m.group(2))
+        if a > 12 and b <= 12:
+            day_first += 1
+        elif b > 12 and a <= 12:
+            month_first += 1
+    return month_first <= day_first  # tie / no evidence → day-first (international default)
+
+
+def _formats_for(day_first: bool) -> tuple[str, ...]:
+    """The time-format ladder for a FIXED date order (4-digit then 2-digit year; 24h then AM/PM)."""
+    d = "%d/%m" if day_first else "%m/%d"
+    return tuple(
+        f"{d}/{y}, {t}"
+        for y in ("%Y", "%y")
+        for t in ("%H:%M:%S", "%H:%M", "%I:%M:%S %p", "%I:%M %p")
+    )
 
 
 def _clean(s: str) -> str:
@@ -90,9 +103,13 @@ def _norm_ts(raw: str) -> str:
 
 
 class _TsParser:
-    """Locks the first format that parses, so a whole file reads with one interpretation."""
+    """Parses timestamps under a FIXED date order (day-first or month-first, decided once for the
+    file). Locks the first working *time* format; a line that fails the fixed order returns None
+    (treated as a continuation upstream) — it NEVER changes the date order, so the whole thread is
+    read under one calendar (the H5 fix)."""
 
-    def __init__(self) -> None:
+    def __init__(self, day_first: bool) -> None:
+        self._formats = _formats_for(day_first)
         self._locked: str | None = None
 
     def parse(self, raw: str) -> datetime | None:
@@ -101,12 +118,10 @@ class _TsParser:
         # windowing would mix naive export times with aware DB times and raise on subtraction. The
         # absolute offset is approximate; windowing only uses *relative* gaps, so it is unaffected.
         t = _norm_ts(raw)
-        if self._locked:
-            try:
-                return datetime.strptime(t, self._locked).replace(tzinfo=UTC)
-            except ValueError:
-                pass  # a stray malformed line — fall through and re-scan the ladder
-        for fmt in _TS_FORMATS:
+        ladder = ((self._locked,) + self._formats) if self._locked else self._formats
+        for fmt in ladder:
+            if fmt is None:
+                continue
             try:
                 dt = datetime.strptime(t, fmt).replace(tzinfo=UTC)
             except ValueError:
@@ -143,16 +158,20 @@ def _flush(
     line_no: int,
 ) -> InboundMessage | None:
     """Turn accumulated lines for one message into an InboundMessage, resolving any attachment
-    reference against the zip's files. Returns ``None`` for a system message (no sender)."""
+    reference against the zip's files. Returns ``None`` for a system message (no sender).
+
+    The attachment marker is matched against the message's FIRST line only, not the joined body:
+    WhatsApp exports a captioned photo as ``IMG.jpg (file attached)`` followed by the caption on the
+    next line(s), and matching the whole body meant the ``$``-anchored regex failed and the photo was
+    dropped entirely (the H2 bug). Trailing lines become the caption text on the same message."""
     if ts is None or sender is None:
         return None
-    body = "\n".join(body_lines).strip()
+    first = body_lines[0].strip() if body_lines else ""
+    caption = "\n".join(body_lines[1:]).strip()
     atts: list[InboundAttachment] = []
-    text: str | None = body or None
+    text: str | None = None
 
-    ios = _ATTACH_IOS.match(body)
-    android = _ATTACH_ANDROID.match(body)
-    marker = ios or android
+    marker = _ATTACH_IOS.match(first) or _ATTACH_ANDROID.match(first)
     if marker:
         name = _clean(marker.group("name"))
         data = attachments.get(name)
@@ -164,14 +183,16 @@ def _flush(
                 missing=data is None,
             )
         )
-        text = None  # the body was only the attachment reference
-    elif _MEDIA_OMITTED.match(body):
+        text = caption or None  # the caption that accompanied the media, if any
+    elif _MEDIA_OMITTED.match(first):
         atts.append(
             InboundAttachment(
                 filename="<omitted>", mime="application/octet-stream", data=b"", missing=True
             )
         )
-        text = None
+        text = caption or None
+    else:
+        text = "\n".join(body_lines).strip() or None
 
     if text is None and not atts:
         return None
@@ -192,7 +213,10 @@ def parse_export_text(
     filename (as referenced in the transcript) to its bytes, resolved from the ``.zip`` — pass
     ``{}`` for a media-less export (attachments become ``missing``)."""
     files = attachments or {}
-    parser = _TsParser()
+    lines = transcript.splitlines()
+    # Decide the date order (DD/MM vs MM/DD) ONCE from every timestamp in the file, then fix it.
+    ts_strings = [h[0] for h in (_match(_clean(ln)) for ln in lines) if h is not None]
+    parser = _TsParser(_detect_day_first(ts_strings))
     out: list[InboundMessage] = []
 
     cur_ts: datetime | None = None
@@ -200,7 +224,7 @@ def parse_export_text(
     cur_body: list[str] = []
     cur_line = 0
 
-    for i, raw_line in enumerate(transcript.splitlines(), start=1):
+    for i, raw_line in enumerate(lines, start=1):
         line = _clean(raw_line)
         hit = _match(line)
         if hit is None:
@@ -249,8 +273,19 @@ def parse_export_zip(data: bytes) -> list[InboundMessage]:
         if transcript_name is None:
             raise ValueError("no .txt transcript found in the WhatsApp export zip")
         transcript = zf.read(transcript_name).decode("utf-8", errors="replace")
-        # Index media by basename (the transcript references the bare filename).
-        attachments = {n.rsplit("/", 1)[-1]: zf.read(n) for n in names if n != transcript_name}
+        # Index media by basename (the transcript references the bare filename). On a basename
+        # collision across folders (M4), prefer the entry in the transcript's own directory — WhatsApp
+        # stores media alongside _chat.txt — so a reference never silently resolves to another
+        # folder's file with the same name.
+        transcript_dir = transcript_name.rsplit("/", 1)[0] if "/" in transcript_name else ""
+        media = [n for n in names if n != transcript_name]
+        attachments: dict[str, bytes] = {}
+        for n in media:
+            base = n.rsplit("/", 1)[-1]
+            n_dir = n.rsplit("/", 1)[0] if "/" in n else ""
+            # First occurrence wins, but a transcript-dir entry always overrides (regardless of order).
+            if base not in attachments or n_dir == transcript_dir:
+                attachments[base] = zf.read(n)
     return parse_export_text(transcript, attachments=attachments)
 
 

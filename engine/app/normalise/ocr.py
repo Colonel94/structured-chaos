@@ -19,6 +19,7 @@ os.environ.setdefault("FLAGS_use_mkldnn", "0")
 os.environ.setdefault("PADDLE_PDX_DISABLE_MODEL_SOURCE_CHECK", "True")
 
 import io
+import time
 from typing import Any
 
 from ..config import settings
@@ -47,8 +48,10 @@ def _bbox_of(poly: Any) -> list[float]:
     return [min(xs), min(ys), max(xs), max(ys)]
 
 
-def ocr_image_bytes(data: bytes) -> list[tuple[str, list[float], float]]:
-    """Run OCR on one image; return ``(text, bbox, confidence)`` per detected line."""
+def ocr_image_bytes(data: bytes) -> list[tuple[str, list[float], float | None]]:
+    """Run OCR on one image; return ``(text, bbox, confidence)`` per detected line. Confidence is
+    ``None`` (never NaN — NaN is invalid JSON/JSONB and would fail the span insert, L2) when the
+    engine returns fewer scores than texts."""
     import numpy as np
     from PIL import Image
 
@@ -58,20 +61,22 @@ def ocr_image_bytes(data: bytes) -> list[tuple[str, list[float], float]]:
     texts = list(r0.get("rec_texts", []))
     scores = list(r0.get("rec_scores", []))
     polys = list(r0.get("rec_polys", []))
-    out: list[tuple[str, list[float], float]] = []
+    out: list[tuple[str, list[float], float | None]] = []
     for i, txt in enumerate(texts):
         t = str(txt).strip()
         if not t:
             continue
         bbox = _bbox_of(polys[i]) if i < len(polys) and len(polys[i]) else [0.0, 0.0, 0.0, 0.0]
-        conf = float(scores[i]) if i < len(scores) else float("nan")
+        conf = float(scores[i]) if i < len(scores) else None
         out.append((t, bbox, conf))
     return out
 
 
 async def normalise_image(source_document_id: str, data: bytes, mime: str) -> NormalisedContent:
     """Normalise one photographed/scanned image into anchored text via OCR."""
+    t0 = time.perf_counter()
     lines = ocr_image_bytes(data)
+    wall_ms = (time.perf_counter() - t0) * 1000.0
     spans = [
         NormalisedSpan(text=t, kind="image_region", locator={"bbox": bbox}, confidence=conf)
         for (t, bbox, conf) in lines
@@ -84,4 +89,6 @@ async def normalise_image(source_document_id: str, data: bytes, mime: str) -> No
         stage="normalise.ocr",
         model="paddleocr",
         model_version="PP-OCRv3" if settings.ocr_lang == "ar" else "PP-OCRv5",
+        usage={"wall_ms": wall_ms},
+        interface="ocr",
     )
