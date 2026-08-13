@@ -140,6 +140,8 @@ async def test_scanned_pdf_without_ocr_stays_reclaimable(
     would skip forever."""
     from io import BytesIO
 
+    pytest.importorskip("PIL", reason="Pillow (pdf group) needed to synthesize the test PDF")
+    pytest.importorskip("pypdfium2", reason="pdf group needed to exercise the rasterise path")
     from PIL import Image, ImageDraw
 
     img = Image.new("RGB", (500, 200), "white")

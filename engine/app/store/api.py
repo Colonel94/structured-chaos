@@ -155,6 +155,88 @@ def register_emergent_field(session: Session, *, field_name: str, field_name_has
     return int(row[0])
 
 
+def _vec_literal(embedding: Sequence[float]) -> str:
+    """A pgvector text literal ``[v1,v2,...]`` — bound as a parameter and cast to ``vector`` in SQL
+    (no pgvector-python adapter dependency)."""
+    return "[" + ",".join(f"{float(x):.8f}" for x in embedding) + "]"
+
+
+def nearest_canonical_field(
+    session: Session, *, embedding: Sequence[float], exclude_hash: str
+) -> tuple[str, str, float] | None:
+    """The nearest CANONICAL emergent field to ``embedding`` (cosine), excluding ``exclude_hash`` —
+    the dedup lookup (EDD §6.2 STAGE 3). A field is canonical iff it is its own canonical
+    (``canonical_hash = field_name_hash``); aliases are skipped so we never chain-merge. Returns
+    ``(hash, name, cosine_similarity)`` or ``None`` if no canonical is embedded yet. RLS-scoped."""
+    row = session.execute(
+        text("""
+            SELECT field_name_hash, field_name, 1 - (embedding <=> CAST(:emb AS vector)) AS sim
+            FROM emergent_field
+            WHERE embedding IS NOT NULL
+              AND field_name_hash = canonical_hash
+              AND field_name_hash <> :exclude
+            ORDER BY embedding <=> CAST(:emb AS vector)
+            LIMIT 1
+            """),
+        {"emb": _vec_literal(embedding), "exclude": exclude_hash},
+    ).first()
+    if row is None:
+        return None
+    return str(row[0]), str(row[1]), float(row[2])
+
+
+def set_field_embedding_canonical(
+    session: Session, *, field_name_hash: str, embedding: Sequence[float], canonical_hash: str
+) -> None:
+    """Store a field's BGE-M3 embedding and its canonical assignment (self = canonical; another
+    field's hash = merged alias of it)."""
+    session.execute(
+        text("""
+            UPDATE emergent_field
+            SET embedding = CAST(:emb AS vector), canonical_hash = :canon, updated_at = now()
+            WHERE field_name_hash = :hash
+            """),
+        {"emb": _vec_literal(embedding), "canon": canonical_hash, "hash": field_name_hash},
+    )
+
+
+def canonical_field_support(session: Session, canonical_hash: str) -> int:
+    """Distinct cases attesting a canonical field OR ANY of its merged aliases — the recurrence
+    count promotion gates on (EDD §6.2 STAGE 4). Counts over the append-only log, so it's exact."""
+    row = session.execute(
+        text("""
+            SELECT count(DISTINCT fe.case_id)
+            FROM field_extraction fe
+            JOIN emergent_field ef ON ef.field_name = fe.field_path
+            WHERE fe.layer = 'emergent' AND ef.canonical_hash = :canon
+            """),
+        {"canon": canonical_hash},
+    ).scalar_one()
+    return int(row)
+
+
+def list_canonical_fields(session: Session) -> list[tuple[str, str, bool]]:
+    """All canonical emergent fields for the tenant — ``(hash, name, promoted)`` — the converged
+    schema (each alias group collapses to one row here). RLS-scoped."""
+    rows = session.execute(text("""
+            SELECT field_name_hash, field_name, promoted FROM emergent_field
+            WHERE field_name_hash = canonical_hash
+            ORDER BY field_name
+            """)).all()
+    return [(str(r[0]), str(r[1]), bool(r[2])) for r in rows]
+
+
+def mark_field_promoted(session: Session, *, canonical_hash: str) -> None:
+    """Mark a canonical field promoted to the governed layer (recurrence met). Idempotent."""
+    session.execute(
+        text(
+            "UPDATE emergent_field SET promoted = true, updated_at = now() "
+            "WHERE field_name_hash = :canon"
+        ),
+        {"canon": canonical_hash},
+    )
+
+
 def get_source_document(
     session: Session, source_document_id: UUID
 ) -> tuple[UUID, str, str, str] | None:
