@@ -89,6 +89,20 @@ be corrected (except the two research-backed spec deltas in §6, which supersede
 > Gate-A5 owner recordings (spikes #1/#2). **Standing practice:** commit fixes directly ([[commit-fixes-directly]]).
 > **Status page (private):** https://claude.ai/code/artifact/4c909fb2-b42e-4f3e-96d2-e7367b366635
 
+**UPDATE (2026-08-14) — FIRST REAL-DATA TEST (CFPB public complaints, n=120, NOT author-generated).**
+Harness in `engine/eval/` (fetch_cfpb.py + run_extraction.py + fixtures/cfpb_sample.jsonl). Run over
+real English complaints (debt/card/bank/transfer) on qwen3:14b. **Confirmed on real data:** extraction
+robust (json-valid **100%**, grounding **0.941**, latency **p50 4.4s**); refuse-to-guess real
+(desired_outcome null 18×, severity discriminates — only 1 spurious safety_health); emergent discovery
+works zero-shot on a domain we never designed for (financial schema found: charged_amount,
+account_status, dispute_status, fraud_type…). **Two hard findings:** (1) **NO convergence without dedup**
+— new-field/20-bucket = **[48,52,74,64,77,63] (flat)**, **378 distinct fields / 120 cases** = synonym
+sprawl. This is the honest PRE-DEDUP BASELINE; unit **4.3 (BGE-M3 dedup + promotion) must bend this curve
+down + drop duplicates <5% on a RE-RUN of this same harness** — that re-run is the real moat proof, not
+yet achieved. (2) Seeded taxonomy near-useless on financial domain (**98% UNCLEAR**) — model correctly
+abstains (validates EMERGENT categories §16.2), but "universal taxonomy = day-one value" is weak far from
+retail. Accuracy (governed-core correctness) NOT measured — needs human labels, separate step.
+
 **UPDATE (2026-08-13) — ARABIC IS A SEPARATE NEXT PROJECT (owner directive). DO NOT re-raise the
 Gate-A5 Gulf voice recordings as a blocker for anything — they belong to a future Arabic project, not
 this build.** Consequences: (1) Phase 0.5 spikes #1/#2 are not "parked pending recordings", they are
