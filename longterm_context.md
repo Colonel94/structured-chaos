@@ -16,6 +16,40 @@ be corrected (except the two research-backed spec deltas in §6, which supersede
 
 ## 0. Current state & next actions  ← read this first every session; keep it current
 
+> ### ⇢ SESSION HANDOFF — read this box first (2026-08-13). The dated UPDATE blocks below are the audit trail; THIS is the current truth.
+>
+> **Status:** Phases **0, 1, 2 DONE + verified live.** Phase 0.5 partial (spike #3 PASS; #1/#2 STAGED,
+> parked on Gate-A5 recordings). A **3-reviewer adversarial cross-phase review** ran — verdict Phase 0/1
+> genuinely met, Phase 2 gaps all closed. **F5 (provenance model) RESOLVED + built:** value↔many-sources
+> **citation bridge** (`extraction_citation`, roles incl. `contradicts`; object-store rows are
+> `object_snapshot` source_documents), migration `0004`.
+>
+> **Numbers:** **42 tests green** (run CI-mode: `REQUIRE_DB=1`), 4 migrations, ~2.5k LOC. `origin/main` @
+> **`bb10ca5`**, working tree clean, all pushed to `github.com/Colonel94/structured-chaos`.
+>
+> **Environment (Windows host):** Docker `db`+`minio` healthy. **Ollama may be DOWN after a reboot →
+> start `Ollama app.exe`** (models `qwen3:14b` etc. are on the 4070). Migrate a fresh DB with
+> `cd engine && uv run alembic upgrade head` + `python scripts/bootstrap_procrastinate.py`.
+>
+> **Run/verify:** tests → `cd engine && uv run pytest` (spins its own Postgres via testcontainers; add
+> `REQUIRE_DB=1` to fail-not-skip like CI). Live checks → `scripts/verify_infra.py` · `verify_blob.py` ·
+> `verify_backends_local.py` (`--full` for BGE+whisper) · `verify_meter.py` · `demo_phase1.py` (15/15,
+> the hands-on trust demo). **Gotcha:** run `black`/`ruff` from `engine/` on `app tests` ONLY — never pass
+> a repo-root `../scripts/...` path to black (it drops to width 88 and reflows committed files).
+>
+> **NEXT → Phase 3 — Intake + normalisation** (`BUILD-PLAN.md`): **file-drop first** (WhatsApp chat-export
+> parser + uploads), then WhatsApp test number; normalise ffmpeg + silero-vad + **local `WhisperASR`
+> (built)** + **PaddleOCR** + pypdfium2; conversation windowing (new-vs-follow-up). Wire real task bodies
+> into the Procrastinate queue, each guarded by the `claim_stage`/`complete_stage` ledger. Provenance is
+> settled — extractions cite the bridge; every inbound message/file is a `source_document`.
+>
+> **Still deferred (cheap, pick up in/after Phase 3):** F7 — `docker compose up` must run alembic +
+> bootstrap before serving (init step/entrypoint); F8 — `field_current` auto-refresh (trigger or funnel
+> through one stage) before the Phase-7 UI reads it; A-MED — prove the ASR/embed wrappers live
+> (`verify_backends_local --full`); M3 — a GUC pool-reuse leak test. **Parked:** Gate-A5 owner recordings
+> (spikes #1/#2). **Standing practice:** commit fixes directly, no asking ([[commit-fixes-directly]]).
+> **Status page (private):** https://claude.ai/code/artifact/4c909fb2-b42e-4f3e-96d2-e7367b366635
+
 **UPDATE (2026-08-12) — ENGLISH-FIRST focus (owner directive).** For now, build/verify the **English
 path only**; do **not** sink time into Arabic quality. This is a *sequencing* call, not a moat reversal:
 the Gulf-Arabic voice moat (§3) stays locked and the **capability is retained in code** (faster-whisper
