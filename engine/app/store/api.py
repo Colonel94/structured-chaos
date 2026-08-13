@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import hashlib
 import json
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime
 from uuid import UUID
@@ -71,19 +71,79 @@ def create_tenant(admin_session: Session, name: str) -> UUID:
 # ----------------------------------------------------------------------------------- cases
 
 
-def create_case(session: Session, *, channel: str, first_contact_at: datetime) -> UUID:
+def create_case(
+    session: Session,
+    *,
+    channel: str,
+    first_contact_at: datetime,
+    contact_ref: str | None = None,
+) -> UUID:
     """Create a case for the current tenant. Created immediately in ``created`` state —
     it exists before the questions do and is never blocked on completeness (CLAUDE.md §3).
-    The SLA clock starts at ``first_contact_at``."""
+    The SLA clock starts at ``first_contact_at``. ``contact_ref`` is the anchor (sender phone/handle)
+    the case belongs to — set once here, used by windowing to find a sender's prior case."""
     row = session.execute(
         text(f"""
-            INSERT INTO case_record (tenant_id, channel, first_contact_at)
-            VALUES ({_GUC_TENANT}, :channel, :first_contact_at)
+            INSERT INTO case_record (tenant_id, channel, first_contact_at, contact_ref)
+            VALUES ({_GUC_TENANT}, :channel, :first_contact_at, :contact_ref)
             RETURNING id
             """),
-        {"channel": channel, "first_contact_at": first_contact_at},
+        {"channel": channel, "first_contact_at": first_contact_at, "contact_ref": contact_ref},
     ).one()
     return UUID(str(row[0]))
+
+
+def latest_case_for_contact(
+    session: Session, *, contact_ref: str
+) -> tuple[UUID, str, datetime] | None:
+    """The sender's most recent case within the tenant — ``(case_id, case_state, last_activity_at)``
+    — or ``None`` if they have no case yet. ``last_activity_at`` is the latest of the case's source
+    documents' ``received_at`` (falling back to ``first_contact_at``), so windowing measures idle
+    time from the real last message, not case creation. RLS scopes this to the current tenant."""
+    row = session.execute(
+        text("""
+            SELECT c.id, c.case_state,
+                   GREATEST(c.first_contact_at,
+                            COALESCE(MAX(sd.received_at), c.first_contact_at)) AS last_activity
+            FROM case_record c
+            LEFT JOIN source_document sd ON sd.case_id = c.id
+            WHERE c.contact_ref = :contact_ref
+            GROUP BY c.id, c.case_state, c.first_contact_at
+            ORDER BY last_activity DESC
+            LIMIT 1
+            """),
+        {"contact_ref": contact_ref},
+    ).first()
+    if row is None:
+        return None
+    return UUID(str(row[0])), str(row[1]), row[2]
+
+
+def source_document_exists(session: Session, sha256: str) -> bool:
+    """Whether a source document with these exact bytes already exists for the current tenant —
+    the idempotency check that makes re-ingesting the same content a no-op (no duplicate case).
+    RLS scopes it to the tenant, matching the ``UNIQUE (tenant_id, sha256)`` constraint."""
+    row = session.execute(
+        text("SELECT 1 FROM source_document WHERE sha256 = :sha LIMIT 1"),
+        {"sha": sha256},
+    ).first()
+    return row is not None
+
+
+def get_source_document(
+    session: Session, source_document_id: UUID
+) -> tuple[UUID, str, str, str] | None:
+    """Load one source document's ``(case_id, sha256, blob_key, mime)`` for normalisation. RLS
+    scopes it to the current tenant (a cross-tenant id reads as absent)."""
+    row = session.execute(
+        text("""
+            SELECT case_id, sha256, blob_key, mime FROM source_document WHERE id = :id
+            """),
+        {"id": source_document_id},
+    ).first()
+    if row is None:
+        return None
+    return UUID(str(row[0])), str(row[1]), str(row[2]), str(row[3])
 
 
 # ------------------------------------------------------------------------- source documents
@@ -317,6 +377,68 @@ def rebuild_field_current(session: Session, case_id: UUID) -> int:
         {"case_id": case_id},
     ).scalar_one()
     return int(n)
+
+
+# --------------------------------------------------------------------- normalised content (Phase 3)
+
+
+def save_normalised_content(
+    session: Session,
+    *,
+    case_id: UUID,
+    source_document_id: UUID,
+    content_text: str,
+    language: str,
+    spans: Sequence[dict[str, JsonValue]],
+    stage: str,
+    model: str,
+    model_version: str,
+    meta: Mapping[str, JsonValue] | None = None,
+) -> UUID:
+    """Upsert the derived normalisation (transcript/OCR/text + provenance spans) for one source
+    document + stage. Rebuildable, so re-normalising replaces the row (``ON CONFLICT DO UPDATE``) —
+    the immutable original is untouched. Returns the row id. (Param is ``content_text`` so it never
+    shadows the imported SQL ``text`` helper.)"""
+    row = session.execute(
+        text(f"""
+            INSERT INTO normalised_content
+                (tenant_id, case_id, source_document_id, text, language, spans, stage, model,
+                 model_version, meta)
+            VALUES ({_GUC_TENANT}, :case_id, :sdid, :text, :language, CAST(:spans AS jsonb),
+                    :stage, :model, :model_version, CAST(:meta AS jsonb))
+            ON CONFLICT (tenant_id, source_document_id, stage) DO UPDATE
+                SET text = EXCLUDED.text, language = EXCLUDED.language, spans = EXCLUDED.spans,
+                    model = EXCLUDED.model, model_version = EXCLUDED.model_version,
+                    meta = EXCLUDED.meta, updated_at = now()
+            RETURNING id
+            """),
+        {
+            "case_id": case_id,
+            "sdid": source_document_id,
+            "text": content_text,
+            "language": language,
+            "spans": _json(list(spans)),
+            "stage": stage,
+            "model": model,
+            "model_version": model_version,
+            "meta": _json(meta or {}),
+        },
+    ).one()
+    return UUID(str(row[0]))
+
+
+def get_case_normalised_text(session: Session, case_id: UUID) -> str:
+    """The concatenated normalised text for a case, in source order — what Phase-4 extraction reads.
+    RLS scopes it to the current tenant."""
+    rows = session.execute(
+        text("""
+            SELECT text FROM normalised_content
+            WHERE case_id = :case_id AND text <> ''
+            ORDER BY created_at, id
+            """),
+        {"case_id": case_id},
+    ).all()
+    return "\n".join(str(r[0]) for r in rows)
 
 
 # ------------------------------------------------------------------------------ idempotency

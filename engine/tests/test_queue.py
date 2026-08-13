@@ -102,7 +102,16 @@ def test_job_args_carry_ids_only_never_content(
         defer_in_transaction(
             s, backfill, queue=BACKFILL_QUEUE, tenant_id=str(tenant), field_path="flavour"
         )
-    allowed = {"tenant_id", "case_id", "field_path", "idempotency_key", "stage"}
+    # All id-typed keys — never content. source_document_id (the Phase-3 normalise stage's arg) is a
+    # UUID id, in keeping with the invariant; adding it here as new id-args land is not a weakening.
+    allowed = {
+        "tenant_id",
+        "case_id",
+        "field_path",
+        "idempotency_key",
+        "stage",
+        "source_document_id",
+    }
     with tenant_session(tenant, factory=app_factory) as s:
         all_args = s.execute(text("SELECT args FROM procrastinate_jobs")).scalars().all()
     for args in all_args:

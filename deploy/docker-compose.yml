@@ -42,6 +42,24 @@ services:
       timeout: 5s
       retries: 10
 
+  # One-shot DB init (F7): applies Alembic migrations + the Procrastinate schema/grants as the
+  # intake_admin superuser BEFORE the engine serves, so `docker compose up` can never start the
+  # engine against an unmigrated DB (where app_rw/the trust-spine tables don't yet exist).
+  # Idempotent — runs on every boot, a no-op once at head.
+  migrate:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    env_file:
+      - ../.env
+    environment:
+      POSTGRES_HOST: db
+    depends_on:
+      db:
+        condition: service_healthy
+    command: python -m app.init_db
+    restart: "no"
+
   engine:
     build:
       context: ..
@@ -59,6 +77,8 @@ services:
         condition: service_healthy
       minio:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
     # Heavy deps (OCR/report/embed) are baked into the image so the Windows host stays clean.
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000
 

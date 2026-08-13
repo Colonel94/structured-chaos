@@ -84,6 +84,9 @@ class Settings(BaseSettings):
     ollama_model: str = "qwen3:14b"  # reasoning model → extraction must disable "think"
     whisper_model: str = "large-v3"
     whisper_device: str = "auto"  # auto → cuda if available else cpu
+    # OCR language (English-first, 2026-08-12 §0): "en" selects PP-OCRv5; "ar" the Arabic path.
+    # The Gulf-Arabic voice moat capability is retained in code, just deprioritised for now.
+    ocr_lang: str = "en"
 
     @property
     def database_url(self) -> str:

@@ -46,10 +46,25 @@ app = App(connector=connector)
 
 @app.task(name="pipeline.persist", queue=DEFAULT_QUEUE)
 def persist(*, tenant_id: str, case_id: str) -> str:
-    """Placeholder pipeline stage — the queue contract, body wired in Phase 3. Real stages will
-    reopen a tenant session and run one idempotent stage (guarded by the Phase-1 claim_stage
-    ledger). Returns the case id it handled."""
+    """Retained queue-contract placeholder (Phase 2). The first real stage body is
+    :func:`normalise_document` below; this stays as the minimal enqueue-contract task the Phase-2
+    transactional-enqueue tests exercise. Returns the case id it handled."""
     return case_id
+
+
+@app.task(name="pipeline.normalise", queue=DEFAULT_QUEUE)
+def normalise_document(*, tenant_id: str, source_document_id: str) -> str:
+    """Real Phase-3 stage body: normalise one source document (transcript/OCR/text + provenance
+    spans), guarded by the Phase-1 idempotency ledger. Sync task → runs in Procrastinate's worker
+    thread; ``asyncio.run`` drives the async stage function (which awaits blob + ASR/OCR). Imported
+    lazily so ``queue`` stays import-light. Returns the document id handled."""
+    import asyncio
+    from uuid import UUID
+
+    from .pipeline import normalise_source_document
+
+    asyncio.run(normalise_source_document(tenant_id, UUID(source_document_id)))
+    return source_document_id
 
 
 @app.task(name="pipeline.backfill", queue=BACKFILL_QUEUE)
