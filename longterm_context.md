@@ -69,10 +69,18 @@ be corrected (except the two research-backed spec deltas in §6, which supersede
 > Android export split into 2 cases (windowing), immutable docs, transactional jobs, idempotent replay,
 > per-case transcript projection.
 >
-> **NEXT → Phase 4 — Extraction + self-converging schema (the moat) + light PII gate + the scorer**
-> (`BUILD-PLAN.md`). Reads `get_case_normalised_text(case)`; GBNF/JSON-constrained extraction →
-> closed-world grounding → BGE-M3/pgvector dedup (τ) → recurrence promotion + backfill; convergence graded
-> on REAL collected data, never author-generated. Build the scorer here, not Phase 8.
+> **PHASE 4 — IN PROGRESS (the moat).** Done + verified live: **4.0 spike** (qwen3:14b extraction viable,
+> ~7s/case, §10 killer proven first) → **4.1 extraction unit** (`app/extract/`: schema + versioned prompt +
+> `extract()` with closed-world grounding gate; nullable refuse-to-guess) → **extract pipeline stage**
+> (`app/extract/stage.py`: normalised text → governed core + grounded emergent via `record_extraction`
+> + citations, `emergent_field` registry (migration `0007`, pgvector), field_current projection, LLM
+> metered, stage-ledger idempotent). **Live E2E proven:** a messy complaint → full structured case
+> (governed + emergent) in ~7s @ $0. 77 tests green + 1 skipped. **REMAINING Phase-4 units:** 4.2 stats-
+> before-semantics profiling · **4.3 BGE-M3 + pgvector DEDUP** (τ=0.85 merge/0.70 admit — the moat core) ·
+> 4.4 promotion (support≥4) + backfill (100%) · 4.5 convergence monitor + light PII gate · 4.6 the scorer
+> · 4.7 crude JSON-diff review view. **Moat PROOF (convergence/<5% dup/declining new-field rate) is gated
+> on REAL ENGLISH data (design-partner/curated, T1/T3) — NOT Arabic recordings (next project); never
+> graded on authored cases.**
 >
 > **Still deferred (cheap):** **F8** — `field_current` auto-refresh (decide at Phase 4, before the review
 > UI reads it); **A-MED(embed)** — BGE-M3 wrapper still only library-proven (lands when Phase-4 dedup calls
@@ -80,6 +88,15 @@ be corrected (except the two research-backed spec deltas in §6, which supersede
 > test number, track T2) + email drop (needs UAE mailbox) — file-drop is the $0 PoC channel. **Parked:**
 > Gate-A5 owner recordings (spikes #1/#2). **Standing practice:** commit fixes directly ([[commit-fixes-directly]]).
 > **Status page (private):** https://claude.ai/code/artifact/4c909fb2-b42e-4f3e-96d2-e7367b366635
+
+**UPDATE (2026-08-13) — ARABIC IS A SEPARATE NEXT PROJECT (owner directive). DO NOT re-raise the
+Gate-A5 Gulf voice recordings as a blocker for anything — they belong to a future Arabic project, not
+this build.** Consequences: (1) Phase 0.5 spikes #1/#2 are not "parked pending recordings", they are
+**out of scope for this project**; stop treating them as an open item. (2) Phase 4's moat/convergence
+**proof-on-real-data** is gated on **real ENGLISH cases** (design-partner / curated complaints, track
+T1/T3) — NOT on Arabic recordings. This is a calendar track, non-blocking to the BUILD. Build the
+machinery English-first now; the proof-on-real-English-data is the deferred item, never faked on
+authored cases.
 
 **UPDATE (2026-08-12) — ENGLISH-FIRST focus (owner directive).** For now, build/verify the **English
 path only**; do **not** sink time into Arabic quality. This is a *sequencing* call, not a moat reversal:

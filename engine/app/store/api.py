@@ -119,6 +119,42 @@ def latest_case_for_contact(
     return UUID(str(row[0])), str(row[1]), row[2]
 
 
+def list_case_source_documents(session: Session, case_id: UUID) -> list[UUID]:
+    """The case's inbound source documents (messages/files), oldest first — what an extracted value
+    cites as its provenance. RLS scopes to the current tenant."""
+    rows = session.execute(
+        text("""
+            SELECT id FROM source_document
+            WHERE case_id = :case_id AND doc_kind IN ('message', 'file')
+            ORDER BY received_at, id
+            """),
+        {"case_id": case_id},
+    ).all()
+    return [UUID(str(r[0])) for r in rows]
+
+
+def register_emergent_field(session: Session, *, field_name: str, field_name_hash: str) -> int:
+    """Upsert the emergent-field registry for the current tenant and recompute its ``support_count``
+    (distinct cases attesting the field, from the append-only ``field_extraction`` log — recomputed
+    rather than incremented, so a replay never double-counts). Returns the new support_count. Call
+    AFTER recording the emergent value, so the just-attested case is included."""
+    row = session.execute(
+        text(f"""
+            INSERT INTO emergent_field (tenant_id, field_name_hash, field_name, support_count)
+            VALUES (
+                {_GUC_TENANT}, :hash, :name,
+                (SELECT count(DISTINCT case_id) FROM field_extraction
+                 WHERE layer = 'emergent' AND field_path = :name)
+            )
+            ON CONFLICT (tenant_id, field_name_hash) DO UPDATE
+                SET support_count = EXCLUDED.support_count, updated_at = now()
+            RETURNING support_count
+            """),
+        {"hash": field_name_hash, "name": field_name},
+    ).one()
+    return int(row[0])
+
+
 def get_source_document(
     session: Session, source_document_id: UUID
 ) -> tuple[UUID, str, str, str] | None:
