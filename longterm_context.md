@@ -89,6 +89,20 @@ be corrected (except the two research-backed spec deltas in §6, which supersede
 > Gate-A5 owner recordings (spikes #1/#2). **Standing practice:** commit fixes directly ([[commit-fixes-directly]]).
 > **Status page (private):** https://claude.ai/code/artifact/4c909fb2-b42e-4f3e-96d2-e7367b366635
 
+**UPDATE (2026-08-14) — CONVERGENCE PROOF: NEGATIVE RESULT (the moat did NOT converge on real data).**
+4.3 dedup (BGE-M3 + pgvector + τ=0.85/0.70 + gray-band LLM) is BUILT + unit-correct (2 tests), but run
+over the real 120-case CFPB baseline it **did not self-converge**: raw 378 → **303 canonical (only 20%
+reduction)**; new-canonical/20 = **[46,43,59,52,54,49] — STILL FLAT** (raw was [48,52,74,64,77,63]);
+smoking gun: `amount`(9) AND `charged_amount`(12) both promoted as SEPARATE fields. Diagnostic: methods
+= merge 63, **llm_merge 12 vs llm_admit 217** — the gray-band adjudicator refuses to merge 95% of the
+time, and τ=0.85 is too high so real synonyms (0.64–0.83) all fall to that adjudicator. **The
+self-converging-schema moat is NOT validated on real data.** Honest levers (do NOT tune on this same
+set — self-grading): (1) reframe the adjudicator "same DB COLUMN?" + show example values (biggest lever,
+217 wrong "different" calls); (2) embed name+example-values not bare names; (3) tune τ on a HELD-OUT
+slice (BGE separation ~0.61: distinct max 0.58 / synonym min 0.64); (4) build the batch HAC
+complete-linkage re-cluster (spec STAGE 3, not yet built). Found cheaply on real data before any pitch —
+which is exactly why we tested. Harness: `eval/run_convergence.py` (re-run after each lever).
+
 **UPDATE (2026-08-14) — FIRST REAL-DATA TEST (CFPB public complaints, n=120, NOT author-generated).**
 Harness in `engine/eval/` (fetch_cfpb.py + run_extraction.py + fixtures/cfpb_sample.jsonl). Run over
 real English complaints (debt/card/bank/transfer) on qwen3:14b. **Confirmed on real data:** extraction
