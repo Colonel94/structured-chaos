@@ -23,14 +23,17 @@ be corrected (except the two research-backed spec deltas in §6, which supersede
 > CONVERGES on real data** (new-column/20-bucket **[20,6,2,1,0,0]**, 29 bounded heads; see the TOP
 > 2026-08-14 UPDATE). Emergent attribute is now `{head(closed enum), qualifier(open), value}`; two-
 > dimensional promotion + migration `0009` shipped. Phase 0.5 spikes #1/#2 = **Arabic next project, NOT a
-> blocker.** F5 provenance bridge built (migration `0004`). `origin/main` @ `55c0dd1`+eval (pushed).
+> blocker.** F5 provenance bridge built (migration `0004`). `origin/main` @ `a7eae91` (pushed).
 >
-> **⇒ IMMEDIATE NEXT — ACCURACY is the top open front (everything proven so far is STRUCTURAL).**
-> **⇒ PENDING OWNER:** fill `engine/eval/fixtures/cfpb_labels.csv` (40 blind cases, see its
-> `INSTRUCTIONS.md`) → `uv run python eval/score.py` → the FIRST governed-core correctness number. The
-> harness is built + verified; the labels are the one thing that can't be self-served (§10-Q3). Warning
-> already visible: category is 117/120 UNCLEAR — the scorer will show whether that abstention is right or
-> the retail taxonomy is just wrong for financial complaints. Then the quality/operational follow-ons:
+> **⇒ IMMEDIATE NEXT — ACCURACY (measured now; the loop works, but the governed core is middling).**
+> First numbers (40 gold): **category 68%** (fixed from 8% via v6 prompt defs), severity 60%, outcome 58%,
+> emotion 82%, key-fact recall ~30% (soft). Next levers, in order: (a) **probe outcome + severity** the
+> same way category was probed (isolate prompt vs capability, then fix + re-score — do NOT blind-tweak);
+> (b) **investigate key-fact recall ~30%** — the emergent layer misses much of what the human flags; first
+> check if it's a real miss or a weak soft-matcher artifact (qualitative look at 5-10 cases), then decide;
+> (c) grow the gold set past 40 (winning-condition wants ≥100 + a too-sparse slice to prove category still
+> abstains when it should). Harness: `eval/make_label_sheet.py` · `eval/score.py` · `eval/category_probe.py`.
+> Then the quality/operational follow-ons:
 > 1. ✅ **DONE (v4 + v5) — extractive qualifiers + tightened head guidance.** v4: verbatim qualifiers,
 >    value grounding **0.989**. v5: specific-head guidance + qualifier length-cap → `description` dumping
 >    **165 (21%) → 46 (11%)**, grounding **0.984**, convergence `[14,5,3,1,1,0]`/24 heads. Residual (NOT a
@@ -129,6 +132,26 @@ be corrected (except the two research-backed spec deltas in §6, which supersede
 > Gate-A5 owner recordings (spikes #1/#2). **Standing practice:** commit fixes directly ([[commit-fixes-directly]]).
 > **Status page (private):** https://claude.ai/code/artifact/4c909fb2-b42e-4f3e-96d2-e7367b366635
 
+**UPDATE (2026-08-15, FIRST ACCURACY NUMBERS + category 8%→68% fix; a wrong earlier read CORRECTED).**
+Owner filled the 40-case gold sheet → the first CORRECTNESS measurement (everything before was
+structural). Shipped-prompt (v5) scores: **category 8%**, desired_outcome 62%, severity 55%, emotion
+78%, key-fact recall 27% (soft). Category was a near-total failure — model blanket-abstained to UNCLEAR.
+**Isolating probe (`eval/category_probe.py`, same least-bad-fit policy + one-line definitions, scored vs
+human gold) → 65%**, proving the 8% was a PROMPT BUG (the shipped prompt listed the category enum with
+NO definitions and told the model to abstain), NOT a taxonomy/capability failure. **⟹ CORRECTION to the
+record: my earlier "seeded taxonomy near-useless on financial domain / model correctly abstains"
+(2026-08-14 real-data-test block) was WRONG — an over-charitable reading of a prompt bug. The universal
+taxonomy is fine; the prompt was starving it.** Fixed in prompt.py (v6: definitions + least-bad-fit),
+re-extracted + re-scored: **category 8%→68%** (UNCLEAR 117→1; residual = legit boundary ambiguity
+service_fault↔billing_charge↔access_availability), severity 55→60, emotion 78→82, outcome 62→58 (noise,
+n=24), key-fact recall 27→30. Consistent with refuse-to-guess §2 (classifying a debt as billing_charge
+is correct, not a guess; UNCLEAR kept for sparse). Convergence held `[15,5,4,0,0,0]`/24 heads, grounding
+0.974; **qualifier retention drifted 0.727→0.648** across the longer prompt (WATCH, not a gate issue).
+**The accuracy LOOP now works (label→score→fix→re-score, proven by 8→68).** Still middling / open:
+outcome 58% + severity 60% need their own probes; **key-fact recall ~30% is the biggest open gap** (the
+emergent layer misses much of what the human flags — though the soft value-token matcher may undercount;
+needs a qualitative look before concluding). `origin/main` push pending.
+
 **UPDATE (2026-08-15, ACCURACY HARNESS built + BACKFILL COST measured — the plan's solo parts).**
 Everything proven so far is STRUCTURAL; accuracy (is the governed core CORRECT) is the first unproven
 front. Built (no owner labels needed): **`eval/make_label_sheet.py`** → a BLIND 40-case sheet
@@ -217,7 +240,7 @@ column, a QUALIFIER splits into its own variant column only at the strictly-hard
 already-promoted head (head-first invariant holds by construction since head-support ≥ qualifier-
 support). `run_extraction.py` is now the Path-A convergence proof; `run_convergence.py` repointed to the
 preserved pre-Path-A baseline (`cfpb_extractions_prePathA.jsonl`). **81 passed + 1 skipped**; ruff/black/
-mypy --strict clean. `origin/main` @ `55c0dd1`+eval (pushed). **Open follow-ons (quality, not gate):**
+mypy --strict clean. `origin/main` @ `a7eae91` (pushed). **Open follow-ons (quality, not gate):**
 (a) qualifiers run long / over-drop legit info (e.g. an org dropped on a bad qualifier) → tighten
 qualifier extraction to be strictly extractive; (b) `description` head is a catch-all (62 uses) — watch
 it doesn't become a dumping ground; (c) qualifier-space dedup before qualifier-promotion is where the
