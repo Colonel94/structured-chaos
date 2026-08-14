@@ -68,10 +68,77 @@ def normalise_document(*, tenant_id: str, source_document_id: str) -> str:
 
 
 @app.task(name="pipeline.backfill", queue=BACKFILL_QUEUE)
-def backfill(*, tenant_id: str, field_path: str) -> str:
-    """Placeholder low-priority backfill stage (own queue so it never blocks intake). Body in
-    Phase 4 (re-extract history after a field promotes)."""
-    return field_path
+def backfill(
+    *,
+    tenant_id: str,
+    concept_key: str,
+    head: str,
+    qualifier: str | None,
+    categories: list[str],
+    batch_size: int,
+) -> str:
+    """Retroactive backfill of a promoted concept: re-EXTRACT it across a bounded batch of the
+    concept's historical cases (STAGE 6, the moat — NOT a re-projection). Runs one batch, then
+    re-enqueues itself on the low-priority backfill queue while cases remain, so a promotion that fans
+    out to a whole category drains in bounded steps and never blocks intake. Imported lazily to keep
+    ``queue`` import-light. Returns the concept handled."""
+    import asyncio
+
+    from .schema.backfill import backfill_concept_batch
+
+    result = asyncio.run(
+        backfill_concept_batch(
+            tenant_id,
+            concept_key=concept_key,
+            head=head,
+            qualifier=qualifier,
+            categories=categories,
+            batch_size=batch_size,
+        )
+    )
+    if result.more:  # a full batch came back → more cases remain → next batch
+        backfill.defer(
+            tenant_id=tenant_id,
+            concept_key=concept_key,
+            head=head,
+            qualifier=qualifier,
+            categories=categories,
+            batch_size=batch_size,
+        )
+    return concept_key
+
+
+@app.periodic(cron="*/30 * * * *")
+@app.task(name="pipeline.promote_scan", queue=DEFAULT_QUEUE)
+def promote_scan(timestamp: int) -> str:
+    """DEBOUNCED promotion trigger (every 30 min) — never per case (a promotion mid-burst must not
+    cascade backfill into live intake). Promotes across all tenants and transactionally enqueues a
+    backfill job for each concept newly promoted this scan. Lazy imports keep ``queue`` import-light.
+    """
+    from .schema.promote_scan import scan_and_enqueue
+
+    def _defer(
+        session: Session,
+        tenant_id: Any,
+        concept: Any,
+        categories: list[str],
+        batch_size: int,
+    ) -> None:
+        # Enqueue on the SAME transaction that marks the promotion → promote + enqueue commit together.
+        defer_in_transaction(
+            session,
+            backfill,
+            queue=BACKFILL_QUEUE,
+            tenant_id=str(tenant_id),
+            concept_key=concept.concept_key,
+            head=concept.head,
+            qualifier=concept.qualifier,
+            categories=categories,
+            batch_size=batch_size,
+        )
+
+    scan_and_enqueue(_defer)
+    return "ok"
 
 
 def raw_psycopg_connection(session: Session) -> psycopg.Connection[Any]:

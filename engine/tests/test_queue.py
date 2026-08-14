@@ -75,7 +75,15 @@ def test_backfill_uses_its_own_low_priority_queue(
     with tenant_session(tenant, factory=app_factory) as s:
         api.create_case(s, channel="file_drop", first_contact_at=_now())
         defer_in_transaction(
-            s, backfill, queue=BACKFILL_QUEUE, tenant_id=str(tenant), field_path="flavour"
+            s,
+            backfill,
+            queue=BACKFILL_QUEUE,
+            tenant_id=str(tenant),
+            concept_key="amount",
+            head="amount",
+            qualifier=None,
+            categories=["billing_charge"],
+            batch_size=25,
         )
     with tenant_session(tenant, factory=app_factory) as s:
         queue_name = s.execute(
@@ -100,7 +108,15 @@ def test_job_args_carry_ids_only_never_content(
         case = api.create_case(s, channel="file_drop", first_contact_at=_now())
         defer_in_transaction(s, persist, tenant_id=str(tenant), case_id=str(case))
         defer_in_transaction(
-            s, backfill, queue=BACKFILL_QUEUE, tenant_id=str(tenant), field_path="flavour"
+            s,
+            backfill,
+            queue=BACKFILL_QUEUE,
+            tenant_id=str(tenant),
+            concept_key="amount",
+            head="amount",
+            qualifier=None,
+            categories=["billing_charge"],
+            batch_size=25,
         )
     # All id-typed keys — never content. source_document_id (the Phase-3 normalise stage's arg) is a
     # UUID id, in keeping with the invariant; adding it here as new id-args land is not a weakening.
@@ -111,6 +127,14 @@ def test_job_args_carry_ids_only_never_content(
         "idempotency_key",
         "stage",
         "source_document_id",
+        # Backfill args (Path A STAGE 6): all schema-metadata, never customer content — the concept
+        # key / head / qualifier are column-name tokens (like field_path), categories are closed
+        # governed-taxonomy values, batch_size is an int.
+        "concept_key",
+        "head",
+        "qualifier",
+        "categories",
+        "batch_size",
     }
     with tenant_session(tenant, factory=app_factory) as s:
         all_args = s.execute(text("SELECT args FROM procrastinate_jobs")).scalars().all()

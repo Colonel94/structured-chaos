@@ -86,3 +86,15 @@ def compose_name(head: str, qualifier: str | None) -> str:
     h = normalise_token(head)
     q = normalise_token(qualifier) if qualifier else ""
     return f"{q}_{h}" if q and q != h else h
+
+
+def split_qualifier(field_name: str, head: str) -> str | None:
+    """Inverse of :func:`compose_name`: recover the qualifier from a composite ``qualifier_head`` given
+    its head (``overdraft_fee`` + ``fee`` → ``overdraft``; a bare ``fee`` → ``None``). Used to name the
+    exact variant a qualifier-promotion must re-extract."""
+    if field_name == head:
+        return None
+    suffix = f"_{head}"
+    if field_name.endswith(suffix):
+        return field_name[: -len(suffix)] or None
+    return None

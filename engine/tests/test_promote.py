@@ -87,19 +87,23 @@ def test_two_dimensional_promotion(
         for c in cases[:2]:
             _attest(s, head="rating", qualifier=None, case_id=c)
 
-        heads, quals = promote(s)
+        concepts = promote(s)
 
-    promoted_heads = {h for h, _s in heads}
-    split_names = {name for name, _head, _s in quals}
-    assert "fee" in promoted_heads  # dim 1: recurring head
-    assert "amount" in promoted_heads  # dim 1: recurring head across varied qualifiers
-    assert "rating" not in promoted_heads  # below N → not promoted
-    assert "overdraft_fee" in split_names  # dim 2: a qualifier at M under a promoted head splits
+    heads = {c.head for c in concepts if c.kind == "head"}
+    splits = {c.concept_key for c in concepts if c.kind == "variant"}
+    assert "fee" in heads  # dim 1: recurring head
+    assert "amount" in heads  # dim 1: recurring head across varied qualifiers
+    assert "rating" not in heads  # below N → not promoted
+    assert "overdraft_fee" in splits  # dim 2: a qualifier at M under a promoted head splits
     # No amount qualifier reached M (each appears once) → none split, even though the head promoted.
-    assert not any(head == "amount" for _n, head, _s in quals)
+    assert not any(c.head == "amount" for c in concepts if c.kind == "variant")
+    # The split variant recovers its qualifier for backfill re-extraction.
+    overdraft = next(c for c in concepts if c.concept_key == "overdraft_fee")
+    assert overdraft.qualifier == "overdraft" and overdraft.is_new is True
 
-    # Idempotent: a second run promotes nothing new and does not error.
+    # Idempotent: a second scan promotes the same set, but nothing is NEW (→ no re-backfill).
     with tenant_session(tenant, factory=app_factory) as s:
-        heads2, quals2 = promote(s)
-    assert {h for h, _s in heads2} == promoted_heads
-    assert {n for n, _h, _s in quals2} == split_names
+        concepts2 = promote(s)
+    assert {c.head for c in concepts2 if c.kind == "head"} == heads
+    assert {c.concept_key for c in concepts2 if c.kind == "variant"} == splits
+    assert all(c.is_new is False for c in concepts2)  # already promoted → not re-enqueued

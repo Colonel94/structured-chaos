@@ -68,6 +68,13 @@ def create_tenant(admin_session: Session, name: str) -> UUID:
     return UUID(str(row[0]))
 
 
+def list_tenant_ids(admin_session: Session) -> list[UUID]:
+    """Every tenant id — for operator-side fan-out (e.g. the periodic promote-scan runs per tenant).
+    Admin session: this deliberately crosses tenants, so it is never available to the app role."""
+    rows = admin_session.execute(text("SELECT id FROM tenant ORDER BY created_at, id")).all()
+    return [UUID(str(r[0])) for r in rows]
+
+
 # ----------------------------------------------------------------------------------- cases
 
 
@@ -302,6 +309,86 @@ def list_emergent_field_variants(session: Session) -> list[tuple[str, str, str |
         (str(r[0]), str(r[1]), (str(r[2]) if r[2] is not None else None), int(r[3]), bool(r[4]))
         for r in rows
     ]
+
+
+# ------------------------------------------------------- Path A: retroactive backfill (STAGE 6)
+
+
+def concept_attested_categories(
+    session: Session, *, head: str, qualifier_composite: str | None
+) -> list[str]:
+    """The distinct governed categories of cases that have attested a concept — the scope backfill
+    re-extracts over (a promoted ``amount`` is re-extracted only across the categories where amounts
+    actually occur, not the whole corpus). ``qualifier_composite`` set → a variant concept (match the
+    exact composite ``field_path``); ``None`` → a head concept (match any composite with that head).
+    Category is the case's ``field_current`` ``category`` value. RLS-scoped."""
+    if qualifier_composite is not None:
+        attesting = "SELECT DISTINCT case_id FROM field_extraction WHERE layer='emergent' AND field_path = :key"
+        params: dict[str, object] = {"key": qualifier_composite}
+    else:
+        attesting = (
+            "SELECT DISTINCT fe.case_id FROM field_extraction fe "
+            "JOIN emergent_field ef ON ef.field_name = fe.field_path "
+            "WHERE fe.layer='emergent' AND ef.head = :head"
+        )
+        params = {"head": head}
+    rows = session.execute(
+        text(f"""
+            SELECT DISTINCT fc.value #>> '{{}}' AS category
+            FROM field_current fc
+            WHERE fc.field_path = 'category'
+              AND fc.case_id IN ({attesting})
+              AND fc.value IS NOT NULL
+            """),
+        params,
+    ).all()
+    return [str(r[0]) for r in rows if r[0] is not None]
+
+
+def cases_needing_backfill(
+    session: Session, *, concept_key: str, categories: Sequence[str], limit: int
+) -> list[UUID]:
+    """Cases in ``categories`` that have NOT yet had a backfill attempt for ``concept_key``, OLDEST
+    first (``first_contact_at``) — the moat re-extracts history in order. Bounded by ``limit`` so a
+    promotion never fans out unboundedly in one job. A case with an ``absent`` marker is excluded (it
+    was already re-extracted and legitimately had nothing), so backfill converges. RLS-scoped."""
+    if not categories:
+        return []
+    rows = session.execute(
+        text("""
+            SELECT cr.id
+            FROM case_record cr
+            JOIN field_current fc
+              ON fc.case_id = cr.id AND fc.field_path = 'category'
+            WHERE (fc.value #>> '{}') = ANY(:categories)
+              AND NOT EXISTS (
+                  SELECT 1 FROM backfill_attempt ba
+                  WHERE ba.case_id = cr.id AND ba.concept_key = :concept_key
+              )
+            ORDER BY cr.first_contact_at, cr.id
+            LIMIT :limit
+            """),
+        {"categories": list(categories), "concept_key": concept_key, "limit": limit},
+    ).all()
+    return [UUID(str(r[0])) for r in rows]
+
+
+def record_backfill_attempt(
+    session: Session, *, case_id: UUID, concept_key: str, outcome: str
+) -> None:
+    """Mark that ``concept_key`` was re-extracted against ``case_id`` — ``found`` (a value was written)
+    or ``absent`` (nothing there). Idempotent (``ON CONFLICT DO NOTHING``): the marker is what stops a
+    genuinely-absent case being re-extracted forever."""
+    if outcome not in ("found", "absent"):
+        raise ValueError(f"backfill outcome must be found|absent, got {outcome!r}")
+    session.execute(
+        text(f"""
+            INSERT INTO backfill_attempt (tenant_id, case_id, concept_key, outcome)
+            VALUES ({_GUC_TENANT}, :case_id, :concept_key, :outcome)
+            ON CONFLICT (tenant_id, case_id, concept_key) DO NOTHING
+            """),
+        {"case_id": case_id, "concept_key": concept_key, "outcome": outcome},
+    )
 
 
 def get_source_document(

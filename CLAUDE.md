@@ -306,6 +306,21 @@ converges at head-noun altitude but not field-name altitude. Redefining the gate
 was rejected as self-grading; the fix is upstream — Path A, constrain extraction granularity — and the
 head-noun curve stays a diagnostic. See `longterm_context.md` §0.)*
 
+**When a gate can be satisfied two ways, distrust the one that costs nothing.** (Standing rule, learned
+2026-08-14 — the THIRD fork in a row where the cheap path kept the letter of a gate and dropped its
+substance.) The pattern is not dishonesty; it is that from inside the code the free option *genuinely
+looks equivalent* — which is exactly why it needs the suspicion. Logged instances: (1) measuring
+convergence at head-noun altitude instead of full-name (the concept-curve is NOT the gate); (2)
+"backfilling" a promoted field by re-running `rebuild_field_current` instead of **re-extracting against
+the retained originals** — re-projection only reads back what was already extracted, so it finds nothing
+in the cases where the concept was never extracted *because the extractor wasn't looking for it then*,
+which are the only cases that matter. The moat is that the schema improves **backwards** over history
+(re-extraction against originals), which is the reason originals are retained forever and the thing no
+incumbent does. (3) the metric-redefinition fork above. **Rule: when a winning-condition mechanism can
+be built cheaply or expensively and the cheap one looks equivalent, that resemblance IS the tell — the
+claim almost always requires the expensive one; verify against the source doc and default to it.**
+Backfill *re-extracts*; convergence is measured at the *field* level; proof runs on data I did not author.
+
 **Split every "ready"/prerequisite gate** into *blocks starting now* vs *blocks a later phase*. Reading
 six papers must never block writing a health endpoint.
 
