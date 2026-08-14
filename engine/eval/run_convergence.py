@@ -95,13 +95,16 @@ async def main() -> int:
     for sup, ch in sorted(promoted, reverse=True)[:20]:
         print(f"    [{sup:2d} cases] {hash_to_name.get(ch, ch[:10])}")
 
-    # --- Concept-family signal (the altitude where the moat actually converges). -----------------
-    # 90% of raw field NAMES are hapax compounds ({qualifier}_{headnoun}: pension_amount,
-    # deposit_date_2). The full-NAME curve is therefore flat — but the underlying CONCEPT space
-    # (the head noun: amount / date / status) converges. Name-level dedup cannot and MUST NOT
-    # collapse distinct compounds (deposit_date vs dispute_date are different columns — over-merge
-    # is worse than a duplicate, §3). So we report the concept curve alongside, crude head-noun
-    # heuristic = last token that is neither a digit nor an ordinal index.
+    # --- Concept-family signal — *** DIAGNOSTIC ONLY, NOT THE GATE *** ----------------------------
+    # The pass/fail gate is the full-field-NAME curve above (winning-condition §4). This head-noun
+    # curve is reported ONLY to show WHERE the sprawl lives, and MUST NOT be promoted to the pass
+    # line — doing so is self-grading (CLAUDE.md §10 "never move the goalposts to pass"). The real
+    # fix for the flat full-name curve is upstream extraction granularity (Path A), not remeasuring
+    # here. 90% of raw field NAMES are hapax compounds ({qualifier}_{headnoun}: pension_amount,
+    # deposit_date_2); the concept space (head noun: amount / date / status) converges even though
+    # the name space does not. Name-level dedup cannot and MUST NOT collapse distinct compounds
+    # (deposit_date vs dispute_date are different columns — over-merge is worse than a duplicate,
+    # §3). Crude head-noun heuristic = last token that is neither a digit nor an ordinal index.
     _ORD = {"first", "second", "third", "1", "2", "3"}
 
     def _head(n: str) -> str:
@@ -118,7 +121,9 @@ async def main() -> int:
             if h not in seen_head:
                 seen_head.add(h)
                 head_per_bucket[i // _BUCKET] += 1
-    print("\n----- concept-family signal (head-noun heuristic) -----")
+    print(
+        "\n----- concept-family signal (head-noun heuristic) — DIAGNOSTIC ONLY, NOT THE GATE -----"
+    )
     print(f"distinct concepts        : {len(seen_head)}   (vs {len(unique)} raw names)")
     print(
         f"new-concept per {_BUCKET}     : {head_per_bucket}   <- THIS is the curve that should bend"

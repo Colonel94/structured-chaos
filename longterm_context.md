@@ -122,6 +122,31 @@ be corrected (except the two research-backed spec deltas in §6, which supersede
 > Gate-A5 owner recordings (spikes #1/#2). **Standing practice:** commit fixes directly ([[commit-fixes-directly]]).
 > **Status page (private):** https://claude.ai/code/artifact/4c909fb2-b42e-4f3e-96d2-e7367b366635
 
+**UPDATE (2026-08-14, DECISION — owner) — Path A chosen; Path B (redefine the metric) REJECTED as
+self-grading; new standing rule added.** Owner call on the convergence-root-cause fork: build **Path A
+(constrain extraction granularity)**, NOT Path B (measure convergence at head-noun altitude). Reason,
+in the owner's words: "You noticed the convergence curve wasn't converging, and the tempting move was
+to redefine convergence. Don't. Section 4 of the winning condition exists precisely so this moment has
+a pre-committed answer." **The full-field-NAME curve stays the gate; the head-noun/concept curve is a
+DIAGNOSTIC only** (labelled as such in `run_convergence.py`, and now in code). New standing rule in
+`CLAUDE.md` §10: *any proposal to redefine a winning-condition metric halts for an explicit owner
+decision, logged* — because this is the 2nd fork where the shortcut was to move a threshold, and the
+pattern is easier to catch as a rule than case-by-case. **Path A design constraints the owner set (bake
+these in):** (1) the **head noun comes from a CLOSED list** (enforced in code via the schema enum, not
+left to the model), extended only by promotion; **qualifiers stay OPEN** — keeps closed-world grounding
+on the part that matters and lets the head vocab converge while qualifiers proliferate. (2) **Promotion
+is now two-dimensional with asymmetric thresholds:** promoting a HEAD creates a column; promoting a
+QUALIFIER *splits* an existing column into variants (a schema change with backfill implications), so
+qualifier-promotion is STRICTLY HARDER than head-promotion **and requires the head to be promoted
+first** (no orphan-qualifier column). (3) **Grounding must be RE-MEASURED on the qualifier slot
+independently** — it's a second free-text slot = a second place to hallucinate; closed-world grounding
+applies to both slots, and the 0.941 number does NOT carry over unproven. **Assumption I'm proceeding
+under (flagging per §4):** "seeded per category" is implemented as a single UNIVERSAL head-noun seed
+available to every (universal) governed category — domain-agnostic primitives (amount/date/status/…),
+NOT industry fields — to stay consistent with §4 "no industry-specific field is ever configured;
+specialisation is emergent, never seeded." Per-category seed *subsets* remain a trivial future
+refinement. Say so if you meant literal per-category seed lists.
+
 **UPDATE (2026-08-14, later) — ROOT CAUSE: the convergence "failure" is a MEASUREMENT ALTITUDE +
 EXTRACTION-GRANULARITY problem, not a dedup-tuning problem (supersedes the "tune the adjudicator"
 framing).** Ran lever #1 (reframe `_adjudicate` "same attribute?" → "same DB COLUMN?", + example-value

@@ -289,6 +289,23 @@ under the moat is a real risk. Licences change across versions — pin the versi
 **that** version (this is why whatstk/PyMuPDF were excluded; apply the same check to silero-vad, pywa,
 WeasyPrint, and every future dep).
 
+**Never move the goalposts to pass. Redefining a winning-condition metric is an owner decision,
+logged.** (Standing rule, learned 2026-08-14 — the second fork where the tempting shortcut was to
+move a threshold.) When a pre-committed metric (convergence <5% dup + declining new-field rate; the
+anchor+2 question budget; the quantitative thresholds in winning-condition §4; any trust-gate number)
+comes back failing, the instinct to *redefine what it measures* — "measure at concept level instead
+of field level," "count synonym-pairs instead of field count" — is **self-grading dressed as metric
+refinement (§10-Q3).** winning-condition §4 exists precisely so this moment has a pre-committed answer.
+So: **fix the system to meet the metric, not the metric to fit the system.** Any proposal to redefine,
+re-scope, or relax a winning-condition metric **halts for an explicit owner decision and is logged
+with its reason** (a dated block in `longterm_context.md`). A refined metric may still be *reported as
+a secondary diagnostic* — but it must be labelled diagnostic-only in code so no later session promotes
+it to the pass line by accident. The original metric stays the gate until the owner says otherwise.
+*(Worked example, 2026-08-14: convergence failed on real data; the diagnosis found the schema
+converges at head-noun altitude but not field-name altitude. Redefining the gate to head-noun count
+was rejected as self-grading; the fix is upstream — Path A, constrain extraction granularity — and the
+head-noun curve stays a diagnostic. See `longterm_context.md` §0.)*
+
 **Split every "ready"/prerequisite gate** into *blocks starting now* vs *blocks a later phase*. Reading
 six papers must never block writing a health endpoint.
 
