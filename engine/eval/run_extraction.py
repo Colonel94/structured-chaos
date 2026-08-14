@@ -8,9 +8,11 @@ so this harness IS the Path-A proof — no downstream embedding-dedup pass is ne
 
 What this measures WITHOUT ground-truth labels (so it's honest, not self-graded):
 - **json_valid** — did grammar-constrained decoding hold on real messy text.
-- **grounding rate** — mean field_validity. Path A grounds BOTH free-text slots (value AND qualifier)
-  independently (owner constraint #3), which is STRICTER than the pre-Path-A value-only rate (0.941),
-  so we report both, apples-to-apples.
+- **grounding (value)** — the VALUE gates the attribute (overlap grounding tolerates reformatting);
+  comparable to the pre-Path-A 0.941. The QUALIFIER must be strictly EXTRACTIVE (a verbatim source
+  span, v4) — a non-extractive qualifier is NULLED, not dropped, so a grounded value survives.
+- **qualifier retention** — fraction of kept attributes carrying a verbatim qualifier: how much
+  specificity survives strict extraction (Path A relies on qualifiers to carry specificity as data).
 - **head (column) convergence** — distinct heads used + the new-head-per-bucket curve. *** THIS is the
   gate *** (winning-condition §4: distinct emergent columns settle + declining new-column rate). It
   should bend down / plateau where the pre-Path-A full-name curve [48,52,74,64,77,63] stayed flat.
@@ -74,10 +76,11 @@ async def main() -> int:
     seen_names: set[str] = set()
     new_head_per_bucket: list[int] = []
     json_ok = 0
-    validity_sum = 0.0  # value+qualifier grounding (the extractor's field_validity)
+    validity_sum = 0.0  # extractor field_validity (value grounding, per-case mean)
     value_only_grounded = 0
     candidates_all = 0  # ALL emergent candidates (incl. dropped) — the value-only denominator
     emergent_kept = 0  # grounded candidates actually kept
+    qualifiers_retained = 0  # kept attrs carrying a (strictly-extractive) qualifier
     latencies: list[float] = []
     results = []
 
@@ -104,6 +107,8 @@ async def main() -> int:
         for e in r.grounded_emergent:
             head_freq[e.head] += 1
             emergent_kept += 1
+            if e.qualifier:
+                qualifiers_retained += 1
             if e.head not in seen_heads:
                 seen_heads.add(e.head)
                 new_head_per_bucket[-1] += 1
@@ -131,13 +136,17 @@ async def main() -> int:
             f.write(json.dumps(r, ensure_ascii=False) + "\n")
 
     n = len(rows)
-    print(f"\n===== REAL-DATA EXTRACTION REPORT (CFPB, n={n}) — Path A =====")
-    print(f"json_valid              : {json_ok}/{n} ({json_ok / n:.0%})")
     print(
-        f"grounding value+qualifier: {validity_sum / n:.3f}   (STRICTER — both free-text slots, §3)"
+        f"\n===== REAL-DATA EXTRACTION REPORT (CFPB, n={n}) — Path A (v4 extractive qualifiers) ====="
     )
+    print(f"json_valid              : {json_ok}/{n} ({json_ok / n:.0%})")
     vo = (value_only_grounded / candidates_all) if candidates_all else 1.0
-    print(f"grounding value-only     : {vo:.3f}   (over ALL candidates — vs pre-Path-A 0.941)")
+    print(f"grounding (value)        : {vo:.3f}   (over ALL candidates — vs pre-Path-A 0.941)")
+    print(f"  field_validity per-case: {validity_sum / n:.3f}   (same signal, per-case mean)")
+    qr = (qualifiers_retained / emergent_kept) if emergent_kept else 0.0
+    print(
+        f"qualifier retention      : {qr:.3f}   ({qualifiers_retained}/{emergent_kept} kept attrs carry a VERBATIM qualifier)"
+    )
     print(f"emergent attrs kept/all  : {emergent_kept}/{candidates_all}")
     print("\n-- COLUMN CONVERGENCE (the gate) --")
     print(f"distinct heads (columns) : {len(seen_heads)}   (closed vocab, bounded by construction)")

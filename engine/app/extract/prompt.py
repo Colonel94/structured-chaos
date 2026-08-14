@@ -11,7 +11,7 @@ from __future__ import annotations
 from .head_nouns import HEAD_NOUNS
 
 # Bump on any change to the prompt text below.
-PROMPT_VERSION = "extract-v3"  # v3: head/qualifier/value emergent attributes (Path A)
+PROMPT_VERSION = "extract-v4"  # v4: qualifiers must be verbatim-extractive (Path A)
 
 _SYSTEM = """You extract a structured complaint case from a customer message. Extract ONLY what the \
 message states or directly implies. NEVER invent facts, names, numbers, or outcomes.
@@ -34,11 +34,12 @@ overcharge. Use "vulnerable_party" only if a child/elderly/disabled person is at
 - emergent_attributes: specific facts worth structuring, each as {"head","qualifier","value"}:
     * head = the column this fact belongs in, chosen from this CLOSED list (pick the closest; use \
 "other" only if nothing fits): <<HEADS>>.
-    * qualifier = one or two words that make the fact specific, or null if the head alone is enough. \
-The qualifier MUST be words taken from the message. Examples: for "$500 was charged" use \
-head="amount", qualifier="charged"; for a pension deposit use head="amount", qualifier="pension"; for \
-the box being crushed use head="condition", qualifier="packaging" (or "box"); for when it was \
-delivered use head="time", qualifier="delivered".
+    * qualifier = a SHORT phrase (1-3 words) COPIED VERBATIM from the message — the exact words as \
+they appear, contiguous — that makes the fact specific, or null if the head alone is enough. Do NOT \
+paraphrase, reword, reorder, or summarise: if you cannot copy a contiguous phrase straight from the \
+message, use null. Examples: for "$500 was charged" use head="amount", qualifier="charged"; for "my \
+pension was deposited" use head="amount", qualifier="pension"; for "the box was crushed" use \
+head="condition", qualifier="box"; for "delivered at 6pm" use head="time", qualifier="delivered".
     * value = the actual value from the message (the number, date, name, phrase).
   Put the SPECIFICITY in the qualifier, NOT in the head — do not invent new heads. Include ONLY facts \
 actually present in the message; every qualifier and value must come from the text. No inferred or \

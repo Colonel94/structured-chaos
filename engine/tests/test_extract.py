@@ -42,26 +42,49 @@ def _payload(emergent: list[dict[str, object]], **over: object) -> dict[str, obj
     return base
 
 
-async def test_grounding_gate_checks_value_and_qualifier_independently() -> None:
+async def test_value_gates_attribute_qualifier_must_be_extractive() -> None:
     payload = _payload(
         [
             {"head": "condition", "qualifier": "crushed", "value": "crushed"},  # both grounded
             {"head": "product", "qualifier": None, "value": "chocolate cake"},  # grounded, no qual
-            {"head": "description", "qualifier": None, "value": "bright green sprinkles"},  # bad val
-            {"head": "amount", "qualifier": "pension", "value": "4471"},  # val ok, qualifier NOT ok
+            {
+                "head": "description",
+                "qualifier": None,
+                "value": "bright green sprinkles",
+            },  # bad val
+            {
+                "head": "amount",
+                "qualifier": "pension",
+                "value": "4471",
+            },  # val ok, qual NOT verbatim
         ]
     )
     r = await extract(_CASE, llm=_ScriptedLLM(payload))
     assert r.governed["desired_outcome"] == "replacement"
     assert r.governed["anchor_value"] == "4471"
-    by_name = {e.name: e.grounded for e in r.emergent}
-    assert by_name["crushed_condition"] is True
-    assert by_name["product"] is True
-    assert by_name["description"] is False  # invented value → ungrounded
-    assert by_name["pension_amount"] is False  # value grounded but qualifier "pension" is not (§3)
-    assert r.field_validity == 2 / 4
-    assert {e.name for e in r.grounded_emergent} == {"crushed_condition", "product"}
+    # VALUE gates the attribute: only "bright green sprinkles" is ungrounded → dropped. The other
+    # three are kept. The non-extractive qualifier "pension" (not in the source) is NULLED, not
+    # allowed to nuke the grounded value 4471 → the fact survives as a bare "amount".
+    grounded = {e.name: e.qualifier for e in r.grounded_emergent}
+    assert set(grounded) == {"crushed_condition", "product", "amount"}
+    assert grounded["amount"] is None  # invented qualifier dropped, value kept
+    assert grounded["crushed_condition"] == "crushed"  # verbatim qualifier retained
+    assert r.field_validity == 3 / 4  # 3 of 4 have a grounded VALUE
     assert r.prompt_version == PROMPT_VERSION
+
+
+async def test_non_extractive_multiword_qualifier_is_nulled() -> None:
+    # "badly crushed" is NOT a contiguous span of the source ("arrived crushed") → qualifier nulled,
+    # value kept. "chocolate cake" IS contiguous → retained.
+    payload = _payload(
+        [
+            {"head": "condition", "qualifier": "badly crushed", "value": "crushed"},
+            {"head": "product", "qualifier": "chocolate cake", "value": "chocolate cake"},
+        ]
+    )
+    r = await extract(_CASE, llm=_ScriptedLLM(payload))
+    got = {e.name: e.qualifier for e in r.grounded_emergent}
+    assert got == {"condition": None, "chocolate_cake_product": "chocolate_cake"}
 
 
 async def test_head_must_be_in_closed_vocabulary() -> None:
@@ -89,7 +112,11 @@ async def test_duplicate_head_qualifier_deduped() -> None:
     payload = _payload(
         [
             {"head": "condition", "qualifier": "Crushed", "value": "crushed"},
-            {"head": "Condition", "qualifier": "crushed", "value": "crushed"},  # same normalised name
+            {
+                "head": "Condition",
+                "qualifier": "crushed",
+                "value": "crushed",
+            },  # same normalised name
         ]
     )
     r = await extract(_CASE, llm=_ScriptedLLM(payload))

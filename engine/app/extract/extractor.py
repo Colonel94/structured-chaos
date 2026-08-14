@@ -29,6 +29,21 @@ _TOKEN = re.compile(r"[a-z0-9]+")
 _GROUNDING_MIN_OVERLAP = 0.6
 
 
+def _is_extractive(qualifier_norm: str, source_lower: str) -> bool:
+    """Whether the qualifier is a VERBATIM contiguous span of the source — strict extractiveness
+    (owner directive 2026-08-14). The qualifier's tokens, space-joined, must appear as a contiguous
+    run in the source's token stream (both sides reduced to alnum tokens, so punctuation/whitespace
+    differences — "past-due" vs "past due" — don't matter). A paraphrase or a reordering
+    ("payment_status" from "status of my payment") is NOT extractive and is rejected. This is stricter
+    than value grounding on purpose: the qualifier is optional context, so a non-extractive one is
+    dropped (nulled) rather than allowed to invent structure."""
+    phrase = " ".join(qualifier_norm.split("_"))
+    if not phrase:
+        return False
+    source_tokens = " ".join(_TOKEN.findall(source_lower))
+    return phrase in source_tokens
+
+
 def _is_grounded(value: str, source_lower: str) -> bool:
     """Whether ``value`` traces back to the source text — the anti-hallucination check. Exact
     substring wins; otherwise require a strong overlap of the value's significant tokens (so a
@@ -78,13 +93,17 @@ async def extract(case_text: str, *, llm: LLMBackend) -> ExtractionResult:
         value = str(item.get("value", "")).strip()
         if not value:
             continue
-        # Closed-world grounding on BOTH free-text slots, independently (owner constraint #3): the
-        # value must trace to the source, and so must the qualifier (a second place to hallucinate).
-        # The head is a closed-enum classification, not free text, so it is not grounded against text.
-        value_ok = _is_grounded(value, source_lower)
-        qual_ok = qualifier is None or _is_grounded(qualifier, source_lower)
+        # Closed-world grounding on BOTH free-text slots, independently (owner constraint #3) — but the
+        # two slots are handled asymmetrically because they mean different things:
+        #  * VALUE gates the attribute: an ungrounded value has nothing real to store → drop the whole
+        #    attribute (overlap grounding tolerates reformatting like "$4,200.00" vs "4200").
+        #  * QUALIFIER is optional context and must be strictly EXTRACTIVE (a verbatim source span). A
+        #    non-extractive qualifier is NULLED, not allowed to nuke a grounded value — so we keep the
+        #    fact (head + value) and simply drop the invented context. Nothing ungrounded is stored.
+        if qualifier is not None and not _is_extractive(qualifier, source_lower):
+            qualifier = None
         attr = EmergentAttribute(
-            head=head, qualifier=qualifier, value=value, grounded=value_ok and qual_ok
+            head=head, qualifier=qualifier, value=value, grounded=_is_grounded(value, source_lower)
         )
         if attr.name in seen:  # same (head, qualifier) already seen this case → drop the duplicate
             continue
