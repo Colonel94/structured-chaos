@@ -110,9 +110,15 @@ async def extract_case(
                 citations=citations,
                 layer="emergent",
             )
+            # Path A: register the composite (qualifier_head) AND roll its support up to the head —
+            # the head is the column the convergence gate + promotion count on.
             api.register_emergent_field(
-                session, field_name=attr.name, field_name_hash=_name_hash(attr.name)
+                session,
+                field_name=attr.name,
+                field_name_hash=_name_hash(attr.name),
+                head=attr.head,
             )
+            api.register_emergent_head(session, head=attr.head)
 
         api.rebuild_field_current(session, case_id)
         meter.meter_backend(

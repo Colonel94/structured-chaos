@@ -1,13 +1,21 @@
 """Run the extractor over the REAL CFPB complaint fixture and report structural quality + the
 convergence signal — on data we did NOT author (CLAUDE.md §10-Q3).
 
+Path A (2026-08-14): an emergent attribute is now ``{head, qualifier, value}`` — the HEAD is the
+column (closed vocabulary), the QUALIFIER carries the specificity as data. Convergence is therefore
+achieved AT EXTRACTION TIME (the head space is bounded by construction + extended only by promotion),
+so this harness IS the Path-A proof — no downstream embedding-dedup pass is needed for the column gate.
+
 What this measures WITHOUT ground-truth labels (so it's honest, not self-graded):
 - **json_valid** — did grammar-constrained decoding hold on real messy text.
-- **grounding rate** — mean field_validity: the closed-world gate's hallucination resistance.
-- **governed-core distributions** — sanity that category/outcome/severity aren't garbage or constant.
-- **new-field-rate curve** — distinct emergent field-names discovered per bucket. This is the raw
-  convergence signal; WITHOUT dedup (unit 4.3) it will still sprawl on synonyms — that sprawl is the
-  honest baseline that dedup must flatten. Re-run after 4.3 to show the curve settle + duplicates drop.
+- **grounding rate** — mean field_validity. Path A grounds BOTH free-text slots (value AND qualifier)
+  independently (owner constraint #3), which is STRICTER than the pre-Path-A value-only rate (0.941),
+  so we report both, apples-to-apples.
+- **head (column) convergence** — distinct heads used + the new-head-per-bucket curve. *** THIS is the
+  gate *** (winning-condition §4: distinct emergent columns settle + declining new-column rate). It
+  should bend down / plateau where the pre-Path-A full-name curve [48,52,74,64,77,63] stayed flat.
+- **composite-name count** — distinct qualifier_head names. DIAGNOSTIC ONLY (qualifiers are data and
+  are EXPECTED to proliferate); not the gate. Kept to show the qualifier cardinality.
 
 NOT measured here: governed-core ACCURACY (needs labels — a separate real-data + human-label step).
 Usage:  uv run python eval/run_extraction.py [limit]
@@ -17,6 +25,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import re
 import sys
 import time
 from collections import Counter
@@ -28,11 +37,27 @@ from app.extract.extractor import extract
 _FIX = Path(__file__).resolve().parent / "fixtures" / "cfpb_sample.jsonl"
 _OUT = Path(__file__).resolve().parent / "fixtures" / "cfpb_extractions.jsonl"
 _BUCKET = 20
+_TOKEN = re.compile(r"[a-z0-9]+")
 
 
 def _load(limit: int | None) -> list[dict[str, str]]:
     rows = [json.loads(line) for line in _FIX.read_text(encoding="utf-8").splitlines() if line]
     return rows[:limit] if limit else rows
+
+
+def _value_grounded(value: str, source_lower: str) -> bool:
+    """Value-only grounding — the pre-Path-A measure, recomputed here for an apples-to-apples compare
+    against the 0.941 baseline (the extractor's field_validity now also folds in qualifier grounding).
+    """
+    v = value.strip().lower()
+    if not v:
+        return False
+    if v in source_lower:
+        return True
+    sig = [t for t in _TOKEN.findall(v) if len(t) > 2]
+    if not sig:
+        return any(t in source_lower for t in _TOKEN.findall(v))
+    return sum(1 for t in sig if t in source_lower) / len(sig) >= 0.6
 
 
 async def main() -> int:
@@ -44,11 +69,15 @@ async def main() -> int:
     outcome: Counter[str] = Counter()
     severity: Counter[str] = Counter()
     emotion: Counter[str] = Counter()
-    field_freq: Counter[str] = Counter()
-    seen_fields: set[str] = set()
-    new_per_bucket: list[int] = []
+    head_freq: Counter[str] = Counter()
+    seen_heads: set[str] = set()
+    seen_names: set[str] = set()
+    new_head_per_bucket: list[int] = []
     json_ok = 0
-    validity_sum = 0.0
+    validity_sum = 0.0  # value+qualifier grounding (the extractor's field_validity)
+    value_only_grounded = 0
+    candidates_all = 0  # ALL emergent candidates (incl. dropped) — the value-only denominator
+    emergent_kept = 0  # grounded candidates actually kept
     latencies: list[float] = []
     results = []
 
@@ -64,49 +93,67 @@ async def main() -> int:
             outcome[str(r.governed.get("desired_outcome"))] += 1
             severity[str(r.governed.get("severity_signal"))] += 1
             emotion[str(r.governed.get("emotion_signal"))] += 1
-        bucket_new = 0
-        for e in r.grounded_emergent:
-            field_freq[e.name] += 1
-            if e.name not in seen_fields:
-                seen_fields.add(e.name)
-                bucket_new += 1
+        source_lower = row["narrative"].lower()
         if i % _BUCKET == 0:
-            new_per_bucket.append(0)
-        new_per_bucket[-1] += bucket_new
+            new_head_per_bucket.append(0)
+        # Value-only grounding over ALL candidates (incl. dropped) — the apples-to-apples denominator
+        # vs the pre-Path-A 0.941; measuring over grounded-only would be circular (always 1.0).
+        for e in r.emergent:
+            candidates_all += 1
+            value_only_grounded += int(_value_grounded(e.value, source_lower))
+        for e in r.grounded_emergent:
+            head_freq[e.head] += 1
+            emergent_kept += 1
+            if e.head not in seen_heads:
+                seen_heads.add(e.head)
+                new_head_per_bucket[-1] += 1
+            seen_names.add(e.name)
         results.append(
             {
                 "id": row["id"],
                 "product": row["product"],
                 "governed": r.governed,
+                # Path A: store head/qualifier/value/name so the proof can measure at the head (column)
+                # level; `emergent` (composite names) kept for backward-compatible readers.
+                "attributes": [
+                    {"head": e.head, "qualifier": e.qualifier, "value": e.value, "name": e.name}
+                    for e in r.grounded_emergent
+                ],
                 "emergent": [e.name for e in r.grounded_emergent],
                 "field_validity": r.field_validity,
             }
         )
         if (i + 1) % 10 == 0:
-            print(f"  ...{i + 1}/{len(rows)}  distinct_fields={len(seen_fields)}")
+            print(f"  ...{i + 1}/{len(rows)}  distinct_heads={len(seen_heads)}")
 
     with _OUT.open("w", encoding="utf-8") as f:
         for r in results:
             f.write(json.dumps(r, ensure_ascii=False) + "\n")
 
     n = len(rows)
-    print(f"\n===== REAL-DATA EXTRACTION REPORT (CFPB, n={n}) =====")
-    print(f"json_valid            : {json_ok}/{n} ({json_ok / n:.0%})")
+    print(f"\n===== REAL-DATA EXTRACTION REPORT (CFPB, n={n}) — Path A =====")
+    print(f"json_valid              : {json_ok}/{n} ({json_ok / n:.0%})")
     print(
-        f"mean grounding (valid): {validity_sum / n:.3f}   (1.0 = no hallucinated emergent fields)"
+        f"grounding value+qualifier: {validity_sum / n:.3f}   (STRICTER — both free-text slots, §3)"
     )
+    vo = (value_only_grounded / candidates_all) if candidates_all else 1.0
+    print(f"grounding value-only     : {vo:.3f}   (over ALL candidates — vs pre-Path-A 0.941)")
+    print(f"emergent attrs kept/all  : {emergent_kept}/{candidates_all}")
+    print("\n-- COLUMN CONVERGENCE (the gate) --")
+    print(f"distinct heads (columns) : {len(seen_heads)}   (closed vocab, bounded by construction)")
     print(
-        f"latency ms  p50/p95   : {sorted(latencies)[n // 2]:.0f} / {sorted(latencies)[int(n * 0.95)]:.0f}"
+        f"new-head per {_BUCKET}-bucket : {new_head_per_bucket}   <- should bend/plateau (was flat)"
     )
-    print(f"distinct emergent flds: {len(seen_fields)}")
+    print(f"distinct composite names : {len(seen_names)}   (DIAGNOSTIC — qualifiers are data)")
+    print(f"head frequency           : {dict(head_freq.most_common())}")
+    print("\n-- governed-core distributions --")
     print(
-        f"new-field per {_BUCKET}-bucket: {new_per_bucket}   <- convergence signal (want: declining)"
+        f"latency ms  p50/p95      : {sorted(latencies)[n // 2]:.0f} / {sorted(latencies)[int(n * 0.95)]:.0f}"
     )
-    print(f"category dist         : {dict(cat.most_common())}")
-    print(f"desired_outcome dist  : {dict(outcome.most_common())}")
-    print(f"severity dist         : {dict(severity.most_common())}")
-    print(f"emotion dist          : {dict(emotion.most_common())}")
-    print(f"top emergent fields   : {dict(field_freq.most_common(15))}")
+    print(f"category dist            : {dict(cat.most_common())}")
+    print(f"desired_outcome dist     : {dict(outcome.most_common())}")
+    print(f"severity dist            : {dict(severity.most_common())}")
+    print(f"emotion dist             : {dict(emotion.most_common())}")
     print(f"\nwrote per-case extractions -> {_OUT}")
     return 0
 

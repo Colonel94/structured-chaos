@@ -15,6 +15,8 @@ Spike-4.0 corrections baked in (the "refuse to guess" trust invariant, CLAUDE.md
 
 from __future__ import annotations
 
+from .head_nouns import HEAD_NOUNS
+
 # Universal starter taxonomy (GOVERNED-CORE-SCHEMA §2) — hierarchical archetypes + UNCLEAR.
 TAXONOMY: tuple[str, ...] = (
     "product_fault",
@@ -64,15 +66,21 @@ EXTRACTION_SCHEMA: dict[str, object] = {
         "emotion_signal": {"type": "string", "enum": list(EMOTIONS)},
         "severity_signal": {"type": "string", "enum": list(SEVERITIES)},
         "anchor_value": {"type": ["string", "null"]},
+        # Path A (2026-08-14): an emergent attribute is {head, qualifier, value}. The HEAD is the
+        # column and is grammar-constrained to the closed vocabulary (enum) — the convergence fix is
+        # enforced here in code, not left to the model. The QUALIFIER is open free text carrying the
+        # specificity (charged/pension/refunded); it may be null. Both qualifier and value are
+        # grounded against the source independently (closed-world grounding, extractor).
         "emergent_attributes": {
             "type": "array",
             "items": {
                 "type": "object",
                 "properties": {
-                    "name": {"type": "string"},
+                    "head": {"type": "string", "enum": list(HEAD_NOUNS)},
+                    "qualifier": {"type": ["string", "null"]},
                     "value": {"type": "string"},
                 },
-                "required": ["name", "value"],
+                "required": ["head", "qualifier", "value"],
             },
         },
     },

@@ -40,9 +40,10 @@ class _ScriptedLLM:
                 "severity_signal": "none",
                 "anchor_value": "4471",
                 "emergent_attributes": [
-                    {"name": "flavour", "value": "chocolate"},  # grounded
-                    {"name": "packaging", "value": "crushed"},  # grounded
-                    {"name": "colour", "value": "bright green"},  # NOT in text → dropped
+                    # Path A shape: head (closed vocab) + open qualifier + value.
+                    {"head": "product", "qualifier": None, "value": "chocolate cake"},  # grounded
+                    {"head": "condition", "qualifier": "crushed", "value": "crushed"},  # grounded
+                    {"head": "description", "qualifier": None, "value": "bright green"},  # dropped
                 ],
             }
         )
@@ -100,9 +101,9 @@ async def test_extract_stage_persists_governed_and_grounded_emergent(
 
     # 6 governed (category, fault, desired_outcome, emotion, severity, anchor) — all non-null here.
     assert gov == 6
-    # 2 grounded emergent; the ungrounded "colour"=bright green was dropped.
-    assert set(emg) == {"flavour", "packaging"}
-    assert {r[0]: r[1] for r in reg} == {"flavour": 1, "packaging": 1}  # registry support_count
+    # 2 grounded emergent (composite names); the ungrounded "bright green" description was dropped.
+    assert set(emg) == {"product", "crushed_condition"}
+    assert {r[0]: r[1] for r in reg} == {"product": 1, "crushed_condition": 1}  # registry support
     assert fc == 8  # projection = 6 governed + 2 emergent
     assert cost["calls"] >= 1  # the extraction LLM call was metered
 

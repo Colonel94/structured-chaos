@@ -1,8 +1,14 @@
-"""The convergence PROOF (STAGE 3+4) — run the real dedup over the real 120-case extraction baseline
-and measure whether the emergent schema converges. On data we did NOT author (CLAUDE.md §10-Q3).
+"""The PRE-Path-A convergence proof (historical) — run the name-level dedup over the pre-Path-A
+120-case extraction baseline and measure whether the emergent schema converges. On data we did NOT
+author (CLAUDE.md §10-Q3).
 
-Reuses ``fixtures/cfpb_extractions.jsonl`` (the baseline extraction — no 12-min re-extraction), then
-runs the PRODUCTION dedup (BGE-M3 embeddings in pgvector + τ=0.85/0.70 gate + gray-band LLM
+*** This is the NEGATIVE-result baseline that motivated Path A. It reads the PRESERVED pre-Path-A
+fixture (``cfpb_extractions_prePathA.jsonl``, composite field NAMES). The current Path A gate — column
+(head) convergence — lives in ``run_extraction.py`` instead, because Path A achieves convergence at
+extraction time (closed head vocabulary), not by a downstream name-dedup pass. Kept runnable so the
+before/after is auditable. ***
+
+Runs the name-level dedup (BGE-M3 embeddings in pgvector + τ=0.85/0.70 gate + gray-band LLM
 adjudication) incrementally in case order. Reports the canonical schema size vs the raw 378, the
 new-canonical-per-bucket curve (compare to the flat raw baseline [48,52,74,64,77,63]), the reduction
 ratio, and the promoted (recurrence ≥4) fields.
@@ -24,7 +30,7 @@ from app.schema.dedup import _name_text, dedup_field
 from app.store import api
 from app.store.db import admin_session, tenant_session
 
-_FIX = Path(__file__).resolve().parent / "fixtures" / "cfpb_extractions.jsonl"
+_FIX = Path(__file__).resolve().parent / "fixtures" / "cfpb_extractions_prePathA.jsonl"
 _BUCKET = 20
 
 

@@ -17,6 +17,7 @@ import re
 
 from ..backends.interfaces import LLMBackend
 from ..obs.logging import get_logger
+from .head_nouns import HEAD_NOUNS, normalise_token
 from .models import EmergentAttribute, ExtractionResult
 from .prompt import PROMPT_VERSION, build_prompt
 from .schema import EXTRACTION_SCHEMA, GOVERNED_KEYS
@@ -26,11 +27,6 @@ log = get_logger(__name__)
 _TOKEN = re.compile(r"[a-z0-9]+")
 # A candidate value is grounded if this fraction of its significant tokens appears in the source.
 _GROUNDING_MIN_OVERLAP = 0.6
-
-
-def _normalise_name(name: str) -> str:
-    """Field names → stable snake_case (the emergent store keys on a stable hash of this)."""
-    return re.sub(r"[^a-z0-9]+", "_", name.strip().lower()).strip("_")
 
 
 def _is_grounded(value: str, source_lower: str) -> bool:
@@ -73,14 +69,27 @@ async def extract(case_text: str, *, llm: LLMBackend) -> ExtractionResult:
     for item in obj.get("emergent_attributes", []) or []:
         if not isinstance(item, dict):
             continue
-        name = _normalise_name(str(item.get("name", "")))
-        value = str(item.get("value", "")).strip()
-        if not name or not value or name in seen:
+        head = normalise_token(str(item.get("head", "")))
+        if head not in HEAD_NOUNS:  # grammar enum guarantees this; defensive against a raw backend
             continue
-        seen.add(name)
-        emergent.append(
-            EmergentAttribute(name=name, value=value, grounded=_is_grounded(value, source_lower))
+        raw_qual = item.get("qualifier")
+        qualifier = normalise_token(str(raw_qual)) if raw_qual else None
+        qualifier = qualifier or None  # normalised-to-empty → no qualifier
+        value = str(item.get("value", "")).strip()
+        if not value:
+            continue
+        # Closed-world grounding on BOTH free-text slots, independently (owner constraint #3): the
+        # value must trace to the source, and so must the qualifier (a second place to hallucinate).
+        # The head is a closed-enum classification, not free text, so it is not grounded against text.
+        value_ok = _is_grounded(value, source_lower)
+        qual_ok = qualifier is None or _is_grounded(qualifier, source_lower)
+        attr = EmergentAttribute(
+            head=head, qualifier=qualifier, value=value, grounded=value_ok and qual_ok
         )
+        if attr.name in seen:  # same (head, qualifier) already seen this case → drop the duplicate
+            continue
+        seen.add(attr.name)
+        emergent.append(attr)
 
     n = len(emergent)
     field_validity = 1.0 if n == 0 else sum(e.grounded for e in emergent) / n

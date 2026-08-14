@@ -4,16 +4,29 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from .head_nouns import compose_name
+
 
 @dataclass(frozen=True)
 class EmergentAttribute:
-    """One candidate attribute the model attested — a *candidate*, not a promoted field (§6). ``name``
-    is normalised snake_case; ``grounded`` is whether ``value`` traces back to the source text
-    (closed-world grounding — an ungrounded candidate is a hallucination and is dropped/flagged)."""
+    """One candidate attribute the model attested — a *candidate*, not a promoted field (§6). Path A
+    (2026-08-14): ``head`` is the column (from the closed vocabulary), ``qualifier`` is the open
+    specificity token (may be ``None``), ``value`` is the attested value. ``grounded`` is whether the
+    attribute traces back to the source text — the qualifier AND the value are each checked
+    independently (owner constraint #3: the qualifier is a second free-text slot = a second place to
+    hallucinate), so ``grounded`` is True only when both hold. An ungrounded candidate is dropped.
+    """
 
-    name: str
+    head: str
+    qualifier: str | None
     value: str
     grounded: bool
+
+    @property
+    def name(self) -> str:
+        """The composite column display-name (``qualifier_head``) recorded in the log — preserves
+        within-case multiplicity while the head is the convergence unit."""
+        return compose_name(self.head, self.qualifier)
 
 
 @dataclass(frozen=True)

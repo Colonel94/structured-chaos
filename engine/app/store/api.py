@@ -133,24 +133,55 @@ def list_case_source_documents(session: Session, case_id: UUID) -> list[UUID]:
     return [UUID(str(r[0])) for r in rows]
 
 
-def register_emergent_field(session: Session, *, field_name: str, field_name_hash: str) -> int:
+def register_emergent_field(
+    session: Session, *, field_name: str, field_name_hash: str, head: str | None = None
+) -> int:
     """Upsert the emergent-field registry for the current tenant and recompute its ``support_count``
     (distinct cases attesting the field, from the append-only ``field_extraction`` log — recomputed
-    rather than incremented, so a replay never double-counts). Returns the new support_count. Call
-    AFTER recording the emergent value, so the just-attested case is included."""
+    rather than incremented, so a replay never double-counts). ``head`` (Path A) is the closed-vocab
+    column this composite (``qualifier_head``) belongs to — stored so support can roll up to the head.
+    Returns the new support_count. Call AFTER recording the emergent value, so the just-attested case
+    is included."""
     row = session.execute(
         text(f"""
-            INSERT INTO emergent_field (tenant_id, field_name_hash, field_name, support_count)
+            INSERT INTO emergent_field (tenant_id, field_name_hash, field_name, head, support_count)
             VALUES (
-                {_GUC_TENANT}, :hash, :name,
+                {_GUC_TENANT}, :hash, :name, :head,
                 (SELECT count(DISTINCT case_id) FROM field_extraction
                  WHERE layer = 'emergent' AND field_path = :name)
             )
             ON CONFLICT (tenant_id, field_name_hash) DO UPDATE
+                SET support_count = EXCLUDED.support_count,
+                    head = COALESCE(EXCLUDED.head, emergent_field.head),
+                    updated_at = now()
+            RETURNING support_count
+            """),
+        {"hash": field_name_hash, "name": field_name, "head": head},
+    ).one()
+    return int(row[0])
+
+
+def register_emergent_head(session: Session, *, head: str) -> int:
+    """Upsert the head-level registry (the emergent COLUMN space, Path A) and recompute its
+    ``support_count`` = distinct cases attesting ANY qualifier of this head, from the append-only log
+    joined on ``emergent_field.head``. Recomputed (never incremented) so a replay can't double-count.
+    Call AFTER ``register_emergent_field`` (which sets the composite's head). Returns support_count.
+    """
+    row = session.execute(
+        text(f"""
+            INSERT INTO emergent_head (tenant_id, head, support_count)
+            VALUES (
+                {_GUC_TENANT}, :head,
+                (SELECT count(DISTINCT fe.case_id)
+                   FROM field_extraction fe
+                   JOIN emergent_field ef ON ef.field_name = fe.field_path
+                  WHERE fe.layer = 'emergent' AND ef.head = :head)
+            )
+            ON CONFLICT (tenant_id, head) DO UPDATE
                 SET support_count = EXCLUDED.support_count, updated_at = now()
             RETURNING support_count
             """),
-        {"hash": field_name_hash, "name": field_name},
+        {"head": head},
     ).one()
     return int(row[0])
 
@@ -235,6 +266,42 @@ def mark_field_promoted(session: Session, *, canonical_hash: str) -> None:
         ),
         {"canon": canonical_hash},
     )
+
+
+# --------------------------------------------------------------------------- Path A: head promotion
+
+
+def list_emergent_heads(session: Session) -> list[tuple[str, int, bool]]:
+    """All heads for the tenant — ``(head, support_count, promoted)`` — the emergent COLUMN space
+    (the convergence unit under Path A). RLS-scoped."""
+    rows = session.execute(
+        text("SELECT head, support_count, promoted FROM emergent_head ORDER BY head")
+    ).all()
+    return [(str(r[0]), int(r[1]), bool(r[2])) for r in rows]
+
+
+def mark_head_promoted(session: Session, *, head: str) -> None:
+    """Mark a head promoted to a governed column (recurrence met — promotion dimension 1). Idempotent."""
+    session.execute(
+        text("UPDATE emergent_head SET promoted = true, updated_at = now() WHERE head = :head"),
+        {"head": head},
+    )
+
+
+def list_emergent_field_variants(session: Session) -> list[tuple[str, str, str | None, int, bool]]:
+    """Every registered composite ``(field_name_hash, field_name, head, support_count, promoted)`` —
+    the qualifier variants under each head. Qualifier promotion (dimension 2) marks these. RLS-scoped.
+    """
+    rows = session.execute(
+        text(
+            "SELECT field_name_hash, field_name, head, support_count, promoted "
+            "FROM emergent_field ORDER BY head, field_name"
+        )
+    ).all()
+    return [
+        (str(r[0]), str(r[1]), (str(r[2]) if r[2] is not None else None), int(r[3]), bool(r[4]))
+        for r in rows
+    ]
 
 
 def get_source_document(

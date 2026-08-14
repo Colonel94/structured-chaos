@@ -8,8 +8,10 @@ severity, stated-not-guessed outcome, closed-world grounding).
 
 from __future__ import annotations
 
+from .head_nouns import HEAD_NOUNS
+
 # Bump on any change to the prompt text below.
-PROMPT_VERSION = "extract-v2"
+PROMPT_VERSION = "extract-v3"  # v3: head/qualifier/value emergent attributes (Path A)
 
 _SYSTEM = """You extract a structured complaint case from a customer message. Extract ONLY what the \
 message states or directly implies. NEVER invent facts, names, numbers, or outcomes.
@@ -29,13 +31,23 @@ risk, food poisoning, gas/electrical/fire hazard). Use "financial_harm" for a di
 overcharge. Use "vulnerable_party" only if a child/elderly/disabled person is at risk. Otherwise \
 "none". A late or damaged product with no hazard is "none".
 - anchor_value: any explicit key the customer stated (order #, job #, booking/tracking ref), else null.
-- emergent_attributes: specific facts worth structuring, each as {"name","value"} with a snake_case \
-name (e.g. flavour, promised_time, actual_time, packaging_condition, technician, unit_no, \
-charged_amount). Include ONLY facts actually present in the message. No inferred or generic fields.
+- emergent_attributes: specific facts worth structuring, each as {"head","qualifier","value"}:
+    * head = the column this fact belongs in, chosen from this CLOSED list (pick the closest; use \
+"other" only if nothing fits): <<HEADS>>.
+    * qualifier = one or two words that make the fact specific, or null if the head alone is enough. \
+The qualifier MUST be words taken from the message. Examples: for "$500 was charged" use \
+head="amount", qualifier="charged"; for a pension deposit use head="amount", qualifier="pension"; for \
+the box being crushed use head="condition", qualifier="packaging" (or "box"); for when it was \
+delivered use head="time", qualifier="delivered".
+    * value = the actual value from the message (the number, date, name, phrase).
+  Put the SPECIFICITY in the qualifier, NOT in the head — do not invent new heads. Include ONLY facts \
+actually present in the message; every qualifier and value must come from the text. No inferred or \
+generic fields.
 
 Return JSON only."""
 
 
 def build_prompt(case_text: str) -> str:
     """The full extraction prompt for one case's normalised text."""
-    return f'{_SYSTEM}\n\nCustomer message:\n"""{case_text}"""'
+    system = _SYSTEM.replace("<<HEADS>>", ", ".join(HEAD_NOUNS))
+    return f'{system}\n\nCustomer message:\n"""{case_text}"""'
