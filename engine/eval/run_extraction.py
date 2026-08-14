@@ -92,10 +92,16 @@ async def main() -> int:
     n = len(rows)
     print(f"\n===== REAL-DATA EXTRACTION REPORT (CFPB, n={n}) =====")
     print(f"json_valid            : {json_ok}/{n} ({json_ok / n:.0%})")
-    print(f"mean grounding (valid): {validity_sum / n:.3f}   (1.0 = no hallucinated emergent fields)")
-    print(f"latency ms  p50/p95   : {sorted(latencies)[n // 2]:.0f} / {sorted(latencies)[int(n * 0.95)]:.0f}")
+    print(
+        f"mean grounding (valid): {validity_sum / n:.3f}   (1.0 = no hallucinated emergent fields)"
+    )
+    print(
+        f"latency ms  p50/p95   : {sorted(latencies)[n // 2]:.0f} / {sorted(latencies)[int(n * 0.95)]:.0f}"
+    )
     print(f"distinct emergent flds: {len(seen_fields)}")
-    print(f"new-field per {_BUCKET}-bucket: {new_per_bucket}   <- convergence signal (want: declining)")
+    print(
+        f"new-field per {_BUCKET}-bucket: {new_per_bucket}   <- convergence signal (want: declining)"
+    )
     print(f"category dist         : {dict(cat.most_common())}")
     print(f"desired_outcome dist  : {dict(outcome.most_common())}")
     print(f"severity dist         : {dict(severity.most_common())}")

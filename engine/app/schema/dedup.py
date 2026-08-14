@@ -5,7 +5,7 @@ nearest existing *canonical* field. The two-threshold gate decides:
 
     cosine ≥ 0.85           → MERGE   (a synonym of that canonical → becomes its alias)
     cosine < 0.70           → ADMIT   (a genuinely new field → its own canonical)
-    0.70 ≤ cosine < 0.85    → ONE LLM adjudication ("same attribute? y/n")
+    0.70 ≤ cosine < 0.85    → ONE LLM adjudication ("would one DB column hold both? y/n")
 
 The asymmetric gap + gray-band adjudication follow the design rule that **over-merge (lossy collapse)
 is more expensive than a duplicate** — so the adjudicator, and any error, fail SAFE to *not merging*.
@@ -20,7 +20,7 @@ scored set — never guessed in prod (EDD §6.2).
 from __future__ import annotations
 
 import json
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 
 from sqlalchemy.orm import Session
 
@@ -45,14 +45,44 @@ def _name_text(field_name: str) -> str:
     return field_name.replace("_", " ")
 
 
-async def _adjudicate(llm: LLMBackend, name_a: str, name_b: str) -> bool:
-    """One LLM call for the gray band: are these two field names the SAME attribute? Fails safe to
-    False (do not merge) on any error — a duplicate is cheaper than a lossy over-merge."""
+def _field_clause(name: str, values: Sequence[str] | None) -> str:
+    """Render a field for the adjudicator: its name plus, when available, up to two real example
+    values — the concrete context a bare snake_case name lacks."""
+    clause = f'"{name}"'
+    if values:
+        sample = ", ".join(repr(v) for v in list(values)[:2] if v)
+        if sample:
+            clause += f" (example values: {sample})"
+    return clause
+
+
+async def _adjudicate(
+    llm: LLMBackend,
+    name_a: str,
+    name_b: str,
+    values_a: Sequence[str] | None = None,
+    values_b: Sequence[str] | None = None,
+) -> bool:
+    """One LLM call for the gray band. The question is framed as a *schema-normalisation* decision —
+    "would a single database COLUMN hold both of these fields?" — NOT the abstract "are they the same
+    attribute?". The column framing is decisive for the real synonyms (``amount``/``charged_amount``,
+    ``phone``/``contact_number``) that the stricter "synonyms of one field" wording rejected 95% of
+    the time on real data. Optional example values give the model the concrete context a bare name
+    lacks. Fails safe to False (do not merge) on any error — a duplicate is cheaper than a lossy
+    over-merge, so the illustrative examples teach the *concept* without naming the pairs we measure.
+    """
     prompt = (
-        "Do these two data-field names denote the SAME attribute (synonyms of one field), or "
-        "DIFFERENT attributes?\n"
-        f'A: "{name_a}"\nB: "{name_b}"\n'
-        'Answer JSON: {"same": true} only if they are the same attribute, else {"same": false}.'
+        "You are normalising an emergent database schema. Two fields were extracted from customer "
+        "messages. Decide whether ONE canonical database COLUMN should store BOTH of them without "
+        "losing meaning.\n"
+        f"Field A: {_field_clause(name_a, values_a)}\n"
+        f"Field B: {_field_clause(name_b, values_b)}\n"
+        "They belong in the SAME column when one is a synonym, abbreviation, or reworded name of the "
+        "other, or both hold the same kind of value about the same underlying thing (for example "
+        '"contact_phone" and "phone_number", or "delivery_date" and "date_delivered"). They belong '
+        "in DIFFERENT columns only when they capture genuinely distinct attributes (for example "
+        '"order_date" and "order_number", which are a date and an identifier).\n'
+        'Answer JSON: {"same": true} if one column should hold both, else {"same": false}.'
     )
     try:
         raw = await llm.complete(prompt, schema=_ADJUDICATE_SCHEMA)
@@ -70,10 +100,13 @@ async def dedup_field(
     llm: LLMBackend,
     embedder: EmbeddingBackend | None = None,
     embedding: Sequence[float] | None = None,
+    example_values: Mapping[str, Sequence[str]] | None = None,
 ) -> tuple[str, str, float]:
     """Assign one emergent field to a canonical (embed → nearest → threshold gate). ``embedding`` may
-    be supplied precomputed (batch efficiency); otherwise ``embedder`` computes it. Returns
-    ``(canonical_hash, method, similarity)`` where method ∈ seed|merge|admit_new|llm_merge|llm_admit.
+    be supplied precomputed (batch efficiency); otherwise ``embedder`` computes it. ``example_values``
+    maps a field name → a few real attested values, handed to the gray-band adjudicator for context.
+    Returns ``(canonical_hash, method, similarity)`` where method ∈
+    seed|merge|admit_new|llm_merge|llm_admit.
     """
     if embedding is None:
         if embedder is None:
@@ -98,7 +131,13 @@ async def dedup_field(
         canonical, method = cand_hash, "merge"
     elif sim < ADMIT_TAU:
         canonical, method = field_name_hash, "admit_new"
-    elif await _adjudicate(llm, field_name, cand_name):
+    elif await _adjudicate(
+        llm,
+        field_name,
+        cand_name,
+        values_a=(example_values or {}).get(field_name),
+        values_b=(example_values or {}).get(cand_name),
+    ):
         canonical, method = cand_hash, "llm_merge"
     else:
         canonical, method = field_name_hash, "llm_admit"

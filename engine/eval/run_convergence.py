@@ -94,6 +94,36 @@ async def main() -> int:
     print(f"promoted (support>=4)    : {len(promoted)} fields")
     for sup, ch in sorted(promoted, reverse=True)[:20]:
         print(f"    [{sup:2d} cases] {hash_to_name.get(ch, ch[:10])}")
+
+    # --- Concept-family signal (the altitude where the moat actually converges). -----------------
+    # 90% of raw field NAMES are hapax compounds ({qualifier}_{headnoun}: pension_amount,
+    # deposit_date_2). The full-NAME curve is therefore flat — but the underlying CONCEPT space
+    # (the head noun: amount / date / status) converges. Name-level dedup cannot and MUST NOT
+    # collapse distinct compounds (deposit_date vs dispute_date are different columns — over-merge
+    # is worse than a duplicate, §3). So we report the concept curve alongside, crude head-noun
+    # heuristic = last token that is neither a digit nor an ordinal index.
+    _ORD = {"first", "second", "third", "1", "2", "3"}
+
+    def _head(n: str) -> str:
+        toks = [t for t in n.split("_") if t and not t.isdigit() and t not in _ORD]
+        return toks[-1] if toks else n
+
+    seen_head: set[str] = set()
+    head_per_bucket = [0] * len(new_canon_per_bucket)
+    head_support: Counter[str] = Counter()
+    for i, c in enumerate(cases):
+        for n in dict.fromkeys(c["emergent"]):
+            head_support[_head(n)] += 1
+            h = _head(n)
+            if h not in seen_head:
+                seen_head.add(h)
+                head_per_bucket[i // _BUCKET] += 1
+    print("\n----- concept-family signal (head-noun heuristic) -----")
+    print(f"distinct concepts        : {len(seen_head)}   (vs {len(unique)} raw names)")
+    print(
+        f"new-concept per {_BUCKET}     : {head_per_bucket}   <- THIS is the curve that should bend"
+    )
+    print(f"top concepts             : {dict(head_support.most_common(12))}")
     return 0
 
 
