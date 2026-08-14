@@ -10,7 +10,7 @@ Phase 0), and `BUILD-PLAN.md` (Phase 0→ship, with per-phase subagent guidance 
 `winning-condition.md` — when this file and those disagree, those win and this file is stale and must
 be corrected (except the two research-backed spec deltas in §6, which supersede two of their numbers).*
 
-*Last updated: 2026-08-09.*
+*Last updated: 2026-08-14 (Path A built + proven — emergent column schema converges on real data).*
 
 ---
 
@@ -19,38 +19,37 @@ be corrected (except the two research-backed spec deltas in §6, which supersede
 > ### ⇢ SESSION HANDOFF — read this box first (2026-08-14, Phase 4). The dated UPDATE blocks below are the audit trail; THIS is the current truth. Read the 2026-08-14 UPDATE blocks — the TOP one (ROOT CAUSE) supersedes the "just tune the adjudicator" framing below it.
 >
 > **Status:** Phases **0, 1, 2, 3 DONE + verified live.** **Phase 4 IN PROGRESS** — extraction pipeline
-> BUILT + verified live end-to-end (messy complaint → structured case, ~7s, $0); **dedup/promotion (4.3)
-> BUILT + unit-correct.** Lever #1 (adjudicator reframe) DONE this session — it helped only marginally,
-> and the deeper diagnosis found the convergence "failure" is **NOT a dedup-tuning problem** (see the top
-> 2026-08-14 UPDATE — ROOT CAUSE). Phase 0.5 spikes #1/#2 = **Arabic next project, NOT a blocker.** F5
-> provenance bridge built (migration `0004`). `origin/main` @ `283a4e3` (pushed).
+> BUILT + verified live end-to-end; **PATH A BUILT + PROVEN this session — the emergent COLUMN schema now
+> CONVERGES on real data** (new-column/20-bucket **[20,6,2,1,0,0]**, 29 bounded heads; see the TOP
+> 2026-08-14 UPDATE). Emergent attribute is now `{head(closed enum), qualifier(open), value}`; two-
+> dimensional promotion + migration `0009` shipped. Phase 0.5 spikes #1/#2 = **Arabic next project, NOT a
+> blocker.** F5 provenance bridge built (migration `0004`). `origin/main` @ `e50d31d` (push pending).
 >
-> **⇒ IMMEDIATE NEXT (owner decision needed — a moat-core DESIGN FORK, do not just keep tuning dedup):**
-> The moat DOES converge, but at **concept altitude, not field-name altitude.** new-full-NAME/bucket
-> `[48,52,74,64,77,63]` is flat because 90% of raw fields are hapax `{qualifier}_{headnoun}` compounds
-> (`pension_amount`, `deposit_date_2`); but new-HEAD-NOUN/bucket `[37,26,37,25,22,18]` **HALVES.** Dedup
-> already did all it honestly can (378→291); collapsing the compounds further = the lossy over-merge §3
-> forbids. Two paths, **Path A is the real fix**:
-> - **Path A (upstream, real lever):** constrain the EXTRACTOR to emit canonical head-noun fields +
->   a separate qualifier/context slot (so `charged_amount` → `{field: amount, qualifier: charged}`),
->   killing the hapax tail at the source. Cost: extraction prompt + schema (`app/extract/`) redesign +
->   re-extraction + re-eval that grounding (0.941) / refuse-to-guess don't regress. **Touches the moat's
->   core contract — get owner sign-off before building.**
-> - **Path B (metric):** the convergence gate must measure at concept/head-noun granularity (or measure
->   remaining-synonym-pairs directly), not raw field-NAME count — the current metric structurally can't
->   hit "<5% dup" when legitimate specialisation exists. `run_convergence.py` now prints the concept curve.
-> **Dead/parked levers (proven this session, do NOT re-attempt):** example-values in the adjudicator
-> (probe_values.py flips NOTHING); τ tuning (geometry sound — real synonyms 0.72–0.83 already reach the
-> gray band, the two sub-0.70 pairs are arguably non-synonyms → lowering τ risks over-merge).
-> Then the rest of Phase 4: 4.2 profiling · 4.4 backfill · 4.5 convergence-monitor + light PII gate · 4.6
-> scorer (needs human labels for governed-core ACCURACY — separate) · 4.7 wire extract into the queue +
-> JSON-diff review view.
+> **⇒ IMMEDIATE NEXT (Path A is proven at the column gate; these are the quality + operational follow-ons):**
+> 1. **Qualifier extraction quality** — qualifiers run long / paraphrase, so dual-slot grounding is 0.822
+>    (down from value-only 0.941) and legit info sometimes drops (an org lost on a bad qualifier). Make
+>    the qualifier strictly EXTRACTIVE (copy spans from source) to lift grounding + shorten qualifiers.
+>    Watch the `description` catch-all head (62/558 uses) doesn't become a dumping ground.
+> 2. **Wire qualifier-space dedup before qualifier-promotion** — the reframed BGE+adjudicator (STAGE 3)
+>    RELOCATES from field-names to QUALIFIERS under a head (dedup `charged`/`charge` before a split).
+>    Not yet wired; heads need no embedding-dedup (closed exact-match).
+> 3. **Wire promotion into the pipeline** (`promote()` runs post-extract or on a schedule) + **backfill
+>    (STAGE 6)** — promoting a head/qualifier must ALTER-add-column + 100%-correct backfill of history.
+> 4. Then the rest of Phase 4: 4.2 profiling · 4.5 convergence-monitor + light PII gate · 4.6 scorer
+>    (needs human labels for governed-core ACCURACY — separate) · 4.7 wire extract into the queue +
+>    JSON-diff review view.
+> **Dead/parked levers (proven earlier this session, do NOT re-attempt):** example-values in the name
+> adjudicator (probe_values.py flipped NOTHING); τ tuning on the proof set (self-grading); **redefining the
+> convergence metric to head-noun count (Path B) — REJECTED as self-grading, full-name/column count stays
+> the gate; head-noun curve is DIAGNOSTIC-ONLY in `run_convergence.py`.**
 >
 > **Env note:** the moat needs the embed group — run eval with `uv run --group embed ...`. Keep all groups
 > synced: `uv sync --group embed --group asr --group pdf` (a bare `uv sync --group X` PRUNES the others and
 > breaks PDF/ASR tests — that bit me this session). Ollama must be up (start `Ollama app.exe`). BGE-M3
 > first load downloads ~2.3GB (cached after). Real-data harness: `eval/fetch_cfpb.py` (fetch) +
-> `run_extraction.py` (extract→baseline) + `run_convergence.py` (the moat proof).
+> `run_extraction.py` (extract → **the Path-A column-convergence proof**) + `run_convergence.py` (the
+> PRESERVED pre-Path-A name-dedup negative baseline, historical) + `diag_pairs.py`/`probe_values.py`
+> (the geometry + dead-lever diagnostics).
 >
 > **Phase 3 (earlier this session) — file-drop intake + normalisation, EN-first:** in-house WhatsApp chat-export
 > parser (`app/intake/whatsapp_export.py` — iOS+Android, multi-line, attachments, media-omitted, bidi,
@@ -121,6 +120,32 @@ be corrected (except the two research-backed spec deltas in §6, which supersede
 > test number, track T2) + email drop (needs UAE mailbox) — file-drop is the $0 PoC channel. **Parked:**
 > Gate-A5 owner recordings (spikes #1/#2). **Standing practice:** commit fixes directly ([[commit-fixes-directly]]).
 > **Status page (private):** https://claude.ai/code/artifact/4c909fb2-b42e-4f3e-96d2-e7367b366635
+
+**UPDATE (2026-08-14, PATH A BUILT + PROVEN — the column schema CONVERGES on real data).** Built the
+closed-head + open-qualifier extraction contract and re-extracted the real 120-case CFPB baseline
+(qwen3:14b, $0). **The convergence gate PASSES at the column level:** new-column(head)/20-bucket =
+**[20, 6, 2, 1, 0, 0]** — zero new columns in the last 40 cases (pre-Path-A was flat
+[48,52,74,64,77,63]); **29 distinct heads** (bounded by the closed vocab, ~0% synonym columns); 484
+composite qualifier-names (qualifiers proliferate as DATA — *not* the gate). json_valid **100%**;
+dual-slot grounding **0.822** (value+qualifier, STRICTER by constraint #3 — the honest re-measure;
+0.941 did NOT carry over; ungrounded candidates dropped = safe); latency p50 **6.7s** (up from 4.4s —
+longer structured prompt, still ≪60s). **Honest caveat:** convergence is by BOUNDED-VOCAB +
+qualifier-offloading (as directed), not free-invention magically converging — it structurally cannot
+sprawl; specialisation still emerges only via promotion. **What shipped:** `app/extract/head_nouns.py`
+(31 universal primitives + `other` escape); `{head(enum), qualifier(open), value}` schema; extractor
+grounds BOTH free-text slots independently; migration **0009** (`emergent_field.head` + `emergent_head`
+registry, RLS'd); **two-dimensional promotion** (`app/schema/promote.py`): HEAD promotes at N=4 → a
+column, a QUALIFIER splits into its own variant column only at the strictly-harder M=8 AND under an
+already-promoted head (head-first invariant holds by construction since head-support ≥ qualifier-
+support). `run_extraction.py` is now the Path-A convergence proof; `run_convergence.py` repointed to the
+preserved pre-Path-A baseline (`cfpb_extractions_prePathA.jsonl`). **81 passed + 1 skipped**; ruff/black/
+mypy --strict clean. `origin/main` @ `e50d31d` (push pending). **Open follow-ons (quality, not gate):**
+(a) qualifiers run long / over-drop legit info (e.g. an org dropped on a bad qualifier) → tighten
+qualifier extraction to be strictly extractive; (b) `description` head is a catch-all (62 uses) — watch
+it doesn't become a dumping ground; (c) qualifier-space dedup before qualifier-promotion is where the
+reframed BGE+adjudicator RELOCATES (not yet wired); (d) governed `category` still 117/120 UNCLEAR on
+financial data (seeded taxonomy weak far from retail — model correctly abstains); (e) backfill on
+promotion (STAGE 6) still pending.
 
 **UPDATE (2026-08-14, DECISION — owner) — Path A chosen; Path B (redefine the metric) REJECTED as
 self-grading; new standing rule added.** Owner call on the convergence-root-cause fork: build **Path A
