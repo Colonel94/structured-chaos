@@ -16,21 +16,32 @@ be corrected (except the two research-backed spec deltas in §6, which supersede
 
 ## 0. Current state & next actions  ← read this first every session; keep it current
 
-> ### ⇢ SESSION HANDOFF — read this box first (2026-08-14, Phase 4). The dated UPDATE blocks below are the audit trail; THIS is the current truth. Read the two 2026-08-14 UPDATE blocks (real-data test + convergence NEGATIVE result) — they are the live frontier.
+> ### ⇢ SESSION HANDOFF — read this box first (2026-08-14, Phase 4). The dated UPDATE blocks below are the audit trail; THIS is the current truth. Read the 2026-08-14 UPDATE blocks — the TOP one (ROOT CAUSE) supersedes the "just tune the adjudicator" framing below it.
 >
 > **Status:** Phases **0, 1, 2, 3 DONE + verified live.** **Phase 4 IN PROGRESS** — extraction pipeline
 > BUILT + verified live end-to-end (messy complaint → structured case, ~7s, $0); **dedup/promotion (4.3)
-> BUILT + unit-correct but the CONVERGENCE PROOF on real data came back NEGATIVE** (see the top 2026-08-14
-> UPDATE block — the moat does NOT self-converge yet). Phase 0.5 spikes #1/#2 = **Arabic next project, NOT
-> a blocker** (§ that UPDATE). F5 provenance bridge built (migration `0004`).
+> BUILT + unit-correct.** Lever #1 (adjudicator reframe) DONE this session — it helped only marginally,
+> and the deeper diagnosis found the convergence "failure" is **NOT a dedup-tuning problem** (see the top
+> 2026-08-14 UPDATE — ROOT CAUSE). Phase 0.5 spikes #1/#2 = **Arabic next project, NOT a blocker.** F5
+> provenance bridge built (migration `0004`). `origin/main` @ `5789623` (push pending — see below).
 >
-> **⇒ IMMEDIATE NEXT (highest value): fix the dedup ADJUDICATOR (lever #1) + re-run `eval/run_convergence.py`.**
-> The convergence failed because the gray-band LLM refused to merge 95% of the time (llm_merge 12 vs
-> llm_admit 217) — reframe `app/schema/dedup.py::_adjudicate` from "same *attribute*?" to "same **database
-> COLUMN**? (show example values)", then re-run the proof over the real 120-case baseline
-> (`fixtures/cfpb_extractions.jsonl`, no re-extraction needed). Watch: does 378→303 shrink and the flat
-> `[46,43,59,52,54,49]` curve bend down? DO NOT tune τ on that same proof set (self-grading). Other levers
-> in order: embed name+example-values; τ on a HELD-OUT slice (~0.61 sep); build the batch HAC re-cluster.
+> **⇒ IMMEDIATE NEXT (owner decision needed — a moat-core DESIGN FORK, do not just keep tuning dedup):**
+> The moat DOES converge, but at **concept altitude, not field-name altitude.** new-full-NAME/bucket
+> `[48,52,74,64,77,63]` is flat because 90% of raw fields are hapax `{qualifier}_{headnoun}` compounds
+> (`pension_amount`, `deposit_date_2`); but new-HEAD-NOUN/bucket `[37,26,37,25,22,18]` **HALVES.** Dedup
+> already did all it honestly can (378→291); collapsing the compounds further = the lossy over-merge §3
+> forbids. Two paths, **Path A is the real fix**:
+> - **Path A (upstream, real lever):** constrain the EXTRACTOR to emit canonical head-noun fields +
+>   a separate qualifier/context slot (so `charged_amount` → `{field: amount, qualifier: charged}`),
+>   killing the hapax tail at the source. Cost: extraction prompt + schema (`app/extract/`) redesign +
+>   re-extraction + re-eval that grounding (0.941) / refuse-to-guess don't regress. **Touches the moat's
+>   core contract — get owner sign-off before building.**
+> - **Path B (metric):** the convergence gate must measure at concept/head-noun granularity (or measure
+>   remaining-synonym-pairs directly), not raw field-NAME count — the current metric structurally can't
+>   hit "<5% dup" when legitimate specialisation exists. `run_convergence.py` now prints the concept curve.
+> **Dead/parked levers (proven this session, do NOT re-attempt):** example-values in the adjudicator
+> (probe_values.py flips NOTHING); τ tuning (geometry sound — real synonyms 0.72–0.83 already reach the
+> gray band, the two sub-0.70 pairs are arguably non-synonyms → lowering τ risks over-merge).
 > Then the rest of Phase 4: 4.2 profiling · 4.4 backfill · 4.5 convergence-monitor + light PII gate · 4.6
 > scorer (needs human labels for governed-core ACCURACY — separate) · 4.7 wire extract into the queue +
 > JSON-diff review view.
@@ -110,6 +121,33 @@ be corrected (except the two research-backed spec deltas in §6, which supersede
 > test number, track T2) + email drop (needs UAE mailbox) — file-drop is the $0 PoC channel. **Parked:**
 > Gate-A5 owner recordings (spikes #1/#2). **Standing practice:** commit fixes directly ([[commit-fixes-directly]]).
 > **Status page (private):** https://claude.ai/code/artifact/4c909fb2-b42e-4f3e-96d2-e7367b366635
+
+**UPDATE (2026-08-14, later) — ROOT CAUSE: the convergence "failure" is a MEASUREMENT ALTITUDE +
+EXTRACTION-GRANULARITY problem, not a dedup-tuning problem (supersedes the "tune the adjudicator"
+framing).** Ran lever #1 (reframe `_adjudicate` "same attribute?" → "same DB COLUMN?", + example-value
+plumbing) and re-ran the proof on the frozen fixture (no re-extraction). Result: `378 → 291` (was 303),
+reduction 20%→23%, `llm_merge 12→24`, `llm_admit 217→201`. The reframe DOUBLED merges but is nowhere
+near enough — so I went deeper (adversarial, §10) and the picture flipped:
+- **Geometry is SOUND** (`eval/diag_pairs.py`): BGE puts real synonyms in the gray band
+  (amount|charged_amount **0.829**, account_status|payment_status 0.821) and correctly rejects the
+  non-synonym control (account_number|account_status 0.798→"different"). Bottleneck = adjudicator
+  JUDGEMENT, not embedding/τ.
+- **Example values are a DEAD lever** (`eval/probe_values.py`): feeding both sides real dollar values
+  flips NOTHING (amount|charged_amount stays "different"). This SAVED a 12-min re-extraction to capture
+  values — the fixture only stored field names, and values would not have helped anyway.
+- **The flat curve is driven by a HAPAX TAIL, not synonym sprawl:** **340/378 (90%) of raw fields appear
+  exactly ONCE** — hyper-specific `{qualifier}_{headnoun}` compounds (`pension_amount`, `deposit_date_2`,
+  `overdrawn_amount_after_deposit`). These are NOT synonyms; collapsing them (e.g. all `*_date`) is the
+  lossy over-merge §3 forbids. Deterministic token-normalisation catches only ~13 true variants (3%).
+- **DECISIVE — the concept space DOES converge:** new-full-NAME/bucket `[48,52,74,64,77,63]` is flat,
+  but new-HEAD-NOUN/bucket **`[37,26,37,25,22,18]` HALVES**. 165 head-nouns vs 378 names. The moat works
+  at concept altitude; the convergence METRIC (raw field-NAME count) is one level too fine, and dedup
+  already did all it honestly can (378→291).
+**⇒ Two paths, owner-decision (a moat-core design fork): Path A (real fix) = constrain the EXTRACTOR to
+canonical head-noun field + qualifier slot, killing the hapax tail at source (re-extraction + re-eval
+grounding/refuse-to-guess); Path B = fix the metric to measure at concept granularity.** Both are in
+the SESSION HANDOFF box. Committed `5789623` (reframe + `run_convergence.py` concept curve + the two
+diagnostics). 79+1skip green. **NOTE: not yet pushed** to origin.
 
 **UPDATE (2026-08-14) — CONVERGENCE PROOF: NEGATIVE RESULT (the moat did NOT converge on real data).**
 4.3 dedup (BGE-M3 + pgvector + τ=0.85/0.70 + gray-band LLM) is BUILT + unit-correct (2 tests), but run
