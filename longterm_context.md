@@ -23,7 +23,7 @@ be corrected (except the two research-backed spec deltas in §6, which supersede
 > CONVERGES on real data** (new-column/20-bucket **[20,6,2,1,0,0]**, 29 bounded heads; see the TOP
 > 2026-08-14 UPDATE). Emergent attribute is now `{head(closed enum), qualifier(open), value}`; two-
 > dimensional promotion + migration `0009` shipped. Phase 0.5 spikes #1/#2 = **Arabic next project, NOT a
-> blocker.** F5 provenance bridge built (migration `0004`). `origin/main` @ `ad963f6` (push pending).
+> blocker.** F5 provenance bridge built (migration `0004`). `origin/main` @ `ad963f6`+docs (pushed).
 >
 > **⇒ IMMEDIATE NEXT (Path A is proven at the column gate; these are the quality + operational follow-ons):**
 > 1. ✅ **DONE (v4) — strictly-extractive qualifiers.** Value grounding **0.989** (> 0.941), qualifier
@@ -152,7 +152,7 @@ column, a QUALIFIER splits into its own variant column only at the strictly-hard
 already-promoted head (head-first invariant holds by construction since head-support ≥ qualifier-
 support). `run_extraction.py` is now the Path-A convergence proof; `run_convergence.py` repointed to the
 preserved pre-Path-A baseline (`cfpb_extractions_prePathA.jsonl`). **81 passed + 1 skipped**; ruff/black/
-mypy --strict clean. `origin/main` @ `ad963f6` (push pending). **Open follow-ons (quality, not gate):**
+mypy --strict clean. `origin/main` @ `ad963f6`+docs (pushed). **Open follow-ons (quality, not gate):**
 (a) qualifiers run long / over-drop legit info (e.g. an org dropped on a bad qualifier) → tighten
 qualifier extraction to be strictly extractive; (b) `description` head is a catch-all (62 uses) — watch
 it doesn't become a dumping ground; (c) qualifier-space dedup before qualifier-promotion is where the
