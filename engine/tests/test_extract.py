@@ -87,6 +87,23 @@ async def test_non_extractive_multiword_qualifier_is_nulled() -> None:
     assert got == {"condition": None, "chocolate_cake_product": "chocolate_cake"}
 
 
+async def test_sentence_length_qualifier_is_nulled() -> None:
+    # A long VERBATIM span (5 words) would pass the extractive check but is a dumped clause, not a
+    # qualifier → nulled by the length cap; the grounded value survives as a bare head.
+    payload = _payload(
+        [
+            {
+                "head": "description",
+                "qualifier": "the chocolate cake arrived crushed",  # 5 tokens, verbatim
+                "value": "crushed",
+            }
+        ]
+    )
+    r = await extract(_CASE, llm=_ScriptedLLM(payload))
+    got = {e.name: e.qualifier for e in r.grounded_emergent}
+    assert got == {"description": None}
+
+
 async def test_head_must_be_in_closed_vocabulary() -> None:
     # "flavour" is not a head in the closed list → the whole attribute is dropped (never counted).
     payload = _payload(

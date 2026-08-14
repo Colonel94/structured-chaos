@@ -136,9 +136,9 @@ async def main() -> int:
             f.write(json.dumps(r, ensure_ascii=False) + "\n")
 
     n = len(rows)
-    print(
-        f"\n===== REAL-DATA EXTRACTION REPORT (CFPB, n={n}) — Path A (v4 extractive qualifiers) ====="
-    )
+    from app.extract.prompt import PROMPT_VERSION
+
+    print(f"\n===== REAL-DATA EXTRACTION REPORT (CFPB, n={n}) — Path A ({PROMPT_VERSION}) =====")
     print(f"json_valid              : {json_ok}/{n} ({json_ok / n:.0%})")
     vo = (value_only_grounded / candidates_all) if candidates_all else 1.0
     print(f"grounding (value)        : {vo:.3f}   (over ALL candidates — vs pre-Path-A 0.941)")

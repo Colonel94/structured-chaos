@@ -11,7 +11,7 @@ from __future__ import annotations
 from .head_nouns import HEAD_NOUNS
 
 # Bump on any change to the prompt text below.
-PROMPT_VERSION = "extract-v4"  # v4: qualifiers must be verbatim-extractive (Path A)
+PROMPT_VERSION = "extract-v5"  # v5: specific-head guidance, "description" is a last resort (Path A)
 
 _SYSTEM = """You extract a structured complaint case from a customer message. Extract ONLY what the \
 message states or directly implies. NEVER invent facts, names, numbers, or outcomes.
@@ -31,19 +31,27 @@ risk, food poisoning, gas/electrical/fire hazard). Use "financial_harm" for a di
 overcharge. Use "vulnerable_party" only if a child/elderly/disabled person is at risk. Otherwise \
 "none". A late or damaged product with no hazard is "none".
 - anchor_value: any explicit key the customer stated (order #, job #, booking/tracking ref), else null.
-- emergent_attributes: specific facts worth structuring, each as {"head","qualifier","value"}:
-    * head = the column this fact belongs in, chosen from this CLOSED list (pick the closest; use \
-"other" only if nothing fits): <<HEADS>>.
+- emergent_attributes: specific STRUCTURED facts worth putting in a table, each as \
+{"head","qualifier","value"}. A fact is ONE concrete value — a number, amount, date, name, status, or \
+short phrase — NOT a sentence, an opinion, an allegation, or a restatement of the complaint (the story \
+is already captured in "fault"). If something is just narrative, leave it out.
+    * head = the column this fact belongs in, chosen from this CLOSED list: <<HEADS>>. Choose the MOST \
+SPECIFIC head that fits: a money value → amount/fee/rate/balance; a calendar date → date; a clock time \
+→ time; a state like open/closed/declined → status; a company/bank/agency → organization; a person → \
+person; an id/reference number → identifier; a count → count; how long → duration. Use "description" \
+or "other" ONLY as a last resort when NO specific head fits — never as a place to dump a sentence or a \
+complaint. If a fact would land in "description" as a whole clause, drop it instead.
     * qualifier = a SHORT phrase (1-3 words) COPIED VERBATIM from the message — the exact words as \
 they appear, contiguous — that makes the fact specific, or null if the head alone is enough. Do NOT \
 paraphrase, reword, reorder, or summarise: if you cannot copy a contiguous phrase straight from the \
 message, use null. Examples: for "$500 was charged" use head="amount", qualifier="charged"; for "my \
 pension was deposited" use head="amount", qualifier="pension"; for "the box was crushed" use \
 head="condition", qualifier="box"; for "delivered at 6pm" use head="time", qualifier="delivered".
-    * value = the actual value from the message (the number, date, name, phrase).
+    * value = the specific value from the message (the number, date, name, or short phrase — not a \
+sentence).
   Put the SPECIFICITY in the qualifier, NOT in the head — do not invent new heads. Include ONLY facts \
 actually present in the message; every qualifier and value must come from the text. No inferred or \
-generic fields.
+generic fields. Prefer FEWER, cleaner structured facts over many narrative ones.
 
 Return JSON only."""
 

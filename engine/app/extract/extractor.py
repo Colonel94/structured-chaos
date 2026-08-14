@@ -27,6 +27,11 @@ log = get_logger(__name__)
 _TOKEN = re.compile(r"[a-z0-9]+")
 # A candidate value is grounded if this fraction of its significant tokens appears in the source.
 _GROUNDING_MIN_OVERLAP = 0.6
+# A qualifier is a SHORT discriminator (the prompt asks for 1-3 words). Enforced in code, not left to
+# the model: a longer "qualifier" is a sentence/clause the model dumped, so it is nulled. This is what
+# stops the `description`-as-narrative-dump failure mode (a whole verbatim sentence otherwise passes
+# the extractive check). Allow up to 4 to tolerate the odd legitimate phrase ("credit card provider").
+_MAX_QUALIFIER_TOKENS = 4
 
 
 def _is_extractive(qualifier_norm: str, source_lower: str) -> bool:
@@ -100,7 +105,10 @@ async def extract(case_text: str, *, llm: LLMBackend) -> ExtractionResult:
         #  * QUALIFIER is optional context and must be strictly EXTRACTIVE (a verbatim source span). A
         #    non-extractive qualifier is NULLED, not allowed to nuke a grounded value — so we keep the
         #    fact (head + value) and simply drop the invented context. Nothing ungrounded is stored.
-        if qualifier is not None and not _is_extractive(qualifier, source_lower):
+        if qualifier is not None and (
+            len(qualifier.split("_")) > _MAX_QUALIFIER_TOKENS
+            or not _is_extractive(qualifier, source_lower)
+        ):
             qualifier = None
         attr = EmergentAttribute(
             head=head, qualifier=qualifier, value=value, grounded=_is_grounded(value, source_lower)
