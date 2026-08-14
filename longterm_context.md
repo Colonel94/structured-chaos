@@ -23,13 +23,13 @@ be corrected (except the two research-backed spec deltas in §6, which supersede
 > CONVERGES on real data** (new-column/20-bucket **[20,6,2,1,0,0]**, 29 bounded heads; see the TOP
 > 2026-08-14 UPDATE). Emergent attribute is now `{head(closed enum), qualifier(open), value}`; two-
 > dimensional promotion + migration `0009` shipped. Phase 0.5 spikes #1/#2 = **Arabic next project, NOT a
-> blocker.** F5 provenance bridge built (migration `0004`). `origin/main` @ `1911df7` (pushed).
+> blocker.** F5 provenance bridge built (migration `0004`). `origin/main` @ `ad963f6` (push pending).
 >
 > **⇒ IMMEDIATE NEXT (Path A is proven at the column gate; these are the quality + operational follow-ons):**
-> 1. **Qualifier extraction quality** — qualifiers run long / paraphrase, so dual-slot grounding is 0.822
->    (down from value-only 0.941) and legit info sometimes drops (an org lost on a bad qualifier). Make
->    the qualifier strictly EXTRACTIVE (copy spans from source) to lift grounding + shorten qualifiers.
->    Watch the `description` catch-all head (62/558 uses) doesn't become a dumping ground.
+> 1. ✅ **DONE (v4) — strictly-extractive qualifiers.** Value grounding **0.989** (> 0.941), qualifier
+>    retention 0.937, 99% attrs kept. Remaining watch: the `description` catch-all is 165/774 (21%) — a
+>    later head-guidance tweak (discourage `description`/`action` when a specific head fits) could tighten
+>    it, but it's NOT a gate issue.
 > 2. **Wire qualifier-space dedup before qualifier-promotion** — the reframed BGE+adjudicator (STAGE 3)
 >    RELOCATES from field-names to QUALIFIERS under a head (dedup `charged`/`charge` before a split).
 >    Not yet wired; heads need no embedding-dedup (closed exact-match).
@@ -121,6 +121,19 @@ be corrected (except the two research-backed spec deltas in §6, which supersede
 > Gate-A5 owner recordings (spikes #1/#2). **Standing practice:** commit fixes directly ([[commit-fixes-directly]]).
 > **Status page (private):** https://claude.ai/code/artifact/4c909fb2-b42e-4f3e-96d2-e7367b366635
 
+**UPDATE (2026-08-14, v4 — STRICTLY-EXTRACTIVE QUALIFIERS; grounding re-measured 0.941→0.989).** Owner
+follow-on. The qualifier must now be a VERBATIM contiguous span of the source (`extractor._is_extractive`
++ prompt v4 "copy a contiguous phrase or use null"). Asymmetric slot handling (still independent per
+constraint #3): the VALUE gates the attribute (overlap grounding), a non-extractive QUALIFIER is NULLED
+(not allowed to nuke a grounded value) — fixing the v3 over-drop. **Re-measured on the real 120-case
+CFPB baseline:** grounding(value) **0.989** (UP from pre-Path-A 0.941; the v3 "0.822 combined" was a
+conflated value+qualifier metric, not comparable); **qualifier retention 0.937** (725/774 kept attrs
+keep a verbatim qualifier — strict extraction did NOT gut specificity); attrs kept 774/783 (99%); column
+convergence still holds `[15,7,3,1,0,2]`, 28 bounded heads; json_valid 100%; latency p50 7.2s. **Watch:**
+the `description` catch-all grew to 165/774 (21%) — not a gate issue (bounded column, verbatim qualifiers
+carry structure) but low-information; candidate for later head-guidance tightening. `origin/main` push
+pending. Follow-on #1 (qualifier extractiveness) in the box below is now DONE.
+
 **UPDATE (2026-08-14, PATH A BUILT + PROVEN — the column schema CONVERGES on real data).** Built the
 closed-head + open-qualifier extraction contract and re-extracted the real 120-case CFPB baseline
 (qwen3:14b, $0). **The convergence gate PASSES at the column level:** new-column(head)/20-bucket =
@@ -139,7 +152,7 @@ column, a QUALIFIER splits into its own variant column only at the strictly-hard
 already-promoted head (head-first invariant holds by construction since head-support ≥ qualifier-
 support). `run_extraction.py` is now the Path-A convergence proof; `run_convergence.py` repointed to the
 preserved pre-Path-A baseline (`cfpb_extractions_prePathA.jsonl`). **81 passed + 1 skipped**; ruff/black/
-mypy --strict clean. `origin/main` @ `1911df7` (pushed). **Open follow-ons (quality, not gate):**
+mypy --strict clean. `origin/main` @ `ad963f6` (push pending). **Open follow-ons (quality, not gate):**
 (a) qualifiers run long / over-drop legit info (e.g. an org dropped on a bad qualifier) → tighten
 qualifier extraction to be strictly extractive; (b) `description` head is a catch-all (62 uses) — watch
 it doesn't become a dumping ground; (c) qualifier-space dedup before qualifier-promotion is where the
