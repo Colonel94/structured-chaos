@@ -23,13 +23,14 @@ be corrected (except the two research-backed spec deltas in §6, which supersede
 > CONVERGES on real data** (new-column/20-bucket **[20,6,2,1,0,0]**, 29 bounded heads; see the TOP
 > 2026-08-14 UPDATE). Emergent attribute is now `{head(closed enum), qualifier(open), value}`; two-
 > dimensional promotion + migration `0009` shipped. Phase 0.5 spikes #1/#2 = **Arabic next project, NOT a
-> blocker.** F5 provenance bridge built (migration `0004`). `origin/main` @ `ad963f6`+docs (pushed).
+> blocker.** F5 provenance bridge built (migration `0004`). `origin/main` @ `06d5127`+docs (pushed).
 >
 > **⇒ IMMEDIATE NEXT (Path A is proven at the column gate; these are the quality + operational follow-ons):**
-> 1. ✅ **DONE (v4) — strictly-extractive qualifiers.** Value grounding **0.989** (> 0.941), qualifier
->    retention 0.937, 99% attrs kept. Remaining watch: the `description` catch-all is 165/774 (21%) — a
->    later head-guidance tweak (discourage `description`/`action` when a specific head fits) could tighten
->    it, but it's NOT a gate issue.
+> 1. ✅ **DONE (v4 + v5) — extractive qualifiers + tightened head guidance.** v4: verbatim qualifiers,
+>    value grounding **0.989**. v5: specific-head guidance + qualifier length-cap → `description` dumping
+>    **165 (21%) → 46 (11%)**, grounding **0.984**, convergence `[14,5,3,1,1,0]`/24 heads. Residual (NOT a
+>    gate issue): description still catches ~46 clausal VALUES (value slot not length-capped) — optional
+>    further tightening (cap value length / force `other`→promotion) if it ever matters.
 > 2. **Wire qualifier-space dedup before qualifier-promotion** — the reframed BGE+adjudicator (STAGE 3)
 >    RELOCATES from field-names to QUALIFIERS under a head (dedup `charged`/`charge` before a split).
 >    Not yet wired; heads need no embedding-dedup (closed exact-match).
@@ -121,6 +122,20 @@ be corrected (except the two research-backed spec deltas in §6, which supersede
 > Gate-A5 owner recordings (spikes #1/#2). **Standing practice:** commit fixes directly ([[commit-fixes-directly]]).
 > **Status page (private):** https://claude.ai/code/artifact/4c909fb2-b42e-4f3e-96d2-e7367b366635
 
+**UPDATE (2026-08-14, v5 — TIGHTENED HEAD GUIDANCE; `description` dumping cut 72%).** Owner follow-on.
+Root cause in the v4 fixture: `description` was the model DUMPING whole narrative sentences (verbatim,
+so they passed the extractive check). Fix: prompt v5 (choose the MOST SPECIFIC head; `description`/
+`other` last-resort only, never a sentence; each attr = ONE concrete value; "prefer FEWER, cleaner
+facts") + a code cap `_MAX_QUALIFIER_TOKENS=4` (a longer verbatim qualifier is a dumped clause → nulled;
+enforces the prompt's "1-3 words" in code, §3 discipline). **Re-measured (120-case CFPB):** description
+**165 (21%) → 46 (11%)**; total attrs kept 774 → 425 (stopped over-extracting narrative); grounding
+(value) **0.984** (> 0.941); qualifier retention 0.727 (down from v4's INFLATED 0.937 — that had counted
+sentence-qualifiers; SPECIFIC heads stay well-qualified: amount 72/89, date 36/44, identifier 38/42 —
+only catch-alls barer, correct); convergence `[14,5,3,1,1,0]`, 24 bounded heads (holds, cleaner);
+json_valid 100%; latency p50 5.9s. **Residual (honest):** description still catches ~46 clausal VALUES
+(only the qualifier slot is length-capped) — reduced, not eliminated; value-capping is beyond the ask +
+risks dropping legit facts. `origin/main` push pending.
+
 **UPDATE (2026-08-14, v4 — STRICTLY-EXTRACTIVE QUALIFIERS; grounding re-measured 0.941→0.989).** Owner
 follow-on. The qualifier must now be a VERBATIM contiguous span of the source (`extractor._is_extractive`
 + prompt v4 "copy a contiguous phrase or use null"). Asymmetric slot handling (still independent per
@@ -152,7 +167,7 @@ column, a QUALIFIER splits into its own variant column only at the strictly-hard
 already-promoted head (head-first invariant holds by construction since head-support ≥ qualifier-
 support). `run_extraction.py` is now the Path-A convergence proof; `run_convergence.py` repointed to the
 preserved pre-Path-A baseline (`cfpb_extractions_prePathA.jsonl`). **81 passed + 1 skipped**; ruff/black/
-mypy --strict clean. `origin/main` @ `ad963f6`+docs (pushed). **Open follow-ons (quality, not gate):**
+mypy --strict clean. `origin/main` @ `06d5127`+docs (pushed). **Open follow-ons (quality, not gate):**
 (a) qualifiers run long / over-drop legit info (e.g. an org dropped on a bad qualifier) → tighten
 qualifier extraction to be strictly extractive; (b) `description` head is a catch-all (62 uses) — watch
 it doesn't become a dumping ground; (c) qualifier-space dedup before qualifier-promotion is where the
