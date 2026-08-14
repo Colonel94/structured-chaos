@@ -16,12 +16,32 @@ be corrected (except the two research-backed spec deltas in §6, which supersede
 
 ## 0. Current state & next actions  ← read this first every session; keep it current
 
-> ### ⇢ SESSION HANDOFF — read this box first (2026-08-13, Phase 3). The dated UPDATE blocks below are the audit trail; THIS is the current truth.
+> ### ⇢ SESSION HANDOFF — read this box first (2026-08-14, Phase 4). The dated UPDATE blocks below are the audit trail; THIS is the current truth. Read the two 2026-08-14 UPDATE blocks (real-data test + convergence NEGATIVE result) — they are the live frontier.
 >
-> **Status:** Phases **0, 1, 2, 3 DONE + verified live.** Phase 0.5 partial (spike #3 PASS; #1/#2 STAGED,
-> parked on Gate-A5 recordings). F5 (provenance citation bridge) built, migration `0004`.
+> **Status:** Phases **0, 1, 2, 3 DONE + verified live.** **Phase 4 IN PROGRESS** — extraction pipeline
+> BUILT + verified live end-to-end (messy complaint → structured case, ~7s, $0); **dedup/promotion (4.3)
+> BUILT + unit-correct but the CONVERGENCE PROOF on real data came back NEGATIVE** (see the top 2026-08-14
+> UPDATE block — the moat does NOT self-converge yet). Phase 0.5 spikes #1/#2 = **Arabic next project, NOT
+> a blocker** (§ that UPDATE). F5 provenance bridge built (migration `0004`).
 >
-> **Phase 3 (this session) — file-drop intake + normalisation, EN-first:** in-house WhatsApp chat-export
+> **⇒ IMMEDIATE NEXT (highest value): fix the dedup ADJUDICATOR (lever #1) + re-run `eval/run_convergence.py`.**
+> The convergence failed because the gray-band LLM refused to merge 95% of the time (llm_merge 12 vs
+> llm_admit 217) — reframe `app/schema/dedup.py::_adjudicate` from "same *attribute*?" to "same **database
+> COLUMN**? (show example values)", then re-run the proof over the real 120-case baseline
+> (`fixtures/cfpb_extractions.jsonl`, no re-extraction needed). Watch: does 378→303 shrink and the flat
+> `[46,43,59,52,54,49]` curve bend down? DO NOT tune τ on that same proof set (self-grading). Other levers
+> in order: embed name+example-values; τ on a HELD-OUT slice (~0.61 sep); build the batch HAC re-cluster.
+> Then the rest of Phase 4: 4.2 profiling · 4.4 backfill · 4.5 convergence-monitor + light PII gate · 4.6
+> scorer (needs human labels for governed-core ACCURACY — separate) · 4.7 wire extract into the queue +
+> JSON-diff review view.
+>
+> **Env note:** the moat needs the embed group — run eval with `uv run --group embed ...`. Keep all groups
+> synced: `uv sync --group embed --group asr --group pdf` (a bare `uv sync --group X` PRUNES the others and
+> breaks PDF/ASR tests — that bit me this session). Ollama must be up (start `Ollama app.exe`). BGE-M3
+> first load downloads ~2.3GB (cached after). Real-data harness: `eval/fetch_cfpb.py` (fetch) +
+> `run_extraction.py` (extract→baseline) + `run_convergence.py` (the moat proof).
+>
+> **Phase 3 (earlier this session) — file-drop intake + normalisation, EN-first:** in-house WhatsApp chat-export
 > parser (`app/intake/whatsapp_export.py` — iOS+Android, multi-line, attachments, media-omitted, bidi,
 > locale-locking, **UTC-aware times**; NOT whatstk/GPL) + generic upload (`upload.py`); channel-agnostic
 > `InboundMessage` (`models.py`). **Normalisation** (`app/normalise/`): router by MIME → audio
@@ -38,9 +58,11 @@ be corrected (except the two research-backed spec deltas in §6, which supersede
 > transcribing real speech with segment timestamps. **F7 CLOSED:** compose `migrate` one-shot
 > (`app/init_db.py`) runs alembic + procrastinate schema before the engine serves.
 >
-> **Numbers:** **71 tests green + 1 skipped** (container-only multimodal; was 42; run CI-mode
-> `REQUIRE_DB=1`), **6 migrations**, ~4.5k LOC. `main` @ latest (feat + fixes + docs); push to
-> `github.com/Colonel94/structured-chaos`. ruff/black/mypy --strict clean.
+> **Numbers:** **79 tests green + 1 skipped** (container-only multimodal; run CI-mode `REQUIRE_DB=1`),
+> **8 migrations**, ~6k LOC. `origin/main` @ `dd71a07`, tree clean, pushed to
+> `github.com/Colonel94/structured-chaos`. ruff/black/mypy --strict clean. New this session (Phase 4):
+> `app/extract/` (schema/prompt/extractor/stage), `app/schema/` (dedup/promote), `app/eval/` (real-data
+> harness), migrations 0005–0008. Verify: `cd engine && REQUIRE_DB=1 uv run pytest`.
 >
 > **ADVERSARIAL CROSS-PHASE REVIEW (2026-08-13) — done, all real gaps closed.** 3 independent reviewers
 > (trust-spine / correctness / exit-gate). **Trust spine + Phase-2 enqueue: genuinely intact, not
