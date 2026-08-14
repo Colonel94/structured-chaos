@@ -23,9 +23,14 @@ be corrected (except the two research-backed spec deltas in §6, which supersede
 > CONVERGES on real data** (new-column/20-bucket **[20,6,2,1,0,0]**, 29 bounded heads; see the TOP
 > 2026-08-14 UPDATE). Emergent attribute is now `{head(closed enum), qualifier(open), value}`; two-
 > dimensional promotion + migration `0009` shipped. Phase 0.5 spikes #1/#2 = **Arabic next project, NOT a
-> blocker.** F5 provenance bridge built (migration `0004`). `origin/main` @ `4bb0be6`+docs (pushed).
+> blocker.** F5 provenance bridge built (migration `0004`). `origin/main` @ `55c0dd1`+eval (pushed).
 >
-> **⇒ IMMEDIATE NEXT (Path A is proven at the column gate; these are the quality + operational follow-ons):**
+> **⇒ IMMEDIATE NEXT — ACCURACY is the top open front (everything proven so far is STRUCTURAL).**
+> **⇒ PENDING OWNER:** fill `engine/eval/fixtures/cfpb_labels.csv` (40 blind cases, see its
+> `INSTRUCTIONS.md`) → `uv run python eval/score.py` → the FIRST governed-core correctness number. The
+> harness is built + verified; the labels are the one thing that can't be self-served (§10-Q3). Warning
+> already visible: category is 117/120 UNCLEAR — the scorer will show whether that abstention is right or
+> the retail taxonomy is just wrong for financial complaints. Then the quality/operational follow-ons:
 > 1. ✅ **DONE (v4 + v5) — extractive qualifiers + tightened head guidance.** v4: verbatim qualifiers,
 >    value grounding **0.989**. v5: specific-head guidance + qualifier length-cap → `description` dumping
 >    **165 (21%) → 46 (11%)**, grounding **0.984**, convergence `[14,5,3,1,1,0]`/24 heads. Residual (NOT a
@@ -124,6 +129,24 @@ be corrected (except the two research-backed spec deltas in §6, which supersede
 > Gate-A5 owner recordings (spikes #1/#2). **Standing practice:** commit fixes directly ([[commit-fixes-directly]]).
 > **Status page (private):** https://claude.ai/code/artifact/4c909fb2-b42e-4f3e-96d2-e7367b366635
 
+**UPDATE (2026-08-15, ACCURACY HARNESS built + BACKFILL COST measured — the plan's solo parts).**
+Everything proven so far is STRUCTURAL; accuracy (is the governed core CORRECT) is the first unproven
+front. Built (no owner labels needed): **`eval/make_label_sheet.py`** → a BLIND 40-case sheet
+(`fixtures/cfpb_labels.csv`, 10/product, model predictions withheld to avoid anchoring) +
+`cfpb_labels_INSTRUCTIONS.md`; **`eval/score.py`** → governed-core exact-match accuracy + category
+confusion (is UNCLEAR right?) + soft key-fact recall. Scorer VERIFIED on crafted labels (1 match/1
+mismatch → 50%, confusion already shows the expected `gold=billing_charge → model=UNCLEAR`
+over-abstention). **⇒ PENDING OWNER: fill `cfpb_labels.csv`, then `uv run python eval/score.py` → the
+first correctness number.** **Backfill cost (`eval/measure_backfill_cost.py`, unit measured live +
+fan-out from the real 120-case corpus):** unit **1.9s/call** (252/27 tok); **15 heads** would promote
+(support≥4); naive fan-out **1764 calls ≈ 55 min GPU** (optimized skip-already-attested 1462 ≈ 46 min);
+tokens ~0.49M; **$0** (local qwen3 — the spike is WALL-CLOCK + GPU, not dollars), linear in
+corpus×concepts. Two findings: (1) **category scoping barely narrows** (every head scans ~all 120 —
+116/120 are UNCLEAR, the weak-governed-taxonomy problem again); (2) **backfilling a promoted HEAD on a
+same-prompt corpus finds ~nothing net-new** — backfill earns its cost on QUALIFIER-variant promotion +
+prompt evolution, so a cost-control gate should fire there, not on every head promotion (recommended
+follow-on, NOT built). `origin/main` push pending.
+
 **UPDATE (2026-08-14, STAGE 6 — PROMOTION WIRED END-TO-END; backfill RE-EXTRACTS history, the moat).**
 Owner correction (the 3rd goalpost-relaxing fork — logged as a standing rule in `CLAUDE.md` §10: *"when a
 gate can be satisfied two ways, distrust the one that costs nothing"*). My proposed "backfill = re-run
@@ -194,7 +217,7 @@ column, a QUALIFIER splits into its own variant column only at the strictly-hard
 already-promoted head (head-first invariant holds by construction since head-support ≥ qualifier-
 support). `run_extraction.py` is now the Path-A convergence proof; `run_convergence.py` repointed to the
 preserved pre-Path-A baseline (`cfpb_extractions_prePathA.jsonl`). **81 passed + 1 skipped**; ruff/black/
-mypy --strict clean. `origin/main` @ `4bb0be6`+docs (pushed). **Open follow-ons (quality, not gate):**
+mypy --strict clean. `origin/main` @ `55c0dd1`+eval (pushed). **Open follow-ons (quality, not gate):**
 (a) qualifiers run long / over-drop legit info (e.g. an org dropped on a bad qualifier) → tighten
 qualifier extraction to be strictly extractive; (b) `description` head is a catch-all (62 uses) — watch
 it doesn't become a dumping ground; (c) qualifier-space dedup before qualifier-promotion is where the
