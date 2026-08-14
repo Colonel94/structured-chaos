@@ -23,7 +23,7 @@ be corrected (except the two research-backed spec deltas in §6, which supersede
 > BUILT + unit-correct.** Lever #1 (adjudicator reframe) DONE this session — it helped only marginally,
 > and the deeper diagnosis found the convergence "failure" is **NOT a dedup-tuning problem** (see the top
 > 2026-08-14 UPDATE — ROOT CAUSE). Phase 0.5 spikes #1/#2 = **Arabic next project, NOT a blocker.** F5
-> provenance bridge built (migration `0004`). `origin/main` @ `5789623` (push pending — see below).
+> provenance bridge built (migration `0004`). `origin/main` @ `283a4e3` (pushed).
 >
 > **⇒ IMMEDIATE NEXT (owner decision needed — a moat-core DESIGN FORK, do not just keep tuning dedup):**
 > The moat DOES converge, but at **concept altitude, not field-name altitude.** new-full-NAME/bucket
@@ -147,7 +147,7 @@ near enough — so I went deeper (adversarial, §10) and the picture flipped:
 canonical head-noun field + qualifier slot, killing the hapax tail at source (re-extraction + re-eval
 grounding/refuse-to-guess); Path B = fix the metric to measure at concept granularity.** Both are in
 the SESSION HANDOFF box. Committed `5789623` (reframe + `run_convergence.py` concept curve + the two
-diagnostics). 79+1skip green. **NOTE: not yet pushed** to origin.
+diagnostics) + docs `283a4e3`; pushed. 79+1skip green.
 
 **UPDATE (2026-08-14) — CONVERGENCE PROOF: NEGATIVE RESULT (the moat did NOT converge on real data).**
 4.3 dedup (BGE-M3 + pgvector + τ=0.85/0.70 + gray-band LLM) is BUILT + unit-correct (2 tests), but run
