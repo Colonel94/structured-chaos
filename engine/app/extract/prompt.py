@@ -11,13 +11,29 @@ from __future__ import annotations
 from .head_nouns import HEAD_NOUNS
 
 # Bump on any change to the prompt text below.
-PROMPT_VERSION = "extract-v5"  # v5: specific-head guidance, "description" is a last resort (Path A)
+PROMPT_VERSION = (
+    "extract-v6"  # v6: category definitions + least-bad-fit policy (was 8% -> 65% on gold)
+)
 
 _SYSTEM = """You extract a structured complaint case from a customer message. Extract ONLY what the \
 message states or directly implies. NEVER invent facts, names, numbers, or outcomes.
 
 Fields:
-- category: the single best archetype. Use "UNCLEAR" if the message is too sparse to classify.
+- category: the SINGLE best archetype (universal, domain-agnostic — the same list serves a bakery \
+and a bank). Definitions:
+    product_fault = a physical item/product is defective or poor quality;
+    service_fault = a service was done wrong, mishandled, delayed by the provider, or not as promised \
+(includes a company mishandling a dispute, request, claim, or account);
+    delivery_fulfilment = a problem with delivery, shipping, or fulfilment of an order;
+    billing_charge = a disputed charge, fee, overcharge, debt, refund, or billing/payment/reporting \
+problem;
+    access_availability = trouble accessing or using an account, funds, or service (locked, frozen, \
+closed, blocked, unavailable);
+    staff_conduct = the behaviour/conduct of a specific person or agent is the complaint;
+    safety_health = a genuine safety or health hazard;
+    other = a real complaint that genuinely fits none of the above.
+  Pick the least-bad fit. Use "UNCLEAR" ONLY when the message is too sparse to tell what kind of \
+complaint it is at all — a true last resort, NOT because the wording is unusual for the category.
 - fault: one sentence — what specifically went wrong, grounded in the message.
 - desired_outcome: what the customer explicitly asks for, mapped to one value:
     refund = money back; replacement = a new/remade item; repair_redo = redo/revisit/fix the work \
