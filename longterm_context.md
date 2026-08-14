@@ -23,7 +23,7 @@ be corrected (except the two research-backed spec deltas in §6, which supersede
 > CONVERGES on real data** (new-column/20-bucket **[20,6,2,1,0,0]**, 29 bounded heads; see the TOP
 > 2026-08-14 UPDATE). Emergent attribute is now `{head(closed enum), qualifier(open), value}`; two-
 > dimensional promotion + migration `0009` shipped. Phase 0.5 spikes #1/#2 = **Arabic next project, NOT a
-> blocker.** F5 provenance bridge built (migration `0004`). `origin/main` @ `06d5127`+docs (pushed).
+> blocker.** F5 provenance bridge built (migration `0004`). `origin/main` @ `4bb0be6`+docs (pushed).
 >
 > **⇒ IMMEDIATE NEXT (Path A is proven at the column gate; these are the quality + operational follow-ons):**
 > 1. ✅ **DONE (v4 + v5) — extractive qualifiers + tightened head guidance.** v4: verbatim qualifiers,
@@ -34,11 +34,13 @@ be corrected (except the two research-backed spec deltas in §6, which supersede
 > 2. **Wire qualifier-space dedup before qualifier-promotion** — the reframed BGE+adjudicator (STAGE 3)
 >    RELOCATES from field-names to QUALIFIERS under a head (dedup `charged`/`charge` before a split).
 >    Not yet wired; heads need no embedding-dedup (closed exact-match).
-> 3. **Wire promotion into the pipeline** (`promote()` runs post-extract or on a schedule) + **backfill
->    (STAGE 6)** — promoting a head/qualifier must ALTER-add-column + 100%-correct backfill of history.
+> 3. ✅ **DONE (STAGE 6) — promotion wired end-to-end; backfill RE-EXTRACTS history** (not re-projection —
+>    see the top 2026-08-14 UPDATE). Periodic trigger + `concept_extract` + `backfill` + migration `0010`
+>    + `promote_scan`. Storage = flag+projection (no log rewrite / no physical column). Remaining bits:
+>    the review UI reading `promoted`; a real long-running worker so `@app.periodic` actually fires.
 > 4. Then the rest of Phase 4: 4.2 profiling · 4.5 convergence-monitor + light PII gate · 4.6 scorer
 >    (needs human labels for governed-core ACCURACY — separate) · 4.7 wire extract into the queue +
->    JSON-diff review view.
+>    JSON-diff review view · qualifier-space dedup before qualifier-promotion (item 2 above).
 > **Dead/parked levers (proven earlier this session, do NOT re-attempt):** example-values in the name
 > adjudicator (probe_values.py flipped NOTHING); τ tuning on the proof set (self-grading); **redefining the
 > convergence metric to head-noun count (Path B) — REJECTED as self-grading, full-name/column count stays
@@ -122,6 +124,31 @@ be corrected (except the two research-backed spec deltas in §6, which supersede
 > Gate-A5 owner recordings (spikes #1/#2). **Standing practice:** commit fixes directly ([[commit-fixes-directly]]).
 > **Status page (private):** https://claude.ai/code/artifact/4c909fb2-b42e-4f3e-96d2-e7367b366635
 
+**UPDATE (2026-08-14, STAGE 6 — PROMOTION WIRED END-TO-END; backfill RE-EXTRACTS history, the moat).**
+Owner correction (the 3rd goalpost-relaxing fork — logged as a standing rule in `CLAUDE.md` §10: *"when a
+gate can be satisfied two ways, distrust the one that costs nothing"*). My proposed "backfill = re-run
+`rebuild_field_current`" was REJECTED: re-projection only reads back already-extracted values; it finds
+nothing in the cases where the concept was never extracted *because the extractor wasn't looking for it
+then* — the only cases that matter. §4's claim is **re-EXTRACTION against the retained originals**, which
+is why originals are kept forever and is the thing no incumbent does. Built it that way:
+- **Storage = flag + projection** (promoted flag; `field_current` already projects) — NO immutable-log
+  rewrite, NO physical columns.
+- **Backfill = re-extraction**, scoped tightly (biggest cost spike): `app/extract/concept_extract.py`
+  (targeted single-concept prompt, same grounding gates as forward) + `app/schema/backfill.py`
+  (re-extract ONE concept across cases IN THE CONCEPT'S CATEGORY, oldest-first, bounded batches; found →
+  new `field_extraction` rows w/ FRESH citations, log stays append-only; **metered per case**; each case
+  its own txn; re-enqueues next batch). **Migration `0010` `backfill_attempt`** — per-(case,concept)
+  `found|absent` marker; the `absent` marker is what makes it idempotent (never re-extract-forever);
+  deterministic uuid5 run_id makes crash-retry writes idempotent too.
+- **Trigger = PERIODIC, not per-case** (owner): `app/schema/promote_scan.py` + `queue.promote_scan`
+  (`@app.periodic` 30m). `promote()` now returns `PromotedConcept(is_new=…)`; only newly-promoted concepts
+  enqueue backfill, **transactionally** with the promotion mark. `queue.backfill` body runs a batch +
+  re-enqueues while cases remain (low-priority queue, never blocks intake).
+**Tests +7 → 90 passed + 1 skipped**; ruff/black/mypy --strict clean. `origin/main` push pending.
+**Still not built (honest):** the review UI reading the `promoted` flag; extract-as-a-queue-task (4.7);
+qualifier-space dedup before qualifier-promotion; a real long-running worker + periodic scheduler in the
+compose stack (the periodic task is DEFINED and its logic tested, but firing it needs the worker running).
+
 **UPDATE (2026-08-14, v5 — TIGHTENED HEAD GUIDANCE; `description` dumping cut 72%).** Owner follow-on.
 Root cause in the v4 fixture: `description` was the model DUMPING whole narrative sentences (verbatim,
 so they passed the extractive check). Fix: prompt v5 (choose the MOST SPECIFIC head; `description`/
@@ -167,7 +194,7 @@ column, a QUALIFIER splits into its own variant column only at the strictly-hard
 already-promoted head (head-first invariant holds by construction since head-support ≥ qualifier-
 support). `run_extraction.py` is now the Path-A convergence proof; `run_convergence.py` repointed to the
 preserved pre-Path-A baseline (`cfpb_extractions_prePathA.jsonl`). **81 passed + 1 skipped**; ruff/black/
-mypy --strict clean. `origin/main` @ `06d5127`+docs (pushed). **Open follow-ons (quality, not gate):**
+mypy --strict clean. `origin/main` @ `4bb0be6`+docs (pushed). **Open follow-ons (quality, not gate):**
 (a) qualifiers run long / over-drop legit info (e.g. an org dropped on a bad qualifier) → tighten
 qualifier extraction to be strictly extractive; (b) `description` head is a catch-all (62 uses) — watch
 it doesn't become a dumping ground; (c) qualifier-space dedup before qualifier-promotion is where the
