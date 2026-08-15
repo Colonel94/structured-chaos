@@ -23,17 +23,19 @@ be corrected (except the two research-backed spec deltas in §6, which supersede
 > CONVERGES on real data** (new-column/20-bucket **[20,6,2,1,0,0]**, 29 bounded heads; see the TOP
 > 2026-08-14 UPDATE). Emergent attribute is now `{head(closed enum), qualifier(open), value}`; two-
 > dimensional promotion + migration `0009` shipped. Phase 0.5 spikes #1/#2 = **Arabic next project, NOT a
-> blocker.** F5 provenance bridge built (migration `0004`). `origin/main` @ `a7eae91` (pushed).
+> blocker.** F5 provenance bridge built (migration `0004`). `origin/main` @ `7bb5618` (pushed).
 >
 > **⇒ IMMEDIATE NEXT — ACCURACY (measured now; the loop works, but the governed core is middling).**
-> First numbers (40 gold): **category 68%** (fixed from 8% via v6 prompt defs), severity 60%, outcome 58%,
-> emotion 82%, key-fact recall ~30% (soft). Next levers, in order: (a) **probe outcome + severity** the
-> same way category was probed (isolate prompt vs capability, then fix + re-score — do NOT blind-tweak);
-> (b) **investigate key-fact recall ~30%** — the emergent layer misses much of what the human flags; first
-> check if it's a real miss or a weak soft-matcher artifact (qualitative look at 5-10 cases), then decide;
-> (c) grow the gold set past 40 (winning-condition wants ≥100 + a too-sparse slice to prove category still
-> abstains when it should). Harness: `eval/make_label_sheet.py` · `eval/score.py` · `eval/category_probe.py`.
-> Then the quality/operational follow-ons:
+> Numbers vs 40 gold after fixes (v8): **category 70%** (was 8%), **severity 82%** (was 55%), outcome
+> 50% (noise band 50–62, NOT prompt-fixable), emotion 78%, key-fact recall ~26%. Done: category defs (v6)
+> + severity breadth (v8) — the two real prompt wins. Next levers, in order: (a) **investigate key-fact
+> recall ~26%** — the emergent layer misses much of what the human flags; FIRST check real-miss vs weak
+> soft-matcher artifact (qualitative look at 5–10 cases), then decide; (b) **grow the gold set to ≥100 +
+> a too-sparse slice** — n=24 makes outcome unmeasurable (bounces on noise) and the sparse slice proves
+> category/severity still ABSTAIN when they should (refuse-to-guess §2); (c) outcome is likely
+> ambiguity-bound → may need confidence+abstain, not a better def (do NOT keep tuning the prompt for it).
+> Harness: `eval/{make_label_sheet,score,category_probe,governed_probe}.py`. Then the quality/operational
+> follow-ons:
 > 1. ✅ **DONE (v4 + v5) — extractive qualifiers + tightened head guidance.** v4: verbatim qualifiers,
 >    value grounding **0.989**. v5: specific-head guidance + qualifier length-cap → `description` dumping
 >    **165 (21%) → 46 (11%)**, grounding **0.984**, convergence `[14,5,3,1,1,0]`/24 heads. Residual (NOT a
@@ -131,6 +133,23 @@ be corrected (except the two research-backed spec deltas in §6, which supersede
 > test number, track T2) + email drop (needs UAE mailbox) — file-drop is the $0 PoC channel. **Parked:**
 > Gate-A5 owner recordings (spikes #1/#2). **Standing practice:** commit fixes directly ([[commit-fixes-directly]]).
 > **Status page (private):** https://claude.ai/code/artifact/4c909fb2-b42e-4f3e-96d2-e7367b366635
+
+**UPDATE (2026-08-15, PROBED outcome + severity — severity 55→82 fixed, outcome NOT prompt-fixable).**
+Same method as category (`eval/governed_probe.py` + confusion-first). **SEVERITY = a real prompt bug,
+FIXED:** shipped def too narrow ("a disputed charge/overcharge") → systematic UNDER-call
+(gold=financial_harm→model=none ×12); broadened to monetary-harm-of-any-kind (debt wrongly reported,
+damaged credit, frozen funds, denied refund). Probe 60→82; held end-to-end **55→82%** (v8). KEPT.
+**DESIRED_OUTCOME = NOT cleanly prompt-fixable:** scattered boundary ambiguity (escalation/refund/
+acknowledgement/repair_redo). Probe's sharper defs got 58→67 ISOLATED but did NOT generalise — ported
+full-corpus it stayed 58 AND caused an **escalation over-fire (57/120) via a domain footgun** ("complaint
+to a higher authority" — every CFPB complaint IS filed to an authority). Reverted (v8). Outcome bounces
+**50–62% on n=24 even with UNCHANGED wording** (prompt-context noise) → ambiguity-bound + n too small;
+NOT tuned further (overfitting a noisy signal). **Final v8 vs 40 gold: category 70, severity 82, outcome
+50 (noise band), emotion 78, key-fact recall 26.** Convergence held `[14,5,4,0,1,0]`/24 heads, grounding
+0.966. Lessons: (1) the probe (isolated, 1 field) OVERSTATES fixability — always confirm end-to-end +
+watch the DISTRIBUTION, not just gold-N accuracy (n=24 outcome accuracy is noise; the escalation over-fire
+was the reliable signal). (2) outcome needs MORE gold (≥100) to measure at all, and is likely
+ambiguity-bound (may need confidence+abstain, not a better def). `origin/main` push pending.
 
 **UPDATE (2026-08-15, FIRST ACCURACY NUMBERS + category 8%→68% fix; a wrong earlier read CORRECTED).**
 Owner filled the 40-case gold sheet → the first CORRECTNESS measurement (everything before was
@@ -240,7 +259,7 @@ column, a QUALIFIER splits into its own variant column only at the strictly-hard
 already-promoted head (head-first invariant holds by construction since head-support ≥ qualifier-
 support). `run_extraction.py` is now the Path-A convergence proof; `run_convergence.py` repointed to the
 preserved pre-Path-A baseline (`cfpb_extractions_prePathA.jsonl`). **81 passed + 1 skipped**; ruff/black/
-mypy --strict clean. `origin/main` @ `a7eae91` (pushed). **Open follow-ons (quality, not gate):**
+mypy --strict clean. `origin/main` @ `7bb5618` (pushed). **Open follow-ons (quality, not gate):**
 (a) qualifiers run long / over-drop legit info (e.g. an org dropped on a bad qualifier) → tighten
 qualifier extraction to be strictly extractive; (b) `description` head is a catch-all (62 uses) — watch
 it doesn't become a dumping ground; (c) qualifier-space dedup before qualifier-promotion is where the
