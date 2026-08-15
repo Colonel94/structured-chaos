@@ -23,7 +23,7 @@ be corrected (except the two research-backed spec deltas in §6, which supersede
 > CONVERGES on real data** (new-column/20-bucket **[20,6,2,1,0,0]**, 29 bounded heads; see the TOP
 > 2026-08-14 UPDATE). Emergent attribute is now `{head(closed enum), qualifier(open), value}`; two-
 > dimensional promotion + migration `0009` shipped. Phase 0.5 spikes #1/#2 = **Arabic next project, NOT a
-> blocker.** F5 provenance bridge built (migration `0004`). `origin/main` @ `7bb5618` (pushed).
+> blocker.** F5 provenance bridge built (migration `0004`). `origin/main` @ `6928c51` (pushed).
 >
 > **⇒ IMMEDIATE NEXT — ACCURACY (measured now; the loop works, but the governed core is middling).**
 > Numbers vs 40 gold after fixes (v8): **category 70%** (was 8%), **severity 82%** (was 55%), outcome
@@ -32,7 +32,9 @@ be corrected (except the two research-backed spec deltas in §6, which supersede
 > recall ~26%** — the emergent layer misses much of what the human flags; FIRST check real-miss vs weak
 > soft-matcher artifact (qualitative look at 5–10 cases), then decide; (b) **grow the gold set to ≥100 +
 > a too-sparse slice** — n=24 makes outcome unmeasurable (bounces on noise) and the sparse slice proves
-> category/severity still ABSTAIN when they should (refuse-to-guess §2); (c) outcome is likely
+> category/severity still ABSTAIN when they should (refuse-to-guess §2). **100-case sheet is BUILT
+> (merge-safe `make_label_sheet.py 25` — 40 labelled preserved + 60 blank, all with narratives); PENDING
+> OWNER to label the 60 → `eval/score.py` gives the ≥100 number.** (c) outcome is likely
 > ambiguity-bound → may need confidence+abstain, not a better def (do NOT keep tuning the prompt for it).
 > Harness: `eval/{make_label_sheet,score,category_probe,governed_probe}.py`. Then the quality/operational
 > follow-ons:
@@ -259,7 +261,7 @@ column, a QUALIFIER splits into its own variant column only at the strictly-hard
 already-promoted head (head-first invariant holds by construction since head-support ≥ qualifier-
 support). `run_extraction.py` is now the Path-A convergence proof; `run_convergence.py` repointed to the
 preserved pre-Path-A baseline (`cfpb_extractions_prePathA.jsonl`). **81 passed + 1 skipped**; ruff/black/
-mypy --strict clean. `origin/main` @ `7bb5618` (pushed). **Open follow-ons (quality, not gate):**
+mypy --strict clean. `origin/main` @ `6928c51` (pushed). **Open follow-ons (quality, not gate):**
 (a) qualifiers run long / over-drop legit info (e.g. an org dropped on a bad qualifier) → tighten
 qualifier extraction to be strictly extractive; (b) `description` head is a catch-all (62 uses) — watch
 it doesn't become a dumping ground; (c) qualifier-space dedup before qualifier-promotion is where the
