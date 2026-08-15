@@ -186,7 +186,7 @@ NO finance category branch (would violate §4 "never seeded" + trip the §8 "tou
 work" red flag). CFPB stays a STRESS-TEST validator (65%→59% both ≫37% baseline); finance specificity
 lives in the EMERGENT layer (heads/qualifiers) + fault + promotion, never the governed enum. Caveat:
 don't over-tune category on CFPB (weak validator); the real category proof needs a mixed-domain gold set
-later. `origin/main` push pending.
+later. Pushed `origin/main` @ `7d540ff`.
 
 **UPDATE (2026-08-15, 100-CASE GOLD SCORED + planted-probe checks — new insight: outcome INVENTS nulls).**
 All 100 labelled (25/product; owner). Scores: **category 65%** (vs **37% majority-class baseline** — real
