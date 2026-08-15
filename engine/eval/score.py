@@ -24,6 +24,9 @@ _SHEET = _DIR / "cfpb_labels.csv"
 _EXTRACTIONS = _DIR / "cfpb_extractions.jsonl"
 _TOKEN = re.compile(r"[a-z0-9]+")
 _GOVERNED = ["category", "desired_outcome", "severity_signal", "emotion_signal"]
+# Fields where a BLANK gold cell is a real label meaning "null / not stated" (scored against a model
+# null), not an unlabeled skip — the owner's convention for desired_outcome (refuse-to-guess).
+_NULL_ON_BLANK = {"desired_outcome"}
 
 
 def _norm(v: object) -> str:
@@ -56,6 +59,7 @@ def main() -> int:
     correct: Counter[str] = Counter()
     total: Counter[str] = Counter()
     cat_confusion: Counter[tuple[str, str]] = Counter()
+    gold_cat: Counter[str] = Counter()  # gold category distribution → majority-class baseline
     kf_hit = kf_total = 0
 
     for row in gold_rows:
@@ -67,16 +71,21 @@ def main() -> int:
 
         for field in _GOVERNED:
             raw = str(row.get(f"gold_{field}", "")).strip()
-            if raw == "":
-                continue  # empty cell → unlabeled → not scored (a labeled null is the string "null")
+            # A blank cell is normally "unlabeled → skip". EXCEPT for a field in _NULL_ON_BLANK
+            # (desired_outcome): the owner leaves it blank to mean "customer stated no outcome → null",
+            # which is a REAL label — the model is correct iff it also returned null (refuse-to-guess).
+            if raw == "" and field not in _NULL_ON_BLANK:
+                continue
             row_labeled = True
-            g = _norm(raw)  # "null" → "" (labeled-as-absent); a real value → itself
+            g = _norm(raw)  # blank/"null" → "" (labeled-as-absent); a real value → itself
             m = _norm(gov.get(field))
             total[field] += 1
             if m == g:
                 correct[field] += 1
             if field == "category":
                 cat_confusion[(g or "∅", m or "∅")] += 1
+                if g:
+                    gold_cat[g] += 1
 
         kf = str(row.get("gold_key_facts", "")).strip()
         if kf:
@@ -104,6 +113,20 @@ def main() -> int:
         print(
             f"  key-fact recall : {kf_hit}/{kf_total} = {kf_hit / kf_total:.0%}   (soft, value-token overlap)"
         )
+
+    # Majority-class baseline: a dumb classifier that always predicts the most common gold category.
+    # Category accuracy is only meaningful ABOVE this line (the corpus concentration ceiling).
+    if gold_cat:
+        n_cat = sum(gold_cat.values())
+        top, top_n = gold_cat.most_common(1)[0]
+        top2 = sum(c for _g, c in gold_cat.most_common(2))
+        rare = [g for g, c in gold_cat.items() if c <= 2]
+        print(
+            f"\n  category baseline : always-'{top}' = {top_n}/{n_cat} = {top_n / n_cat:.0%} "
+            f"(majority-class); top-2 hold {top2 / n_cat:.0%}"
+        )
+        if rare:
+            print(f"  unmeasurable classes (≤2 gold): {', '.join(sorted(rare))}")
 
     print("\n-- category confusion (gold -> model), top 15 --")
     for (g, m), n in cat_confusion.most_common(15):
