@@ -321,6 +321,18 @@ be built cheaply or expensively and the cheap one looks equivalent, that resembl
 claim almost always requires the expensive one; verify against the source doc and default to it.**
 Backfill *re-extracts*; convergence is measured at the *field* level; proof runs on data I did not author.
 
+**Feedback compounds into rules; the winning condition is the standing motto.** (Owner directive,
+2026-08-15.) Every owner review comment is a *durable rule*, not a one-off fix: extract the
+generalizable lesson, log it (build-law → this §10; working style → memory
+[[feedback-into-rules-winning-condition-motto]]), and check future work against it — **never re-make a
+mistake the owner already caught.** And score **every** step against `winning-condition.md` as the motto
+(a stranger sends their messiest real case and cannot name a field the system got wrong; they ask what it
+costs before asking for a feature). Concretely, the recurring traps already caught — do not repeat: the
+cheap path that keeps a gate's letter but drops its substance (see the rule above); an over-charitable
+read of a bad result (dig — probe, isolate prompt-vs-capability, read the confusion + planted rows —
+don't rationalise); domain footguns in prompts (e.g. "complaint to a higher authority" over-firing on
+regulator complaints); measuring on data I authored, or on a sample too small to mean anything.
+
 **Split every "ready"/prerequisite gate** into *blocks starting now* vs *blocks a later phase*. Reading
 six papers must never block writing a health endpoint.
 

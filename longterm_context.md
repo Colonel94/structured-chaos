@@ -16,21 +16,31 @@ be corrected (except the two research-backed spec deltas in §6, which supersede
 
 ## 0. Current state & next actions  ← read this first every session; keep it current
 
-> ### ⇢ SESSION HANDOFF — read this box first (2026-08-14, Phase 4). The dated UPDATE blocks below are the audit trail; THIS is the current truth. Read the 2026-08-14 UPDATE blocks — the TOP one (ROOT CAUSE) supersedes the "just tune the adjudicator" framing below it.
+> ### ⇢ SESSION HANDOFF — read this box first (updated 2026-08-15, Phase 4). The dated UPDATE blocks below are the audit trail (newest first); THIS box is the current truth. Read the 2026-08-15 UPDATE blocks top-down — they are the live frontier (accuracy).
 >
-> **Status:** Phases **0, 1, 2, 3 DONE + verified live.** **Phase 4 IN PROGRESS** — extraction pipeline
-> BUILT + verified live end-to-end; **PATH A BUILT + PROVEN this session — the emergent COLUMN schema now
-> CONVERGES on real data** (new-column/20-bucket **[20,6,2,1,0,0]**, 29 bounded heads; see the TOP
-> 2026-08-14 UPDATE). Emergent attribute is now `{head(closed enum), qualifier(open), value}`; two-
-> dimensional promotion + migration `0009` shipped. Phase 0.5 spikes #1/#2 = **Arabic next project, NOT a
-> blocker.** F5 provenance bridge built (migration `0004`). `origin/main` @ `a957b9e` (pushed).
+> **Status:** Phases **0–3 DONE + verified live.** **Phase 4 (the moat) — core BUILT + PROVEN on real
+> data:** Path A self-converging schema (`{head(closed enum), qualifier(open), value}`; new-column curve
+> **[14,5,4,0,1,0]**/24 bounded columns on 120 real CFPB cases), two-dimensional promotion (mig `0009`),
+> **STAGE-6 backfill = re-EXTRACTION against retained originals** (mig `0010`), periodic promote-scan.
+> Structural quality strong: json_valid 100%, grounding 0.966. **First ACCURACY numbers in (100-case
+> human-gold):** category **65%** (>37% baseline; CFPB weak taxonomy validator), severity **70%**, emotion
+> 70% (not a gate), desired_outcome **41%** — its real problem is **inventing an outcome 27/39 times when
+> gold=null (a §2 refuse-to-guess FAILURE, the clearest lever)**; key-fact recall ~21% (soft, biggest gap).
+> Planted-probe checks (`eval/gold_checks.py`): UNCLEAR abstention PASS, safety_health 1/2, extractor
+> deterministic. **90 tests + 1 skipped; 10 migrations.** Arabic = separate next project (not blocking).
+> `origin/main` @ `HEAD` (pushed). **MOTTO: score every step against `winning-condition.md`; turn
+> each owner comment into a durable rule; never repeat a caught mistake ([[feedback-into-rules-winning-condition-motto]], CLAUDE.md §10).**
 >
-> **⇒ IMMEDIATE NEXT — ACCURACY (measured now; the loop works, but the governed core is middling).**
-> Numbers vs 40 gold after fixes (v8): **category 70%** (was 8%), **severity 82%** (was 55%), outcome
-> 50% (noise band 50–62, NOT prompt-fixable), emotion 78%, key-fact recall ~26%. Done: category defs (v6)
-> + severity breadth (v8) — the two real prompt wins. Next levers, in order: (a) **investigate key-fact
-> recall ~26%** — the emergent layer misses much of what the human flags; FIRST check real-miss vs weak
-> soft-matcher artifact (qualitative look at 5–10 cases), then decide; (b) **grow the gold set to ≥100 +
+> **⇒ IMMEDIATE NEXT — ACCURACY (100-case gold now labelled + scored; governed core still middling).**
+> Next levers, in priority: (a) **desired_outcome null-invention** — the model fills an outcome 27/39 times
+> when gold=null; a §2 refuse-to-guess FAILURE + the clearest lever (strengthen null/abstention, then
+> re-score; NOT a def tweak — def tweaks footgunned before). (b) **investigate key-fact recall ~21%** —
+> emergent layer misses much of what the human flags; FIRST check real-miss vs weak soft-matcher (look at
+> 5–10 cases), then decide. (c) **TAXONOMY FORK (owner decision):** CFPB is a weak taxonomy validator
+> (65% vs 37% baseline, 4 classes ≤2 gold) — finance branch (violates §4 "never seeded") vs
+> CFPB-as-stress-test + let finance categories EMERGE via promotion (§4-consistent, recommended). (d)
+> safety-severity read off counterparty not narrator (1/2 missed) — watch. **Discipline: don't blind-tune,
+> probe→isolate→fix→re-score→watch the DISTRIBUTION; dev set ≠ ship gate.** Older accuracy trail: (was 40-gold)
 > a too-sparse slice** — n=24 makes outcome unmeasurable (bounces on noise) and the sparse slice proves
 > category/severity still ABSTAIN when they should (refuse-to-guess §2). **100-case sheet is BUILT
 > (merge-safe `make_label_sheet.py 25` — 40 labelled preserved + 60 blank, all with narratives); PENDING
