@@ -31,13 +31,13 @@ be corrected (except the two research-backed spec deltas in §6, which supersede
 > scheduler loop; `@app.periodic` removed — it can't run on the twin). The queue now FIRES autonomously —
 > proven live in the full container stack (ingest → container worker normalise+extract via host Ollama over
 > `host.docker.internal` → served by the container engine). This closes the last 4.7 "not built" gap.
- Structural quality strong: json_valid 100%, grounding 0.983. **Accuracy on the 100-case human-gold
-> (v10 SHIPPED):** desired_outcome **41→51%** (lever (a) DONE — null-invention 27→12 via a refuse-to-guess
-> abstention gate; escalation over-fire 42→4), severity **71%**, emotion 73% (not a gate), category **59%**
-> (was 65%; the −6 is fragile boundary noise on the service_fault↔billing↔access seam of a weak validator,
-> ACCEPTED by owner "do what serves the motto" — the §2/§3 trust fix wins over coin-flip category points);
-> key-fact recall 22% (soft) / 49% case-recall-incl-fault (diagnostic — lever (b): mostly a metric-scope
-> artifact, process facts live in `fault`; residual = org under-capture ~30%).
+ Structural quality strong: json_valid 100%, grounding 0.980. **Accuracy on the 100-case human-gold
+> (v12, latest):** desired_outcome **63%** (v10 41→v10.5 51 via refuse-to-guess abstention gate; **v11 51→63**
+> via the wrong-value refund-overfire fix — correct-a-record=repair_redo, validate=information; null-invention
+> now 6/39), **org capture 50/51 (98%)** (v12, was 21/51), key-fact recall **24%**, category **60%** (held;
+> earlier −6 vs the retired 65 was fragile boundary noise, owner-accepted), emotion 71% (not a gate). **Severity
+> 66% (was 71) — a −5 regression FLAGGED for owner: 4/6 losses are credit-report-inaccuracy cases where the
+> def makes v12 arguably right vs gold=none (a gold-vs-def boundary q, not degradation); not chased per §10.**
 > Planted-probe checks (`eval/gold_checks.py`): UNCLEAR abstention PASS, safety_health 1/2, extractor
 > deterministic. **94 tests + 1 skipped; 10 migrations** (+4 this session: review read model, tenant
 > isolation, normalise→extract chain). Arabic = separate next project (not blocking).
@@ -161,6 +161,32 @@ be corrected (except the two research-backed spec deltas in §6, which supersede
 > test number, track T2) + email drop (needs UAE mailbox) — file-drop is the $0 PoC channel. **Parked:**
 > Gate-A5 owner recordings (spikes #1/#2). **Standing practice:** commit fixes directly ([[commit-fixes-directly]]).
 > **Status page (private):** https://claude.ai/code/artifact/4c909fb2-b42e-4f3e-96d2-e7367b366635
+
+**UPDATE (2026-08-16, ACCURACY — outcome value-side 51→63 (v11) + org capture 41→98% (v12); both probe-first, not blind-tuned).**
+Two grounded fixes, each diagnosed on the real data BEFORE touching the prompt (§10). **LEVER: outcome
+wrong-VALUE (v11).** Probe of the 32 gold=value/model=wrong cases → **21/32 (66%) were `refund`
+over-firing** in the credit/debt domain: the model mapped "correct my credit report" (→ should be
+repair_redo, 10 cases), "validate this debt" (→ information, 6), and account-closure/other (5) all onto
+refund. Fix: sharpen the three value defs — refund = MONEY returned; repair_redo = fix/remove/update an
+inaccurate record; information = validate/prove/documentation — framed universally (a bakery has
+"fix my order" vs "refund" too), NOT a domain seed. Result: outcome **51→63%** (+12), gold=value matched
+**24→30/61**, refund dist **61→35**, repair_redo **1→12**, information **3→8**; null-invention even
+IMPROVED **12→6/39**. **LEVER: org capture (v12).** Probe: of 51 org key-facts, 0 redacted, 30 were
+names IN the text (Wells Fargo, Truist, USAA…) the model put only in `fault`, never as a structured
+`organization` attr. Fix: one line in the emergent section — "ALWAYS capture the named organization…".
+Result: org capture **21/51 → 50/51 (98%)**, `organization` head 42→136, key-fact recall **22→24%**,
+grounded 0.980. **HELD:** category 59→60, convergence declining `[15,4,4,1,1,1]`/26 heads (closed vocab),
+json 100%, determinism verified. **REGRESSION (flagged, NOT chased): severity 71→66 (−5).** Diagnosed:
+6 lost / 2 gained; **4/6 losses are "remove inaccurate credit-report entry" cases where the severity def
+("damaged credit = financial_harm") makes v12 arguably MORE correct than gold=none** — a gold-vs-def
+boundary disagreement, not degradation; 2 are real misses (funds-denied). Per §10 I did NOT narrow the
+owner-tuned severity def to chase debatable gold (fix system to metric, not metric to system); per the
+motto (big outcome+org wins) shipped it and flagged for owner — **the 4 credit-inaccuracy gold labels may
+warrant review (is an inaccurate late-mark `financial_harm` or `none`?).** **Harness hardening:**
+`run_extraction.py` now retries-once-then-records-empty on `httpx.ReadTimeout` (intermittent GPU/Ollama
+stalls under sustained batch load blew 2 cases mid-run — both extract fine in 8–15s in isolation, so it's
+environmental, not case-pathological; the 2 were re-extracted with retries and patched in). Dev set, not
+the ship gate. `origin/main` push pending.
 
 **UPDATE (2026-08-15, THE WORKER IS STOOD UP — the queue now FIRES autonomously in the compose stack).**
 Closes the last 4.7 "not built" gap. The moat runs end-to-end with NO manual trigger: ingest → worker

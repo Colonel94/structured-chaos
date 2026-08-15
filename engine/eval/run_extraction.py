@@ -33,6 +33,8 @@ import time
 from collections import Counter
 from pathlib import Path
 
+import httpx
+
 from app.backends.local.llm_ollama import OllamaLLM
 from app.extract.extractor import extract
 
@@ -84,9 +86,26 @@ async def main() -> int:
     latencies: list[float] = []
     results = []
 
+    from app.extract.models import ExtractionResult
+
+    timed_out: list[str] = []
     for i, row in enumerate(rows):
         t0 = time.perf_counter()
-        r = await extract(row["narrative"], llm=llm)
+        # Resilience: one pathologically-slow case (schema-constrained generation can stall a single
+        # request past the client timeout) must not nuke a 12-minute batch. Retry once, then record an
+        # empty result and carry on, logging the id so the failure is visible, not silently swallowed.
+        try:
+            r = await extract(row["narrative"], llm=llm)
+        except httpx.ReadTimeout:
+            print(f"  ! {row['id']} timed out; retrying once")
+            try:
+                r = await extract(row["narrative"], llm=llm)
+            except httpx.ReadTimeout:
+                print(f"  !! {row['id']} timed out again; recording empty and continuing")
+                timed_out.append(str(row["id"]))
+                r = ExtractionResult(
+                    governed={}, emergent=[], field_validity=0.0, prompt_version="timeout", raw=""
+                )
         latencies.append((time.perf_counter() - t0) * 1000)
         ok = bool(r.governed)
         json_ok += int(ok)
@@ -163,6 +182,8 @@ async def main() -> int:
     print(f"desired_outcome dist     : {dict(outcome.most_common())}")
     print(f"severity dist            : {dict(severity.most_common())}")
     print(f"emotion dist             : {dict(emotion.most_common())}")
+    if timed_out:
+        print(f"\n!! {len(timed_out)} case(s) timed out (recorded empty): {', '.join(timed_out)}")
     print(f"\nwrote per-case extractions -> {_OUT}")
     return 0
 

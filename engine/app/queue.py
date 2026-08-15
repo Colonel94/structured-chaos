@@ -138,7 +138,8 @@ def promote_scan() -> str:
     into live intake). Deferred on an interval by the worker entrypoint's scheduler loop
     (scripts/run_worker.py), NOT via @app.periodic (the async worker twin can't run procrastinate's
     periodic deferrer — see the connector note above). Promotes across all tenants and transactionally
-    enqueues a backfill job for each concept newly promoted this scan. Lazy import keeps queue light."""
+    enqueues a backfill job for each concept newly promoted this scan. Lazy import keeps queue light.
+    """
     from .schema.promote_scan import scan_and_enqueue
 
     def _defer(

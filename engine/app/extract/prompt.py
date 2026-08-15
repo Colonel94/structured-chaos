@@ -11,7 +11,7 @@ from __future__ import annotations
 from .head_nouns import HEAD_NOUNS
 
 # Bump on any change to the prompt text below.
-PROMPT_VERSION = "extract-v10"  # v10: keep the v9 outcome abstention gate but STRIP domain-noun examples (overdraft/fee/credit-report/unlock) that bled into category — leaner, principle-first, to undo the v9 category regression (65->59) while holding the null-invention win (27->12).
+PROMPT_VERSION = "extract-v12"  # v12: capture the named organization (bank/agency/collector) as a structured `organization` fact — the model was putting it only in `fault`, missing ~30/51 org key-facts. Outcome block unchanged from v11.
 
 _SYSTEM = """You extract a structured complaint case from a customer message. Extract ONLY what the \
 message states or directly implies. NEVER invent facts, names, numbers, or outcomes.
@@ -39,12 +39,18 @@ this", "I am requesting...")? If the message only describes or disputes the prob
 asking for a specific remedy, return null. Do NOT infer the remedy from the KIND of problem: a \
 grievance about money is not, by itself, a request for a refund; filing or writing a complaint is not \
 a request for escalation. Only if a remedy IS stated, map it to one value:
-    refund = money back; replacement = a new/remade item; repair_redo = redo/revisit/fix the work \
-again; escalation = warranty honoured, a manager, or formal escalation; information = an answer/status; \
-acknowledgement = only an apology/recognition, nothing more; other = a stated request that fits none \
-of these.
-  If they state alternatives, choose the one they state FIRST. The absence of a stated remedy is null, \
-never "acknowledgement", "escalation", or "other".
+    refund = MONEY returned or reimbursed to the customer (a payment back); replacement = a new/remade \
+item; repair_redo = redo or fix the work, OR CORRECT A RECORD — fix, update, remove, or delete an \
+inaccurate entry, balance, or report item (e.g. "remove this from my credit report", "correct my \
+balance"); this is NOT a refund; escalation = warranty honoured, a manager, or formal escalation; \
+information = an answer, a status, or VALIDATION/PROOF/documentation of something (e.g. "validate this \
+debt", "verify this account"); acknowledgement = only an apology/recognition, nothing more; other = a \
+stated request that fits none of these.
+  Key distinction (the model tends to over-pick "refund"): a request to FIX, UPDATE, or DELETE an \
+inaccurate record/report is repair_redo, and a request to VALIDATE or PROVE a debt is information — \
+neither is a refund unless the customer ALSO asks for money back. If they state alternatives, choose \
+the one they state FIRST. The absence of a stated remedy is null, never "acknowledgement", \
+"escalation", or "other".
 - emotion_signal: calm | frustrated | angry, from the tone.
 - severity_signal: pick the SINGLE most serious that applies.
     safety_health = a genuine safety/health hazard (allergen, injury risk, food poisoning, gas/\
@@ -65,7 +71,9 @@ SPECIFIC head that fits: a money value → amount/fee/rate/balance; a calendar d
 → time; a state like open/closed/declined → status; a company/bank/agency → organization; a person → \
 person; an id/reference number → identifier; a count → count; how long → duration. Use "description" \
 or "other" ONLY as a last resort when NO specific head fits — never as a place to dump a sentence or a \
-complaint. If a fact would land in "description" as a whole clause, drop it instead.
+complaint. If a fact would land in "description" as a whole clause, drop it instead. ALWAYS capture \
+the named organization the complaint is about or names — the company, bank, agency, lender, or debt \
+collector — as an "organization" fact, whenever a real name is given (skip a fully-redacted XXXX).
     * qualifier = a SHORT phrase (1-3 words) COPIED VERBATIM from the message — the exact words as \
 they appear, contiguous — that makes the fact specific, or null if the head alone is enough. Do NOT \
 paraphrase, reword, reorder, or summarise: if you cannot copy a contiguous phrase straight from the \
