@@ -186,7 +186,7 @@ warrant review (is an inaccurate late-mark `financial_harm` or `none`?).** **Har
 `run_extraction.py` now retries-once-then-records-empty on `httpx.ReadTimeout` (intermittent GPU/Ollama
 stalls under sustained batch load blew 2 cases mid-run — both extract fine in 8–15s in isolation, so it's
 environmental, not case-pathological; the 2 were re-extracted with retries and patched in). Dev set, not
-the ship gate. `origin/main` push pending.
+the ship gate. Pushed `origin/main` @ `1083274`.
 
 **UPDATE (2026-08-15, THE WORKER IS STOOD UP — the queue now FIRES autonomously in the compose stack).**
 Closes the last 4.7 "not built" gap. The moat runs end-to-end with NO manual trigger: ingest → worker
