@@ -702,6 +702,170 @@ def get_case_normalised_text(session: Session, case_id: UUID) -> str:
     return "\n".join(str(r[0]) for r in rows)
 
 
+# ----------------------------------------------------------------- review read model (Phase 4.7)
+#
+# The review view (the engine's first client) reads the assembled case: the governed core + the
+# emergent attributes, each with its confidence, provenance (which sources it was drawn from), and —
+# where a human has corrected it — the prev→new diff. All reads are RLS-scoped to the current tenant,
+# so a stray or cross-tenant id returns nothing (fail-closed), never another tenant's case.
+
+
+def list_cases(session: Session, *, limit: int = 100) -> list[dict[str, JsonValue]]:
+    """Recent cases for the current tenant, newest first, with a light summary (category + fault from
+    the ``field_current`` projection) so the register can render without a per-row round-trip."""
+    rows = session.execute(
+        text("""
+            SELECT c.id, c.channel, c.case_state, c.first_contact_at,
+                   (SELECT value FROM field_current
+                    WHERE case_id = c.id AND field_path = 'category') AS category,
+                   (SELECT value FROM field_current
+                    WHERE case_id = c.id AND field_path = 'fault') AS fault,
+                   (SELECT count(*) FROM field_current WHERE case_id = c.id) AS field_count
+            FROM case_record c
+            ORDER BY c.first_contact_at DESC, c.id
+            LIMIT :limit
+            """),
+        {"limit": limit},
+    ).all()
+    return [
+        {
+            "case_id": str(r[0]),
+            "channel": r[1],
+            "case_state": r[2],
+            "first_contact_at": r[3].isoformat(),
+            "category": r[4],
+            "fault": r[5],
+            "field_count": int(r[6]),
+        }
+        for r in rows
+    ]
+
+
+def _citations_for(session: Session, extraction_id: UUID) -> list[dict[str, JsonValue]]:
+    """The sources one extracted value was drawn from — the provenance a reviewer clicks into."""
+    rows = session.execute(
+        text("""
+            SELECT source_document_id, role, locator FROM extraction_citation
+            WHERE extraction_id = :eid ORDER BY id
+            """),
+        {"eid": extraction_id},
+    ).all()
+    return [{"source_document_id": str(r[0]), "role": r[1], "locator": r[2]} for r in rows]
+
+
+def get_case_review(session: Session, case_id: UUID) -> dict[str, JsonValue] | None:
+    """Assemble one case for review: header + every current field (governed and emergent) with its
+    confidence, provenance and any human correction, plus the source documents and the normalised
+    text that back it. Returns ``None`` if the case is absent for this tenant (RLS fail-closed)."""
+    header = session.execute(
+        text("""
+            SELECT id, channel, case_state, first_contact_at
+            FROM case_record WHERE id = :cid
+            """),
+        {"cid": case_id},
+    ).first()
+    if header is None:
+        return None
+
+    # Authoritative layer per field_path (a path is consistently one layer) — avoids importing the
+    # extract vocabulary into the store layer and covers correction-sourced rows too.
+    layers = {
+        str(r[0]): str(r[1])
+        for r in session.execute(
+            text("SELECT DISTINCT field_path, layer FROM field_extraction WHERE case_id = :cid"),
+            {"cid": case_id},
+        ).all()
+    }
+    # The closed-vocab head each emergent composite belongs to (Path A), for a clean column render.
+    heads = {
+        str(r[0]): str(r[1])
+        for r in session.execute(
+            text("SELECT field_name, head FROM emergent_field WHERE head IS NOT NULL")
+        ).all()
+    }
+
+    fields: list[dict[str, JsonValue]] = []
+    rows = session.execute(
+        text("""
+            SELECT field_path, value, source_kind, source_id, confidence
+            FROM field_current WHERE case_id = :cid ORDER BY field_path
+            """),
+        {"cid": case_id},
+    ).all()
+    for field_path, value, source_kind, source_id, confidence in rows:
+        layer = layers.get(field_path, "governed_core" if "_" not in field_path else "emergent")
+        provenance: list[dict[str, JsonValue]] = []
+        correction: dict[str, JsonValue] | None = None
+        model_version: str | None = None
+        prompt_version: str | None = None
+        if source_kind == "extraction":
+            meta = session.execute(
+                text("SELECT model_version, prompt_version FROM field_extraction WHERE id = :id"),
+                {"id": source_id},
+            ).first()
+            if meta is not None:
+                model_version, prompt_version = meta[0], meta[1]
+            provenance = _citations_for(session, source_id)
+        else:  # a human correction is the current value → surface the prev→new diff + who/why
+            corr = session.execute(
+                text("""
+                    SELECT prev_value, reviewer_id, note, based_on_extraction_id
+                    FROM field_correction WHERE id = :id
+                    """),
+                {"id": source_id},
+            ).first()
+            if corr is not None:
+                correction = {"prev_value": corr[0], "reviewer_id": corr[1], "note": corr[2]}
+                if corr[3] is not None:
+                    provenance = _citations_for(session, corr[3])
+
+        head = heads.get(field_path) if layer == "emergent" else None
+        qualifier = None
+        if head and field_path != head and field_path.endswith(f"_{head}"):
+            qualifier = field_path[: -(len(head) + 1)]
+        fields.append(
+            {
+                "field_path": field_path,
+                "value": value,
+                "layer": layer,
+                "head": head,
+                "qualifier": qualifier,
+                "confidence": confidence,
+                "source_kind": source_kind,
+                "correction": correction,
+                "provenance": provenance,
+                "model_version": model_version,
+                "prompt_version": prompt_version,
+            }
+        )
+
+    source_docs = session.execute(
+        text("""
+            SELECT id, channel, mime, received_at FROM source_document
+            WHERE case_id = :cid AND doc_kind IN ('message', 'file')
+            ORDER BY received_at, id
+            """),
+        {"cid": case_id},
+    ).all()
+    return {
+        "case_id": str(header[0]),
+        "channel": header[1],
+        "case_state": header[2],
+        "first_contact_at": header[3].isoformat(),
+        "fields": fields,
+        "normalised_text": get_case_normalised_text(session, case_id),
+        "source_documents": [
+            {
+                "id": str(d[0]),
+                "channel": d[1],
+                "mime": d[2],
+                "received_at": d[3].isoformat(),
+            }
+            for d in source_docs
+        ],
+    }
+
+
 # ------------------------------------------------------------------------------ idempotency
 
 

@@ -22,6 +22,10 @@ be corrected (except the two research-backed spec deltas in §6, which supersede
 > data:** Path A self-converging schema (`{head(closed enum), qualifier(open), value}`; new-column curve
 > **[14,5,4,0,1,0]**/24 bounded columns on 120 real CFPB cases), two-dimensional promotion (mig `0009`),
 > **STAGE-6 backfill = re-EXTRACTION against retained originals** (mig `0010`), periodic promote-scan.
+> **4.7 DONE + verified live on real pixels:** intake→normalise→**extract chained** (transactional enqueue;
+> extract-idempotency prompt-version hole fixed), the **review read model + `/api` routes** (tenant-isolation
+> test passes), and the **review UI** (governed cards incl. a "not stated" refuse-to-guess card, emergent table,
+> click-to-trace provenance) — `nabu-ui-test` clean desktop+mobile on 3 real CFPB cases via the local $0 pipeline.
  Structural quality strong: json_valid 100%, grounding 0.983. **Accuracy on the 100-case human-gold
 > (v10 SHIPPED):** desired_outcome **41→51%** (lever (a) DONE — null-invention 27→12 via a refuse-to-guess
 > abstention gate; escalation over-fire 42→4), severity **71%**, emotion 73% (not a gate), category **59%**
@@ -30,7 +34,8 @@ be corrected (except the two research-backed spec deltas in §6, which supersede
 > key-fact recall 22% (soft) / 49% case-recall-incl-fault (diagnostic — lever (b): mostly a metric-scope
 > artifact, process facts live in `fault`; residual = org under-capture ~30%).
 > Planted-probe checks (`eval/gold_checks.py`): UNCLEAR abstention PASS, safety_health 1/2, extractor
-> deterministic. **90 tests + 1 skipped; 10 migrations.** Arabic = separate next project (not blocking).
+> deterministic. **94 tests + 1 skipped; 10 migrations** (+4 this session: review read model, tenant
+> isolation, normalise→extract chain). Arabic = separate next project (not blocking).
 > `origin/main` @ `HEAD` (pushed). **MOTTO: score every step against `winning-condition.md`; turn
 > each owner comment into a durable rule; never repeat a caught mistake ([[feedback-into-rules-winning-condition-motto]], CLAUDE.md §10).**
 >
@@ -151,6 +156,37 @@ be corrected (except the two research-backed spec deltas in §6, which supersede
 > test number, track T2) + email drop (needs UAE mailbox) — file-drop is the $0 PoC channel. **Parked:**
 > Gate-A5 owner recordings (spikes #1/#2). **Standing practice:** commit fixes directly ([[commit-fixes-directly]]).
 > **Status page (private):** https://claude.ai/code/artifact/4c909fb2-b42e-4f3e-96d2-e7367b366635
+
+**UPDATE (2026-08-15, PHASE 4.7 DONE — extract wired into the queue + the review view, verified live on real pixels).**
+The moat now runs end-to-end with no manual trigger AND is reviewable. Built + verified:
+- **Chain intake→normalise→EXTRACT.** New `pipeline.extract` queue task (`queue.extract_case_task`); `normalise_
+  source_document` transactionally enqueues it on the SAME txn that completes normalisation (mirrors intake→
+  normalise: commit → durably queued, rollback → nothing). Multi-doc cases collapse to "last text wins" via
+  extract's stage-ledger idempotency; a redundant mid-burst extract is an accepted PoC cost (scale path = a
+  per-case queueing-lock). **Latent bug fixed while wiring:** the extract idempotency key used `prompt_version=""`,
+  so a prompt bump (v8→v10) would NOT re-extract already-done cases — the §3/§4 "a better prompt re-runs history"
+  guarantee was silently holed. Now keyed on `PROMPT_VERSION` (importable constant).
+- **Review read model + routes.** `store/api.get_case_review` (governed core + emergent split into Path-A
+  head/qualifier + confidence + provenance citations + prev→new correction diff + normalised text + source docs)
+  and `list_cases` (register summary). `/api/cases` + `/api/cases/{id}` (FastAPI router, `X-Tenant-Id` header =
+  PoC tenant convention, RLS is the real boundary), test-overridable session factory. **Tenant isolation proven
+  by an automated test** (tenant B → 404 on tenant A's case, register empty) — the trust gate holds through the
+  new HTTP surface.
+- **The review UI** (`ui/`, was a bare scaffold): dependency-free React (no new npm/licence surface), Vite `/api`
+  dev-proxy (no CORS), `?tenant=&case=` deep-links. Governed-core cards (a null field renders an explicit
+  **"not stated"** refuse-to-guess card — the visible face of the lever-(a) fix), emergent table, click-to-trace
+  provenance aside, source-text panel, raw-JSON toggle, responsive (mobile breakpoint).
+- **VERIFIED LIVE (not a source audit):** migrated the stale live DB 0008→0010 (Path-A `head` col was missing),
+  seeded 3 real CFPB cases through the full local $0 pipeline (Ollama), ran the engine+Vite, `nabu-ui-test` on real
+  pixels desktop+mobile → 0 console/page/network errors, no overflow; the null-outcome case renders "not stated".
+  Fixed 2 layout bugs found in the pixels (governed-card dead-space; broken mobile — both re-shot green).
+- **Numbers: 94 backend tests +1 skip (was 90; +4 review/isolation/chain tests), 10 migrations, ruff/black/mypy
+  --strict clean; UI tsc + vitest green.** Trust spine (RLS/provenance/idempotency/no-PII) re-ran green.
+  **Still not built (honest, deferred):** a real long-running worker + periodic scheduler in compose so the queued
+  extract/promote-scan actually FIRE (the tasks + chain are defined and tested, but firing needs the worker
+  process running — today extract runs via the direct call path in the seed/tests); the review UI reading the
+  `promoted` flag; per-field span locators (provenance is whole-source at PoC); real auth (header is the PoC seam).
+  `origin/main` push pending.
 
 **UPDATE (2026-08-15, LEVER (a) SHIPPED — desired_outcome refuse-to-guess fix (v10); null-invention 27→12).**
 Diagnosed on real data BEFORE tuning (§10): the model INVENTED an outcome from the grievance TYPE

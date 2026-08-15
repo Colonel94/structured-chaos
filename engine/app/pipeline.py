@@ -19,6 +19,7 @@ from .backends.registry import get_blob
 from .config import settings
 from .normalise.router import normalise
 from .obs.logging import get_logger
+from .queue import defer_in_transaction, extract_case_task
 from .store import api, meter
 from .store.db import SessionFactory, tenant_session
 
@@ -119,6 +120,17 @@ async def normalise_source_document(
             return content.text or None
 
         api.complete_stage(session, idempotency_key=key)
+        # Chain 4.7: extraction runs off the SAME transaction that completes normalisation, so a
+        # committed normalise durably enqueues its extract (no orphan/phantom, mirroring intake→
+        # normalise). extract_case reads the WHOLE case's normalised text and is idempotent on that
+        # text's hash, so a multi-document case's extracts collapse to "last text wins"; a redundant
+        # mid-burst extract is an accepted PoC cost (the scale path adds a per-case queueing-lock).
+        defer_in_transaction(
+            session,
+            extract_case_task,
+            tenant_id=str(tenant_id),
+            case_id=str(case_id),
+        )
         log.info(
             "normalise.done",
             source_document_id=str(source_document_id),

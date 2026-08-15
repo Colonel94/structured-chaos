@@ -67,6 +67,22 @@ def normalise_document(*, tenant_id: str, source_document_id: str) -> str:
     return source_document_id
 
 
+@app.task(name="pipeline.extract", queue=DEFAULT_QUEUE)
+def extract_case_task(*, tenant_id: str, case_id: str) -> str:
+    """Real Phase-4 stage body: extract the governed core + grounded emergent for one case from its
+    normalised text, guarded by the Phase-1 idempotency ledger. Enqueued transactionally by the
+    normalise stage the moment a document's normalisation completes, so extraction chains straight off
+    intake with no manual trigger (4.7). Sync task → ``asyncio.run`` drives the async stage. Imported
+    lazily to keep ``queue`` import-light. Returns the case id handled."""
+    import asyncio
+    from uuid import UUID
+
+    from .extract.stage import extract_case
+
+    asyncio.run(extract_case(tenant_id, UUID(case_id)))
+    return case_id
+
+
 @app.task(name="pipeline.backfill", queue=BACKFILL_QUEUE)
 def backfill(
     *,

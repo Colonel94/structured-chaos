@@ -30,6 +30,7 @@ from ..obs.logging import get_logger
 from ..store import api, meter
 from ..store.db import SessionFactory, tenant_session
 from .extractor import extract
+from .prompt import PROMPT_VERSION
 
 log = get_logger(__name__)
 
@@ -62,7 +63,10 @@ async def extract_case(
             source_sha256=hashlib.sha256(case_text.encode("utf-8")).hexdigest(),
             stage=_STAGE,
             model_version=settings.ollama_model,
-            prompt_version="",  # filled after extraction (the extractor owns the prompt version)
+            # PROMPT_VERSION is in the key so a prompt bump (e.g. v8→v10) forces a fresh re-extraction
+            # of already-extracted cases instead of the ledger skipping them as "done" — the §3/§4
+            # guarantee that a better prompt re-runs history (was "" here, a silent re-extraction hole).
+            prompt_version=PROMPT_VERSION,
             code_version=settings.code_version,
         )
         if not api.claim_stage(session, stage=_STAGE, idempotency_key=key, case_id=case_id):

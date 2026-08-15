@@ -1,9 +1,17 @@
 import { render, screen } from "@testing-library/react";
-import { expect, test } from "vitest";
+import { beforeEach, expect, test, vi } from "vitest";
 import App from "./App";
 
-// Phase-0 CI proof-of-life for the UI lane; replaced by real review-screen tests in Phase 7.
-test("renders the scaffold shell", () => {
+// The review shell renders and, with no tenant set, prompts for one instead of calling the API.
+beforeEach(() => {
+  localStorage.clear();
+  vi.restoreAllMocks();
+});
+
+test("renders the review shell with a tenant field", () => {
   render(<App />);
-  expect(screen.getByText(/review UI/i)).toBeDefined();
+  expect(screen.getByText(/Adaptive Intake — Review/i)).toBeDefined();
+  expect(screen.getByLabelText(/tenant id/i)).toBeDefined();
+  // No tenant → no fetch, and the register prompts to set one.
+  expect(screen.getByText(/Set a tenant id to load cases/i)).toBeDefined();
 });

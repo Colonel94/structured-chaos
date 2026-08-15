@@ -1,15 +1,18 @@
 """FastAPI headless engine entrypoint.
 
-Phase 0 ships only `/health` (Phase-0 exit gate). Real routes/webhooks arrive in Phase 3.
+`/health` is the Phase-0 exit gate; the `/api` review routes (Phase 4.7) are the review UI's read
+model. The engine stays headless — these routes are a thin client of the store layer, not app logic.
 """
 
 from __future__ import annotations
 
 from fastapi import FastAPI
 
+from .api.routes import router as api_router
 from .config import settings
 
 app = FastAPI(title="Adaptive Intake Engine", version="0.0.0")
+app.include_router(api_router)
 
 
 @app.get("/health")
