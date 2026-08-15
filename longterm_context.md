@@ -186,7 +186,7 @@ The moat now runs end-to-end with no manual trigger AND is reviewable. Built + v
   extract/promote-scan actually FIRE (the tasks + chain are defined and tested, but firing needs the worker
   process running — today extract runs via the direct call path in the seed/tests); the review UI reading the
   `promoted` flag; per-field span locators (provenance is whole-source at PoC); real auth (header is the PoC seam).
-  `origin/main` push pending.
+  Pushed `origin/main` @ `f312f07`.
 
 **UPDATE (2026-08-15, LEVER (a) SHIPPED — desired_outcome refuse-to-guess fix (v10); null-invention 27→12).**
 Diagnosed on real data BEFORE tuning (§10): the model INVENTED an outcome from the grievance TYPE
