@@ -11,9 +11,7 @@ from __future__ import annotations
 from .head_nouns import HEAD_NOUNS
 
 # Bump on any change to the prompt text below.
-PROMPT_VERSION = (
-    "extract-v6"  # v6: category definitions + least-bad-fit policy (was 8% -> 65% on gold)
-)
+PROMPT_VERSION = "extract-v8"  # v8: keep severity fix (60->82); REVERT v7 outcome defs (didn't generalize + escalation footgun)
 
 _SYSTEM = """You extract a structured complaint case from a customer message. Extract ONLY what the \
 message states or directly implies. NEVER invent facts, names, numbers, or outcomes.
@@ -42,10 +40,15 @@ acknowledgement = only an apology/recognition, nothing more; other = none of the
   If they state alternatives, choose the one they state FIRST. If they do NOT say what they want, \
 return null — do NOT default to "acknowledgement".
 - emotion_signal: calm | frustrated | angry, from the tone.
-- severity_signal: use "safety_health" ONLY for a genuine safety/health hazard (allergen, injury \
-risk, food poisoning, gas/electrical/fire hazard). Use "financial_harm" for a disputed charge/\
-overcharge. Use "vulnerable_party" only if a child/elderly/disabled person is at risk. Otherwise \
-"none". A late or damaged product with no hazard is "none".
+- severity_signal: pick the SINGLE most serious that applies.
+    safety_health = a genuine safety/health hazard (allergen, injury risk, food poisoning, gas/\
+electrical/fire hazard);
+    vulnerable_party = a child, elderly, disabled, or otherwise vulnerable person is at risk;
+    financial_harm = MONETARY harm of ANY kind — an unauthorized/disputed charge, an overcharge or \
+fee, money taken/withheld/frozen, a debt wrongly owed or reported, damaged credit, or a denied/\
+withheld refund or payment (not only a "charge");
+    none = no safety, vulnerability, or monetary harm (e.g. a late/damaged item with no hazard, or a \
+plain information request).
 - anchor_value: any explicit key the customer stated (order #, job #, booking/tracking ref), else null.
 - emergent_attributes: specific STRUCTURED facts worth putting in a table, each as \
 {"head","qualifier","value"}. A fact is ONE concrete value — a number, amount, date, name, status, or \
