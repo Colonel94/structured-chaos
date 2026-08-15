@@ -187,7 +187,7 @@ CFPB case ingested, the containerised worker ran normalise+extract on its own (O
 host.docker.internal, `extract-v10`), case served by the container engine; a null-outcome case correctly
 stayed `desired_outcome=null` (refuse-to-guess end-to-end). Workers stable (no crash loop), 94 tests +1
 skip green. **Still deferred (smaller):** the review UI reading the `promoted` flag; per-field span
-locators; real auth; graceful-shutdown tuning + a worker healthcheck. `origin/main` push pending.
+locators; real auth; graceful-shutdown tuning + a worker healthcheck. Pushed `origin/main` @ `5cd319a`.
 
 **UPDATE (2026-08-15, PHASE 4.7 DONE — extract wired into the queue + the review view, verified live on real pixels).**
 The moat now runs end-to-end with no manual trigger AND is reviewable. Built + verified:
