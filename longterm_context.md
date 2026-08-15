@@ -26,6 +26,11 @@ be corrected (except the two research-backed spec deltas in §6, which supersede
 > extract-idempotency prompt-version hole fixed), the **review read model + `/api` routes** (tenant-isolation
 > test passes), and the **review UI** (governed cards incl. a "not stated" refuse-to-guess card, emergent table,
 > click-to-trace provenance) — `nabu-ui-test` clean desktop+mobile on 3 real CFPB cases via the local $0 pipeline.
+> **THE WORKER IS STOOD UP (compose):** `worker`(default)+`worker-backfill`(backfill isolated) run
+> `scripts/run_worker.py` (sync `app` for defers + async `worker_app` twin for the worker + promote-scan
+> scheduler loop; `@app.periodic` removed — it can't run on the twin). The queue now FIRES autonomously —
+> proven live in the full container stack (ingest → container worker normalise+extract via host Ollama over
+> `host.docker.internal` → served by the container engine). This closes the last 4.7 "not built" gap.
  Structural quality strong: json_valid 100%, grounding 0.983. **Accuracy on the 100-case human-gold
 > (v10 SHIPPED):** desired_outcome **41→51%** (lever (a) DONE — null-invention 27→12 via a refuse-to-guess
 > abstention gate; escalation over-fire 42→4), severity **71%**, emotion 73% (not a gate), category **59%**
@@ -157,6 +162,33 @@ be corrected (except the two research-backed spec deltas in §6, which supersede
 > Gate-A5 owner recordings (spikes #1/#2). **Standing practice:** commit fixes directly ([[commit-fixes-directly]]).
 > **Status page (private):** https://claude.ai/code/artifact/4c909fb2-b42e-4f3e-96d2-e7367b366635
 
+**UPDATE (2026-08-15, THE WORKER IS STOOD UP — the queue now FIRES autonomously in the compose stack).**
+Closes the last 4.7 "not built" gap. The moat runs end-to-end with NO manual trigger: ingest → worker
+`normalise.done` → chained → worker `extract.done` (governed+emergent via Ollama) → readable via the API.
+**The hard part was a Procrastinate sync/async connector conflict** (this is WHY the worker was never
+stood up): the worker CLI needs an ASYNC connector to listen/fetch/run-periodic, but every DEFER we do is
+SYNCHRONOUS — transactional in the engine, AND inside each worker task body (which does `asyncio.run(...)`
+then enqueues the next stage). Findings, in order: (1) a sync-connector app crashes the worker on the
+periodic deferrer (`SyncConnectorConfigurationError`); (2) an async-connector app crashes the in-task
+transactional defer (`get_sync_connector()`→`AsyncToSync` deadlocks on the worker task's own event loop);
+(3) `with_connector` is DEPRECATED and leaves the periodic bound to the wrong connector. **Solution:**
+`app` stays SYNC (native psycopg — the only thing that defers cleanly in BOTH the engine and a worker task
+thread); `worker_app = app.with_connector(PsycopgConnector)` is an async twin the worker PROCESS runs
+(with_connector's task→app link, deprecated in general, is exactly what we want here — task-body `.defer()`
+stays native-sync); `@app.periodic` is REMOVED (the twin can't run procrastinate's periodic deferrer) and
+replaced by a scheduler loop in the entrypoint. New `scripts/run_worker.py` opens the sync `app` (so
+no-connection defers like the backfill re-enqueue have a live pool) + runs the async worker on `worker_app`
++ (`--schedule`) defers promote-scan on a 30-min loop; a Windows-only `WindowsSelectorEventLoopPolicy`
+guard (psycopg async can't use ProactorEventLoop; no-op on the Linux container). **Compose:** two worker
+services — `worker` (queue=default, intake + promote-scan) and `worker-backfill` (queue=backfill, isolated
+so a long re-extraction drain never starves intake) — both reaching the host's Ollama (the 4070, $0) via
+`host.docker.internal`. **VERIFIED LIVE TWICE:** on the host, then in the FULL CONTAINER STACK — a fresh
+CFPB case ingested, the containerised worker ran normalise+extract on its own (Ollama over
+host.docker.internal, `extract-v10`), case served by the container engine; a null-outcome case correctly
+stayed `desired_outcome=null` (refuse-to-guess end-to-end). Workers stable (no crash loop), 94 tests +1
+skip green. **Still deferred (smaller):** the review UI reading the `promoted` flag; per-field span
+locators; real auth; graceful-shutdown tuning + a worker healthcheck. `origin/main` push pending.
+
 **UPDATE (2026-08-15, PHASE 4.7 DONE — extract wired into the queue + the review view, verified live on real pixels).**
 The moat now runs end-to-end with no manual trigger AND is reviewable. Built + verified:
 - **Chain intake→normalise→EXTRACT.** New `pipeline.extract` queue task (`queue.extract_case_task`); `normalise_
@@ -182,10 +214,9 @@ The moat now runs end-to-end with no manual trigger AND is reviewable. Built + v
   Fixed 2 layout bugs found in the pixels (governed-card dead-space; broken mobile — both re-shot green).
 - **Numbers: 94 backend tests +1 skip (was 90; +4 review/isolation/chain tests), 10 migrations, ruff/black/mypy
   --strict clean; UI tsc + vitest green.** Trust spine (RLS/provenance/idempotency/no-PII) re-ran green.
-  **Still not built (honest, deferred):** a real long-running worker + periodic scheduler in compose so the queued
-  extract/promote-scan actually FIRE (the tasks + chain are defined and tested, but firing needs the worker
-  process running — today extract runs via the direct call path in the seed/tests); the review UI reading the
-  `promoted` flag; per-field span locators (provenance is whole-source at PoC); real auth (header is the PoC seam).
+  **Still not built (honest, deferred):** ~~a real long-running worker + scheduler in compose~~ — **DONE, see the
+  top 2026-08-15 worker UPDATE** (the queue now fires autonomously in the container stack); the review UI reading
+  the `promoted` flag; per-field span locators (provenance is whole-source at PoC); real auth (header is the PoC seam).
   Pushed `origin/main` @ `f312f07`.
 
 **UPDATE (2026-08-15, LEVER (a) SHIPPED — desired_outcome refuse-to-guess fix (v10); null-invention 27→12).**

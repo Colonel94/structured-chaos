@@ -82,6 +82,59 @@ services:
     # Heavy deps (OCR/report/embed) are baked into the image so the Windows host stays clean.
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000
 
+  # The Procrastinate worker — what actually FIRES the queued pipeline stages (normalise → extract)
+  # and the periodic promote-scan, so intake flows end-to-end with no manual trigger. Runs the async
+  # `app.queue.app` (async connector required for a worker; the engine's sync in-transaction defer
+  # still works through it via get_sync_connector — see queue.py). Reaches the host's Ollama (the
+  # 4070, $0) via host.docker.internal — extraction runs on the host GPU, not in-container.
+  # Listens to the DEFAULT queue only (intake + promote-scan); backfill is isolated below so a long
+  # re-extraction drain can never starve live intake (queue.py BACKFILL_QUEUE).
+  worker:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    env_file:
+      - ../.env
+    environment:
+      POSTGRES_HOST: db
+      MINIO_ENDPOINT: http://minio:9000
+      OLLAMA_HOST: ${OLLAMA_HOST:-http://host.docker.internal:11434}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      db:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    # --schedule: this intake worker also runs the promote-scan scheduler loop (replaces @app.periodic).
+    # Ollama serialises per-model and qwen3:14b fills ~10GB of the 12GB card, so one extraction at a time.
+    command: python /app/scripts/run_worker.py default --schedule
+    restart: unless-stopped
+
+  # The low-priority backfill worker — drains promoted-concept re-extraction in bounded batches on its
+  # own queue, so it never blocks the intake worker above (STAGE-6, CLAUDE.md §4).
+  worker-backfill:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    env_file:
+      - ../.env
+    environment:
+      POSTGRES_HOST: db
+      MINIO_ENDPOINT: http://minio:9000
+      OLLAMA_HOST: ${OLLAMA_HOST:-http://host.docker.internal:11434}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    command: python /app/scripts/run_worker.py backfill
+    restart: unless-stopped
+
 volumes:
   pgdata:
   miniodata:

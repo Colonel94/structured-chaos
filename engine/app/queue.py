@@ -19,7 +19,7 @@ from __future__ import annotations
 from typing import Any
 
 import psycopg
-from procrastinate import App, SyncPsycopgConnector
+from procrastinate import App, PsycopgConnector, SyncPsycopgConnector
 from sqlalchemy.orm import Session
 
 from .config import Settings, settings
@@ -37,9 +37,17 @@ def _conninfo(cfg: Settings = settings, *, admin: bool = False) -> str:
     )
 
 
-# The worker connects as the least-privilege app_rw (granted on procrastinate_* only). For
-# transactional defer the connector's own conninfo is irrelevant — the enqueue uses the caller's
-# connection — so this is safe to build at import time.
+# The runtime connects as the least-privilege app_rw (granted on procrastinate_* only).
+#
+# TWO connectors for one hard constraint. Deferring is SYNCHRONOUS everywhere it happens — inside a
+# SQLAlchemy transaction in the engine, AND inside the worker's task bodies (which run
+# `asyncio.run(...)` then defer the next stage). A native SyncPsycopgConnector is the only thing that
+# works in BOTH: an async connector's sync bridge (get_sync_connector → AsyncToSync) deadlocks on the
+# worker task's own running event loop. So ``app`` (the module default, used for every defer) is sync.
+# But the worker PROCESS itself needs an async connector to listen/fetch, so ``worker_app`` is an async
+# twin sharing the same task registry; the worker entrypoint (scripts/run_worker.py) runs it. The
+# periodic promote-scan is deliberately NOT an @app.periodic (the twin can't run procrastinate's
+# periodic deferrer) — the entrypoint's own scheduler loop defers it instead.
 connector = SyncPsycopgConnector(conninfo=_conninfo())
 app = App(connector=connector)
 
@@ -124,13 +132,13 @@ def backfill(
     return concept_key
 
 
-@app.periodic(cron="*/30 * * * *")
 @app.task(name="pipeline.promote_scan", queue=DEFAULT_QUEUE)
-def promote_scan(timestamp: int) -> str:
-    """DEBOUNCED promotion trigger (every 30 min) — never per case (a promotion mid-burst must not
-    cascade backfill into live intake). Promotes across all tenants and transactionally enqueues a
-    backfill job for each concept newly promoted this scan. Lazy imports keep ``queue`` import-light.
-    """
+def promote_scan() -> str:
+    """DEBOUNCED promotion trigger — never per case (a promotion mid-burst must not cascade backfill
+    into live intake). Deferred on an interval by the worker entrypoint's scheduler loop
+    (scripts/run_worker.py), NOT via @app.periodic (the async worker twin can't run procrastinate's
+    periodic deferrer — see the connector note above). Promotes across all tenants and transactionally
+    enqueues a backfill job for each concept newly promoted this scan. Lazy import keeps queue light."""
     from .schema.promote_scan import scan_and_enqueue
 
     def _defer(
@@ -155,6 +163,15 @@ def promote_scan(timestamp: int) -> str:
 
     scan_and_enqueue(_defer)
     return "ok"
+
+
+# The async twin the WORKER process runs (scripts/run_worker.py). Defined after every @app.task above
+# so it shares the full task registry. with_connector keeps each task's `.app` pointing at the SYNC
+# `app`, which is exactly what we want: a task body's `.defer()` / defer_in_transaction stays
+# native-sync even while the worker's fetch/listen runs async. (with_connector is deprecated for the
+# general case precisely because of that task→app link; here that link is the feature, not a bug.)
+# There are no @app.periodic tasks, so the twin's periodic deferrer is a no-op and never crashes.
+worker_app = app.with_connector(PsycopgConnector(conninfo=_conninfo()))
 
 
 def raw_psycopg_connection(session: Session) -> psycopg.Connection[Any]:
