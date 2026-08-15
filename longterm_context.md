@@ -22,25 +22,31 @@ be corrected (except the two research-backed spec deltas in §6, which supersede
 > data:** Path A self-converging schema (`{head(closed enum), qualifier(open), value}`; new-column curve
 > **[14,5,4,0,1,0]**/24 bounded columns on 120 real CFPB cases), two-dimensional promotion (mig `0009`),
 > **STAGE-6 backfill = re-EXTRACTION against retained originals** (mig `0010`), periodic promote-scan.
-> Structural quality strong: json_valid 100%, grounding 0.966. **First ACCURACY numbers in (100-case
-> human-gold):** category **65%** (>37% baseline; CFPB weak taxonomy validator), severity **70%**, emotion
-> 70% (not a gate), desired_outcome **41%** — its real problem is **inventing an outcome 27/39 times when
-> gold=null (a §2 refuse-to-guess FAILURE, the clearest lever)**; key-fact recall ~21% (soft, biggest gap).
+ Structural quality strong: json_valid 100%, grounding 0.983. **Accuracy on the 100-case human-gold
+> (v10 SHIPPED):** desired_outcome **41→51%** (lever (a) DONE — null-invention 27→12 via a refuse-to-guess
+> abstention gate; escalation over-fire 42→4), severity **71%**, emotion 73% (not a gate), category **59%**
+> (was 65%; the −6 is fragile boundary noise on the service_fault↔billing↔access seam of a weak validator,
+> ACCEPTED by owner "do what serves the motto" — the §2/§3 trust fix wins over coin-flip category points);
+> key-fact recall 22% (soft) / 49% case-recall-incl-fault (diagnostic — lever (b): mostly a metric-scope
+> artifact, process facts live in `fault`; residual = org under-capture ~30%).
 > Planted-probe checks (`eval/gold_checks.py`): UNCLEAR abstention PASS, safety_health 1/2, extractor
 > deterministic. **90 tests + 1 skipped; 10 migrations.** Arabic = separate next project (not blocking).
 > `origin/main` @ `HEAD` (pushed). **MOTTO: score every step against `winning-condition.md`; turn
 > each owner comment into a durable rule; never repeat a caught mistake ([[feedback-into-rules-winning-condition-motto]], CLAUDE.md §10).**
 >
-> **⇒ IMMEDIATE NEXT — ACCURACY (100-case gold now labelled + scored; governed core still middling).**
-> Next levers, in priority: (a) **desired_outcome null-invention** — the model fills an outcome 27/39 times
-> when gold=null; a §2 refuse-to-guess FAILURE + the clearest lever (strengthen null/abstention, then
-> re-score; NOT a def tweak — def tweaks footgunned before). (b) **investigate key-fact recall ~21%** —
-> emergent layer misses much of what the human flags; FIRST check real-miss vs weak soft-matcher (look at
-> 5–10 cases), then decide. (c) **TAXONOMY FORK (owner decision):** CFPB is a weak taxonomy validator
-> (65% vs 37% baseline, 4 classes ≤2 gold) — finance branch (violates §4 "never seeded") vs
-> CFPB-as-stress-test + let finance categories EMERGE via promotion (§4-consistent, recommended). (d)
-> safety-severity read off counterparty not narrator (1/2 missed) — watch. **Discipline: don't blind-tune,
-> probe→isolate→fix→re-score→watch the DISTRIBUTION; dev set ≠ ship gate.** Older accuracy trail: (was 40-gold)
+> **⇒ IMMEDIATE NEXT — levers (a)/(b)/(c) all RESOLVED this session; remaining accuracy + Phase-4 wiring.**
+> DONE: (a) desired_outcome refuse-to-guess (v10 shipped, 41→51, invention 27→12); (b) key-fact recall
+> diagnosed as mostly metric-scope (primary 22% / diagnostic case-recall 49%); (c) taxonomy fork SETTLED —
+> no finance branch, CFPB stays a stress-test, finance emerges via the emergent layer (§4). **OPEN next
+> levers:** (1) **desired_outcome value-side still ~48%** (24/61 stated outcomes matched) — the abstention
+> gate fixed INVENTION but the wrong-VALUE bucket (repair_redo→refund, →escalation, →information) is
+> unaddressed; likely ambiguity-bound + may need confidence+abstain, and needs its own probe (do NOT
+> blind-tune). (2) **org/counterparty under-capture ~30%** — the real residual behind key-fact recall; the
+> model should emit the bank/agency into the `organization` head more reliably. (3) **safety-severity 1/2**
+> (24507863 read off the financial dispute, not the underlying biohazard — counterparty-vs-narrator; watch).
+> (4) category needs a MIXED-DOMAIN gold set to measure honestly (CFPB is a weak validator, don't over-tune
+> it). **Discipline: don't blind-tune, probe→isolate→fix→re-score→watch the DISTRIBUTION; dev set ≠ ship
+> gate.** Then Phase-4 operational wiring (below). Older accuracy trail: (was 40-gold)
 > a too-sparse slice** — n=24 makes outcome unmeasurable (bounces on noise) and the sparse slice proves
 > category/severity still ABSTAIN when they should (refuse-to-guess §2). **100-case sheet is BUILT
 > (merge-safe `make_label_sheet.py 25` — 40 labelled preserved + 60 blank, all with narratives); PENDING
@@ -145,6 +151,42 @@ be corrected (except the two research-backed spec deltas in §6, which supersede
 > test number, track T2) + email drop (needs UAE mailbox) — file-drop is the $0 PoC channel. **Parked:**
 > Gate-A5 owner recordings (spikes #1/#2). **Standing practice:** commit fixes directly ([[commit-fixes-directly]]).
 > **Status page (private):** https://claude.ai/code/artifact/4c909fb2-b42e-4f3e-96d2-e7367b366635
+
+**UPDATE (2026-08-15, LEVER (a) SHIPPED — desired_outcome refuse-to-guess fix (v10); null-invention 27→12).**
+Diagnosed on real data BEFORE tuning (§10): the model INVENTED an outcome from the grievance TYPE
+(monetary→refund, "filing a complaint"→escalation, misc→other), not from a stated request. Clean
+separating signal on n=100: an explicit-request phrase appears in **4% (1/27)** of the invented-null
+cases vs **55%+ (16/29)** of the true-positive value cases → systematic over-inference, NOT the
+earlier n=24 "ambiguity-bound noise" worry. Fix (prompt **v10**, PROMPT_VERSION bumped): lead
+desired_outcome with an ABSTENTION GATE — require a STATED remedy; "a money grievance is not a refund
+request; filing a complaint is not escalation"; absence→null. **Value defs UNCHANGED** (owner: "not a
+def tweak" — the prior escalation-def tweak footgunned). v9 first attempt worked but the verbose,
+domain-noun-heavy block bled into category; v10 stripped the domain nouns (leaner, principle-first) —
+proved the bleed is the gate's CONTENT not its verbosity (v9≡v10 on category). **Clean before→after
+(same scorer, temp-0 deterministic):** null-invention **27/39→12/39** (escalation over-fire 42→4
+corpus-wide), desired_outcome **41→51%**, severity 70→71, emotion 70→73, key-fact 21→22; convergence
+held (plateau/23 heads), grounding 0.966→0.983, json 100%. **COST: category 65→59% (−6).** Investigated
+(read all 7 flips): ALL on the known service_fault↔billing↔access seam; ≥2 are credit-REPORTING cases
+where v10's `billing_charge` is arguably BETTER than gold (def includes "reporting problem") → fragile-
+boundary NOISE on a weak validator (top-2 still 74%, 4 classes ≤2 gold), not a capability drop. Mechanism:
+the abstention gate makes the model read a case as "just a grievance" (surface topic→billing/access)
+rather than "company mishandled it" (service_fault). **OWNER DECISION (logged, §10): "do what serves the
+motto and vision" → SHIP v10.** Rationale: null-invention is nameable confident-wrongness (§2/§3 TRUST
+gate — "confident wrongness destroys trust permanently"); the category loss is coin-flip boundary cases
+a stranger can't name wrong; decoupling category into a 2nd LLM call to hold both was REJECTED as
+over-engineering against the sub-60s/$0 vision for boundary noise. **90 tests +1 skip green; ruff/black/
+mypy --strict clean.** **LEVER (b) key-fact recall DIAGNOSED (largely a metric-scope artifact):** the
+soft matcher searched ONLY the emergent-table VALUES; ~half the human "key facts" are PROCESS facts
+("refund reversed", "bank acknowledged error") + the counterparty name that by DESIGN land in the
+`fault` sentence, not the value table. Added a DIAGNOSTIC-ONLY "case recall (table+fault)" line to
+score.py (primary 22% UNCHANGED, §10 refined-metric rule) → **case recall 49%** (org capture 19/50→34/50
+with fault counted). Real residual: model still under-captures bank/organization ~30% even counting
+fault — a genuine but smaller gap than 22% implied. **LEVER (c) taxonomy fork — SETTLED (motto/§4):**
+NO finance category branch (would violate §4 "never seeded" + trip the §8 "touch config to make a case
+work" red flag). CFPB stays a STRESS-TEST validator (65%→59% both ≫37% baseline); finance specificity
+lives in the EMERGENT layer (heads/qualifiers) + fault + promotion, never the governed enum. Caveat:
+don't over-tune category on CFPB (weak validator); the real category proof needs a mixed-domain gold set
+later. `origin/main` push pending.
 
 **UPDATE (2026-08-15, 100-CASE GOLD SCORED + planted-probe checks — new insight: outcome INVENTS nulls).**
 All 100 labelled (25/product; owner). Scores: **category 65%** (vs **37% majority-class baseline** — real

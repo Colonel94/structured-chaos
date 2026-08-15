@@ -11,7 +11,7 @@ from __future__ import annotations
 from .head_nouns import HEAD_NOUNS
 
 # Bump on any change to the prompt text below.
-PROMPT_VERSION = "extract-v8"  # v8: keep severity fix (60->82); REVERT v7 outcome defs (didn't generalize + escalation footgun)
+PROMPT_VERSION = "extract-v10"  # v10: keep the v9 outcome abstention gate but STRIP domain-noun examples (overdraft/fee/credit-report/unlock) that bled into category — leaner, principle-first, to undo the v9 category regression (65->59) while holding the null-invention win (27->12).
 
 _SYSTEM = """You extract a structured complaint case from a customer message. Extract ONLY what the \
 message states or directly implies. NEVER invent facts, names, numbers, or outcomes.
@@ -33,12 +33,18 @@ closed, blocked, unavailable);
   Pick the least-bad fit. Use "UNCLEAR" ONLY when the message is too sparse to tell what kind of \
 complaint it is at all — a true last resort, NOT because the wording is unusual for the category.
 - fault: one sentence — what specifically went wrong, grounded in the message.
-- desired_outcome: what the customer explicitly asks for, mapped to one value:
+- desired_outcome: what the customer wants done — but ONLY if they explicitly ask for it. Decide \
+first: did they actually state a request or instruction (e.g. "I want a refund", "please reverse \
+this", "I am requesting...")? If the message only describes or disputes the problem, or vents, without \
+asking for a specific remedy, return null. Do NOT infer the remedy from the KIND of problem: a \
+grievance about money is not, by itself, a request for a refund; filing or writing a complaint is not \
+a request for escalation. Only if a remedy IS stated, map it to one value:
     refund = money back; replacement = a new/remade item; repair_redo = redo/revisit/fix the work \
-again; escalation = warranty honoured, manager, or formal escalation; information = an answer/status; \
-acknowledgement = only an apology/recognition, nothing more; other = none of these.
-  If they state alternatives, choose the one they state FIRST. If they do NOT say what they want, \
-return null — do NOT default to "acknowledgement".
+again; escalation = warranty honoured, a manager, or formal escalation; information = an answer/status; \
+acknowledgement = only an apology/recognition, nothing more; other = a stated request that fits none \
+of these.
+  If they state alternatives, choose the one they state FIRST. The absence of a stated remedy is null, \
+never "acknowledgement", "escalation", or "other".
 - emotion_signal: calm | frustrated | angry, from the tone.
 - severity_signal: pick the SINGLE most serious that applies.
     safety_health = a genuine safety/health hazard (allergen, injury risk, food poisoning, gas/\

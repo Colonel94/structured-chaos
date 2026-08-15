@@ -61,6 +61,15 @@ def main() -> int:
     cat_confusion: Counter[tuple[str, str]] = Counter()
     gold_cat: Counter[str] = Counter()  # gold category distribution → majority-class baseline
     kf_hit = kf_total = 0
+    # DIAGNOSTIC-ONLY (2026-08-15, §10 refined-metric rule): the primary recall above searches ONLY the
+    # emergent-table VALUES. But a chunk of the human-flagged "key facts" are process facts (e.g. "refund
+    # reversed", "bank acknowledged error") + the counterparty name, which by design land in the `fault`
+    # sentence, NOT the structured table (the table holds concrete values, not clauses). Searching
+    # attrs+fault (the full structured case a reviewer actually reads) measures "did the SYSTEM capture
+    # it", not "did the TABLE capture it". This is a secondary diagnostic — it does NOT replace the
+    # primary metric and is NOT a gate. (Real residual gap it exposed: the model still under-captures the
+    # bank/organization ~30% of the time even counting fault.)
+    kf_hit_case = 0
 
     for row in gold_rows:
         pred = preds.get(str(row["id"]))
@@ -91,12 +100,18 @@ def main() -> int:
         if kf:
             row_labeled = True
             model_vals = " ".join(str(a.get("value", "")) for a in pred.get("attributes", []))
-            model_tok = _tokens(model_vals)
+            model_tok = _tokens(model_vals)  # PRIMARY: emergent-table values only
+            fault_tok = _tokens(str((pred.get("governed") or {}).get("fault", "")))
+            case_tok = model_tok | fault_tok  # DIAGNOSTIC: full structured case (table + fault)
             for fact in (p for p in kf.split(";") if p.strip()):
                 kf_total += 1
                 want = _tokens(fact.split("=", 1)[-1])  # tokens of the value side
-                if want and len(want & model_tok) / len(want) >= 0.5:
+                if not want:
+                    continue
+                if len(want & model_tok) / len(want) >= 0.5:
                     kf_hit += 1
+                if len(want & case_tok) / len(want) >= 0.5:
+                    kf_hit_case += 1
         labeled_any += int(row_labeled)
 
     print("===== GOVERNED-CORE ACCURACY (human-labeled slice) =====")
@@ -111,7 +126,11 @@ def main() -> int:
             )
     if kf_total:
         print(
-            f"  key-fact recall : {kf_hit}/{kf_total} = {kf_hit / kf_total:.0%}   (soft, value-token overlap)"
+            f"  key-fact recall : {kf_hit}/{kf_total} = {kf_hit / kf_total:.0%}   (soft, table VALUES only)"
+        )
+        print(
+            f"    case recall   : {kf_hit_case}/{kf_total} = {kf_hit_case / kf_total:.0%}   "
+            f"(DIAGNOSTIC — table+fault, the full case a reviewer reads; process facts live in fault)"
         )
 
     # Majority-class baseline: a dumb classifier that always predicts the most common gold category.
