@@ -23,7 +23,7 @@ be corrected (except the two research-backed spec deltas in §6, which supersede
 > CONVERGES on real data** (new-column/20-bucket **[20,6,2,1,0,0]**, 29 bounded heads; see the TOP
 > 2026-08-14 UPDATE). Emergent attribute is now `{head(closed enum), qualifier(open), value}`; two-
 > dimensional promotion + migration `0009` shipped. Phase 0.5 spikes #1/#2 = **Arabic next project, NOT a
-> blocker.** F5 provenance bridge built (migration `0004`). `origin/main` @ `6928c51` (pushed).
+> blocker.** F5 provenance bridge built (migration `0004`). `origin/main` @ `a957b9e` (pushed).
 >
 > **⇒ IMMEDIATE NEXT — ACCURACY (measured now; the loop works, but the governed core is middling).**
 > Numbers vs 40 gold after fixes (v8): **category 70%** (was 8%), **severity 82%** (was 55%), outcome
@@ -135,6 +135,24 @@ be corrected (except the two research-backed spec deltas in §6, which supersede
 > test number, track T2) + email drop (needs UAE mailbox) — file-drop is the $0 PoC channel. **Parked:**
 > Gate-A5 owner recordings (spikes #1/#2). **Standing practice:** commit fixes directly ([[commit-fixes-directly]]).
 > **Status page (private):** https://claude.ai/code/artifact/4c909fb2-b42e-4f3e-96d2-e7367b366635
+
+**UPDATE (2026-08-15, 100-CASE GOLD SCORED + planted-probe checks — new insight: outcome INVENTS nulls).**
+All 100 labelled (25/product; owner). Scores: **category 65%** (vs **37% majority-class baseline** — real
+signal, but top-2 hold 74% + 4 classes have ≤2 gold = unmeasurable; CFPB is a weak taxonomy validator —
+service_fault bleeds into billing/access), **severity 70%**, **emotion 70%** (NOT a gate — subjective),
+**desired_outcome 41%**, key-fact recall 21% (soft; biggest gap). **KEY NEW INSIGHT the bigger set
+revealed:** desired_outcome's real problem isn't just boundary ambiguity — it's that the model **INVENTS
+an outcome 27/39 times when the customer stated none** (gold=null → model non-null): a **§2 refuse-to-guess
+failure**, and the clearest actionable lever (make it return null more, not a better def). gold=value only
+29/61 (48%). Scoring policy (owner): desired_outcome blank = "correctly null" (scored, not skipped) — baked
+into `score.py`; category majority-baseline added. **Planted-probe checks (`eval/gold_checks.py`):** (1)
+safety_health 1/2 — 24507863 MISSED (read severity off the financial dispute, not the underlying biohazard;
+confirms owner's counterparty-vs-narrative concern); (2) UNCLEAR row 24513554 (pure redaction) **PASS** —
+model=UNCLEAR + 0 invented facts (abstention works); (3) the "identical" IC System triplet is NOT
+byte-identical (390/386/375) so differing extractions ≠ instability — true determinism verified separately
+(same narrative ×2 → identical). **OWNER DESIGN FORK (taxonomy):** finance branch (violates §4
+"never seeded") vs CFPB-as-stress-test-only → let finance categories EMERGE via promotion (§4-consistent,
+recommended). Dev set, not the ship gate. `origin/main` push pending.
 
 **UPDATE (2026-08-15, PROBED outcome + severity — severity 55→82 fixed, outcome NOT prompt-fixable).**
 Same method as category (`eval/governed_probe.py` + confusion-first). **SEVERITY = a real prompt bug,
@@ -261,7 +279,7 @@ column, a QUALIFIER splits into its own variant column only at the strictly-hard
 already-promoted head (head-first invariant holds by construction since head-support ≥ qualifier-
 support). `run_extraction.py` is now the Path-A convergence proof; `run_convergence.py` repointed to the
 preserved pre-Path-A baseline (`cfpb_extractions_prePathA.jsonl`). **81 passed + 1 skipped**; ruff/black/
-mypy --strict clean. `origin/main` @ `6928c51` (pushed). **Open follow-ons (quality, not gate):**
+mypy --strict clean. `origin/main` @ `a957b9e` (pushed). **Open follow-ons (quality, not gate):**
 (a) qualifiers run long / over-drop legit info (e.g. an org dropped on a bad qualifier) → tighten
 qualifier extraction to be strictly extractive; (b) `description` head is a catch-all (62 uses) — watch
 it doesn't become a dumping ground; (c) qualifier-space dedup before qualifier-promotion is where the
