@@ -9,9 +9,17 @@ nearest existing *canonical* field. The two-threshold gate decides:
 
 The asymmetric gap + gray-band adjudication follow the design rule that **over-merge (lossy collapse)
 is more expensive than a duplicate** — so the adjudicator, and any error, fail SAFE to *not merging*.
-This is what turns the raw 378-field sprawl into a converging schema. Incremental: fields are
-processed in first-seen order, growing the canonical set; new fields only ever compare against
+This is what is DESIGNED to turn the raw 378-field sprawl into a converging schema. Incremental: fields
+are processed in first-seen order, growing the canonical set; new fields only ever compare against
 canonicals (never aliases), so there is no chain-merge.
+
+*** STATUS (2026-08-17, owner + remediation R0/R1). This module has ZERO callers in ``app/`` — it has
+never run in the live pipeline (``extract/stage.py`` registers fields and stops; nothing embeds or
+merges). So the "converging schema" above is DESIGN INTENT, not a measured result: the emergent schema
+is currently NOT deduped and remains ~90% hapax. Wiring this into the live flow (head-scoped, on the
+qualifier space) is remediation R1 — and note the measured hazard (run_qualifier_dedup.py, 2026-08-16):
+on the value-polluted qualifier slot this over-merges distinct DATA (6_weeks↔6_months, distinct dates),
+so R1 depends on qualifier hygiene (R3/R4) landing first. ***
 
 Thresholds are the paper's numbers (Jonnalagedda et al. 2606.05415), hardcoded here and tuned on a
 scored set — never guessed in prod (EDD §6.2).

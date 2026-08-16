@@ -10,18 +10,34 @@ Phase 0), and `BUILD-PLAN.md` (Phase 0→ship, with per-phase subagent guidance 
 `winning-condition.md` — when this file and those disagree, those win and this file is stale and must
 be corrected (except the two research-backed spec deltas in §6, which supersede two of their numbers).*
 
-*Last updated: 2026-08-14 (Path A built + proven — emergent column schema converges on real data).*
+*Last updated: 2026-08-17 (Path A convergence claim RETRACTED — the head curve is a closed-enum
+tautology; the composite curve is flat ~90% hapax → convergence UNPROVEN. Remediation R0–R7 is the plan;
+see `repo-analysis-remediation.md` and §0.)*
 
 ---
 
 ## 0. Current state & next actions  ← read this first every session; keep it current
 
-> ### ⇢ SESSION HANDOFF — read this box first (updated 2026-08-15, Phase 4). The dated UPDATE blocks below are the audit trail (newest first); THIS box is the current truth. Read the 2026-08-15 UPDATE blocks top-down — they are the live frontier (accuracy).
+> ### ⇢ SESSION HANDOFF — read this box first (updated 2026-08-17, Phase 4 CONVERGENCE CLAIM RETRACTED). The dated UPDATE blocks below are the audit trail (newest first); THIS box is the current truth. Read the 2026-08-17 + 2026-08-16b UPDATE blocks top-down — they are the live frontier.
 >
-> **Status:** Phases **0–3 DONE + verified live.** **Phase 4 (the moat) — core BUILT + PROVEN on real
-> data:** Path A self-converging schema (`{head(closed enum), qualifier(open), value}`; new-column curve
-> **[14,5,4,0,1,0]**/24 bounded columns on 120 real CFPB cases), two-dimensional promotion (mig `0009`),
-> **STAGE-6 backfill = re-EXTRACTION against retained originals** (mig `0010`), periodic promote-scan.
+> **🚩 CONVERGENCE PROOF RETRACTED (2026-08-17, owner + `repo-analysis-remediation.md` R0).** The earlier
+> "Phase 4 the moat — PROVEN, self-converging schema" claim was INVALID and is withdrawn. `HEAD_NOUNS` is a
+> closed 31-enum, so the new-HEAD curve [15,4,4,1,1,1] is finite-set enumeration — it declines by
+> construction and would do so on noise; **a gate that cannot fail is not a gate.** The REAL signal is the
+> composite (`qualifier_head`) curve, and it is FLAT: cfpb [46,38,54,45,51,41]/275/**89% hapax**, multidomain
+> [70,34,49,41,37]/231/**92% hapax** — same as the pre-Path-A curve [48,52,74,64,77,63] it was meant to fix.
+> Sprawl MOVED into the qualifier space (unmeasured + undeduped: `dedup_field` has ZERO live callers). The
+> escape valve is closed (`other` 0.7% cfpb / **0.0% multidomain**) so head-promotion can't fire → "emergent,
+> never seeded" is **100% seeded** today. 34% of attrs carry a null qualifier (information loss). **Convergence
+> is UNPROVEN. The moat has never executed end-to-end.** Do NOT treat Phase 4 as done. **Plan = remediation
+> R0–R7 (`repo-analysis-remediation.md`), R1–R3 before any Phase 5.** This is the 2026-08-14 head-noun-altitude
+> self-grading move, recommitted under the Path A name (§10) — do not re-promote the head curve to the pass line.
+>
+> **Status:** Phases **0–3 DONE + verified live.** **Phase 4 (the moat) — MECHANISMS built & sound, PROOF
+> INVALID (see retraction above).** Correctly built and NOT to be re-litigated (remediation Finding 5):
+> `{head(closed enum), qualifier(open), value}` extraction, two-dimensional promotion (mig `0009`),
+> **STAGE-6 backfill = re-EXTRACTION against retained originals** (mig `0010`), periodic promote-scan. What is
+> NOT proven: that any of it produces a converging schema — it hasn't run live (no dedup) and the curve is flat.
 > **4.7 DONE + verified live on real pixels:** intake→normalise→**extract chained** (transactional enqueue;
 > extract-idempotency prompt-version hole fixed), the **review read model + `/api` routes** (tenant-isolation
 > test passes), and the **review UI** (governed cards incl. a "not stated" refuse-to-guess card, emergent table,
@@ -161,6 +177,38 @@ be corrected (except the two research-backed spec deltas in §6, which supersede
 > test number, track T2) + email drop (needs UAE mailbox) — file-drop is the $0 PoC channel. **Parked:**
 > Gate-A5 owner recordings (spikes #1/#2). **Standing practice:** commit fixes directly ([[commit-fixes-directly]]).
 > **Status page (private):** https://claude.ai/code/artifact/4c909fb2-b42e-4f3e-96d2-e7367b366635
+
+**UPDATE (2026-08-17, CONVERGENCE PROOF RETRACTED — remediation R0 DONE; R0–R7 is now THE plan; do NOT start Phase 5 until R1–R3).**
+Owner + an external repo read (`repo-analysis-remediation.md`, now committed) invalidated the Path-A
+convergence proof — **the 6th instance of the cheap-path-that-keeps-a-gate's-letter pattern** ([[comfortable-reframe-trap]],
+CLAUDE.md §10). The invalidity, verified live this session (numbers reproduced exactly): the head curve
+[15,4,4,1,1,1] is a **closed-31-enum enumeration** (declines by construction, can't fail = not a gate); the
+composite curve — the real §4 signal — is **flat + ~90% hapax** (cfpb [46,38,54,45,51,41]/275/89%; multidomain
+[70,34,49,41,37]/231/92%), i.e. the pre-Path-A sprawl [48,52,74,64,77,63] just MOVED into the qualifier space,
+which is unmeasured + undeduped (`dedup_field`: 0 live callers). Escape valve closed (`other` 0.7%/**0.0%**) →
+promotion can't fire → "emergent, never seeded" is 100% seeded; 34% null-qualifier = information loss.
+**R0 DONE (this session):** retracted the claim in every site it lived — `run_extraction.py` docstring +
+printed gate labels (now: head=diagnostic, composite curve+hapax=THE gate, and the harness now PRINTS the
+composite curve/hapax so the gate is shown not asserted), `head_nouns.py`, `dedup.py`, `run_convergence.py`,
+and this file (§0 box header + status + `Last updated`). **THE PLAN — remediation `repo-analysis-remediation.md`,
+ordered, R1–R3 gate Phase 5:** R1 wire `dedup_field` into the live pipeline **head-scoped on qualifier space**
+(embed `f"{qualifier} {head}"`, keep τ=0.85/0.70 + fail-safe; consider an off-hot-path `dedup` stage) — BUT
+the 2026-08-16b hazard stands: on the value-polluted slot dedup over-merges DATA (6_weeks↔6_months), so R1
+needs R3/R4 hygiene first or a value-guard. R2 replace the gate with **composite-curve-after-dedup + dup-rate
+(<5%) + hapax**, invert the head/composite labelling (DONE in run_extraction), run on both sets; if the curve
+doesn't bend after dedup **the concept is wrong** — know it before Phase 5. R3 reopen the escape valve in the
+prompt (target `other` 5–15%, add a `credit_score_dropped→amount` bad-force-fit negative example, then confirm
+≥1 head actually promotes on multidomain — else §4's central claim fails) + fix the 18 null-qualifier `amount`
+attrs. R4 statistics-before-semantics (§4.2, deterministic type/cardinality/identifier pass — the published
+fix for force-fit, also cuts model calls). R5 PII gate at promotion (§4.5). R6 adopt `record_accuracy` third
+category + re-label + re-score (**lowers the score first — that direction IS the correctness check**; verify it
+generalises off finance: bakery analogue = membership/loyalty/warranty/service-history). R7 determinism check
+(free, during R2): `24483813`≡`24490268` are identical narratives — identical input MUST give identical
+extraction or every measurement is void. **Score (external): 4/10** (engineering strong, but a measured-invalid
+moat is worse than unmeasured — it gave false confidence 3 phases built on). 6 ← R1–R3 done + composite curve
+reported honestly *whatever it shows*; 8 ← the curve actually bends after dedup on data we didn't author. That
+single result is product-with-a-moat vs well-engineered ticketing system. `origin/main` @ `<this commit>`.
+Adjudication (billing↔service) still PENDING OWNER and folds into R6.
 
 **UPDATE (2026-08-16b, MOAT'S FIRST LIVE RUN — qualifier-space dedup MEASURED; wiring it live is BLOCKED on qualifier hygiene; task 4 now PRECEDES task 3).** `origin/main` @ `6f2ca06`.
 Ran the built-but-never-run dedup end-to-end for the first time (`eval/run_qualifier_dedup.py`, head-scoped,

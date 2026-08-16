@@ -2,12 +2,19 @@
 
 The convergence root cause (longterm_context §0): the extractor was minting one-off compound field
 names (``pension_amount``, ``deposit_date_2``, ``overdrawn_amount_after_deposit``) — 90% hapax — so the
-emergent-column count never converged. Path A fixes it upstream: an emergent attribute is now
+emergent-column count never converged. Path A's *intent*: an emergent attribute is now
 ``{head, qualifier, value}``. The **head is the column** and MUST come from this closed list (enforced
 in code via the extraction-schema enum, not left to the model). The **qualifier is open** free text
 that carries the specificity (``charged``/``pension``/``refunded``), so ``charged_amount`` becomes
-``head=amount, qualifier=charged`` — the schema converges at the head while qualifiers proliferate as
-DATA, losing no information (owner constraint #1, 2026-08-14).
+``head=amount, qualifier=charged``.
+
+*** CAVEAT (2026-08-17, owner + remediation R0). Because this list is CLOSED, "the schema converges at
+the head" is TRUE BY CONSTRUCTION and therefore NOT evidence of convergence — the head count is bounded
+whatever the data. Measured, the sprawl did not vanish; it MOVED into the open qualifier space, which is
+still ~90% hapax and undeduped (``dedup_field`` has no live callers). "losing no information" is also
+false as built: 34% of attestations carry a null qualifier and ``other`` fires at 0.7%, so novelty is
+force-fit into the seed. Convergence is UNPROVEN pending live qualifier dedup + an open escape valve
+(remediation R1/R3). Do not read the closed head vocab as a convergence proof. ***
 
 **Why a fixed seed does NOT violate §4 ("no industry-specific field is ever configured; specialisation
 is emergent, never seeded").** These are universal, domain-agnostic *data primitives* — the kinds of

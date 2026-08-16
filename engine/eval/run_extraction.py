@@ -1,10 +1,22 @@
 """Run the extractor over the REAL CFPB complaint fixture and report structural quality + the
 convergence signal — on data we did NOT author (CLAUDE.md §10-Q3).
 
-Path A (2026-08-14): an emergent attribute is now ``{head, qualifier, value}`` — the HEAD is the
-column (closed vocabulary), the QUALIFIER carries the specificity as data. Convergence is therefore
-achieved AT EXTRACTION TIME (the head space is bounded by construction + extended only by promotion),
-so this harness IS the Path-A proof — no downstream embedding-dedup pass is needed for the column gate.
+Path A (2026-08-14): an emergent attribute is ``{head, qualifier, value}`` — the HEAD is the column
+(closed vocabulary), the QUALIFIER carries specificity as data.
+
+*** RETRACTION (2026-08-17, owner + remediation R0). The earlier claim in this docstring — "convergence
+is achieved AT EXTRACTION TIME ... this harness IS the Path-A proof ... no downstream dedup needed" — was
+INVALID and is withdrawn. ``HEAD_NOUNS`` is a closed 31-element enum enforced in the schema, so the
+new-HEAD-per-bucket curve [15,4,4,1,1,1] is the enumeration of a finite list: it declines because finite
+sets exhaust, and would draw the same shape on random noise. A gate that cannot fail is not a gate.
+The REAL convergence signal is the composite (``qualifier_head``) curve — and it is FLAT: cfpb
+[46,38,54,45,51,41] / 275 composites / 89% hapax; multidomain [70,34,49,41,37] / 231 / 92% hapax —
+statistically the same as the pre-Path-A full-name curve [48,52,74,64,77,63] this was meant to fix. The
+sprawl did not disappear; it moved into the qualifier space, which is unmeasured here and undeduped
+(``dedup_field`` has ZERO callers in ``app/``). Convergence is therefore CURRENTLY UNPROVEN. The gate is
+the composite curve AFTER dedup runs live (remediation R1/R2); the head curve is a bounded-by-construction
+DIAGNOSTIC, not evidence of convergence. Do not re-promote it to the pass line (self-grading, CLAUDE.md
+§10 — this is the 2026-08-14 head-noun-altitude move, recommitted under the Path A name). ***
 
 What this measures WITHOUT ground-truth labels (so it's honest, not self-graded):
 - **json_valid** — did grammar-constrained decoding hold on real messy text.
@@ -13,11 +25,11 @@ What this measures WITHOUT ground-truth labels (so it's honest, not self-graded)
   span, v4) — a non-extractive qualifier is NULLED, not dropped, so a grounded value survives.
 - **qualifier retention** — fraction of kept attributes carrying a verbatim qualifier: how much
   specificity survives strict extraction (Path A relies on qualifiers to carry specificity as data).
-- **head (column) convergence** — distinct heads used + the new-head-per-bucket curve. *** THIS is the
-  gate *** (winning-condition §4: distinct emergent columns settle + declining new-column rate). It
-  should bend down / plateau where the pre-Path-A full-name curve [48,52,74,64,77,63] stayed flat.
-- **composite-name count** — distinct qualifier_head names. DIAGNOSTIC ONLY (qualifiers are data and
-  are EXPECTED to proliferate); not the gate. Kept to show the qualifier cardinality.
+- **head enumeration (NOT a gate)** — distinct heads used + the new-head-per-bucket curve. Bounded by
+  the closed vocab → declines by construction; reported ONLY as a diagnostic of enum coverage.
+- **composite-name curve (THE REAL GATE, currently FAILING)** — new distinct ``qualifier_head`` names
+  per bucket + hapax rate. Winning-condition §4 (schema settles: duplicate/synonym fields <5% +
+  declining new-field rate) is measured HERE. It is flat and ~90% hapax → unproven until dedup runs.
 
 NOT measured here: governed-core ACCURACY (needs labels — a separate real-data + human-label step).
 Usage:  uv run python eval/run_extraction.py [limit]
@@ -76,7 +88,9 @@ async def main() -> int:
     head_freq: Counter[str] = Counter()
     seen_heads: set[str] = set()
     seen_names: set[str] = set()
+    name_support: Counter[str] = Counter()  # composite attestations → hapax rate (the real §4 gate)
     new_head_per_bucket: list[int] = []
+    new_name_per_bucket: list[int] = []  # THE GATE: new distinct composites per bucket (must bend)
     json_ok = 0
     validity_sum = 0.0  # extractor field_validity (value grounding, per-case mean)
     value_only_grounded = 0
@@ -118,6 +132,7 @@ async def main() -> int:
         source_lower = row["narrative"].lower()
         if i % _BUCKET == 0:
             new_head_per_bucket.append(0)
+            new_name_per_bucket.append(0)
         # Value-only grounding over ALL candidates (incl. dropped) — the apples-to-apples denominator
         # vs the pre-Path-A 0.941; measuring over grounded-only would be circular (always 1.0).
         for e in r.emergent:
@@ -131,7 +146,10 @@ async def main() -> int:
             if e.head not in seen_heads:
                 seen_heads.add(e.head)
                 new_head_per_bucket[-1] += 1
-            seen_names.add(e.name)
+            if e.name not in seen_names:
+                seen_names.add(e.name)
+                new_name_per_bucket[-1] += 1
+            name_support[e.name] += 1
         results.append(
             {
                 "id": row["id"],
@@ -169,12 +187,22 @@ async def main() -> int:
         f"qualifier retention      : {qr:.3f}   ({qualifiers_retained}/{emergent_kept} kept attrs carry a VERBATIM qualifier)"
     )
     print(f"emergent attrs kept/all  : {emergent_kept}/{candidates_all}")
-    print("\n-- COLUMN CONVERGENCE (the gate) --")
+    print("\n-- HEAD ENUMERATION (NOT the gate — bounded by the closed 31-vocab, declines by construction) --")
     print(f"distinct heads (columns) : {len(seen_heads)}   (closed vocab, bounded by construction)")
     print(
-        f"new-head per {_BUCKET}-bucket : {new_head_per_bucket}   <- should bend/plateau (was flat)"
+        f"new-head per {_BUCKET}-bucket : {new_head_per_bucket}   <- declines because the enum is FINITE, not because anything converged"
     )
-    print(f"distinct composite names : {len(seen_names)}   (DIAGNOSTIC — qualifiers are data)")
+    print("\n-- COMPOSITE CURVE (THE REAL §4 GATE — currently FAILING: flat + ~90% hapax) --")
+    hapax = sum(1 for v in name_support.values() if v == 1)
+    print(f"distinct composite names : {len(seen_names)}   (the qualifier_head space where sprawl actually lives)")
+    print(
+        f"new-composite per {_BUCKET}   : {new_name_per_bucket}   <- MUST bend down to converge "
+        f"(pre-Path-A was [48,52,74,64,77,63]); flat = unproven"
+    )
+    print(
+        f"hapax rate               : {hapax}/{len(seen_names)} = "
+        f"{hapax / len(seen_names) if seen_names else 0:.0%}   (fraction seen once; a converging schema drives this DOWN)"
+    )
     print(f"head frequency           : {dict(head_freq.most_common())}")
     print("\n-- governed-core distributions --")
     print(

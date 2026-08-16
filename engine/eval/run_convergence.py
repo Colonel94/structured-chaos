@@ -3,10 +3,16 @@
 author (CLAUDE.md §10-Q3).
 
 *** This is the NEGATIVE-result baseline that motivated Path A. It reads the PRESERVED pre-Path-A
-fixture (``cfpb_extractions_prePathA.jsonl``, composite field NAMES). The current Path A gate — column
-(head) convergence — lives in ``run_extraction.py`` instead, because Path A achieves convergence at
-extraction time (closed head vocabulary), not by a downstream name-dedup pass. Kept runnable so the
-before/after is auditable. ***
+fixture (``cfpb_extractions_prePathA.jsonl``, composite field NAMES). Kept runnable so the before/after
+is auditable.
+
+CORRECTION (2026-08-17, owner + remediation R0): the earlier note here — that "the current Path A gate,
+column (head) convergence, lives in run_extraction.py ... Path A achieves convergence at extraction
+time" — was WRONG and mislabelled this file as merely "historical." The head curve is bounded by a
+closed enum and cannot fail, so it is not a gate. The real gate is the composite curve after LIVE dedup,
+which does not run yet — so this name-dedup path is NOT obsolete; a live, head-scoped version of exactly
+this mechanism is what remediation R1 wires in. The composite curve remains flat (~90% hapax) and
+convergence is unproven. ***
 
 Runs the name-level dedup (BGE-M3 embeddings in pgvector + τ=0.85/0.70 gate + gray-band LLM
 adjudication) incrementally in case order. Reports the canonical schema size vs the raw 378, the
