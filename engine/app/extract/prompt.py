@@ -8,10 +8,12 @@ severity, stated-not-guessed outcome, closed-world grounding).
 
 from __future__ import annotations
 
+from collections.abc import Sequence
+
 from .head_nouns import HEAD_NOUNS
 
 # Bump on any change to the prompt text below.
-PROMPT_VERSION = "extract-v13"  # v13 (remediation R3): reopen the `other` escape valve (prefer `other` to force-fitting → unblocks emergent promotion; was firing 0.7%/0.0%) + qualifier is a LABEL not a value (keep numbers/dates/names/amounts OUT of the qualifier slot — they were polluting it and breaking dedup) + drop fully-redacted (all-XXXX) values. Governed-core (category/outcome/severity/emotion) text UNCHANGED from v12.
+PROMPT_VERSION = "extract-v14"  # v14 (remediation R4, stats-before-semantics): the extractor now drops CLAUSE/junk values from the escape-valve heads (`other`/`description`) via the deterministic profiler (app/extract/profile.py) so head-minting clusters on concrete facts, not narrative. Prompt TEXT is unchanged from v13; the version bump busts the idempotency key so the live pipeline re-extracts under the new storage behaviour. v13 was: reopen `other`, qualifier-is-a-label, drop fully-redacted.
 
 _SYSTEM = """You extract a structured complaint case from a customer message. Extract ONLY what the \
 message states or directly implies. NEVER invent facts, names, numbers, or outcomes.
@@ -97,7 +99,10 @@ narrative ones.
 Return JSON only."""
 
 
-def build_prompt(case_text: str) -> str:
-    """The full extraction prompt for one case's normalised text."""
-    system = _SYSTEM.replace("<<HEADS>>", ", ".join(HEAD_NOUNS))
+def build_prompt(case_text: str, heads: Sequence[str] = HEAD_NOUNS) -> str:
+    """The full extraction prompt for one case's normalised text. ``heads`` is the tenant's effective
+    head vocabulary (seed + minted); it defaults to the seed so existing callers are unchanged. The
+    minted heads appear in the closed list the model chooses from, so an emerged column is offered
+    directly rather than forcing the concept back into ``other``."""
+    system = _SYSTEM.replace("<<HEADS>>", ", ".join(heads))
     return f'{system}\n\nCustomer message:\n"""{case_text}"""'

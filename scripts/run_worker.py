@@ -23,25 +23,29 @@ import asyncio
 import sys
 
 from app.obs.logging import get_logger
-from app.queue import app, dedup_scan, promote_scan, worker_app
+from app.queue import app, dedup_scan, mint_scan, promote_scan, worker_app
 
 log = get_logger(__name__)
 
-# How often the intake worker defers the dedup+promote scans (the old @app.periodic cron was */30 min).
+# How often the intake worker defers the schema-maintenance scans (the old @app.periodic cron was */30).
 PROMOTE_SCAN_INTERVAL_SECONDS = 30 * 60
 
 
 async def _scheduler() -> None:
-    """Defer a dedup-scan then a promote-scan every interval. Order matters: dedup collapses synonym
-    qualifiers to their canonical FIRST, so the promote-scan that follows counts pooled canonical
-    support and never splits two synonyms into duplicate columns (remediation R1). ``.defer()`` is a
-    quick sync call on the already-open sync ``app`` — a few ms every 30 min against the worker loop.
+    """Defer the schema-maintenance scans every interval, IN ORDER — the order is the moat's pipeline:
+      1. dedup  — collapse synonym qualifiers to their canonical (so promotion counts pooled support
+                  and never splits two synonyms into duplicate columns, R1);
+      2. mint   — cluster the escape valve and mint NEW heads from recurring novelty (the R2 pivot:
+                  emergent columns are born here), re-homing history against the extended vocabulary;
+      3. promote— lift recurring heads/qualifiers into the governed layer.
+    ``.defer()`` is a quick sync call on the already-open sync ``app`` — a few ms every 30 min.
     """
     while True:
         await asyncio.sleep(PROMOTE_SCAN_INTERVAL_SECONDS)
         dedup_scan.defer()
+        mint_scan.defer()
         promote_scan.defer()
-        log.info("scheduler.dedup_and_promote_scan_deferred")
+        log.info("scheduler.schema_maintenance_scans_deferred")
 
 
 async def _run(queues: list[str], schedule: bool) -> None:

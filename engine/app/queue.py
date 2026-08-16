@@ -148,6 +148,26 @@ def dedup_scan() -> str:
     return "ok"
 
 
+@app.task(name="pipeline.mint_scan", queue=DEFAULT_QUEUE)
+def mint_scan() -> str:
+    """Head-minting scan (remediation, the R2 pivot) — cluster each tenant's escape-valve facts and mint
+    a NEW head for every cluster recurring across >= PROMOTE_HEAD_N distinct cases, then re-extract the
+    affected cases so the minted column RE-HOMES history (the vocab-aware idempotency key makes that
+    re-extraction fire instead of skipping). Runs AFTER dedup, BEFORE promote. Sync task → asyncio.run
+    drives the async embed/name. Lazy imports keep ``queue`` light."""
+    import asyncio
+
+    from .backends.registry import get_embedding, get_llm
+    from .schema.mint_scan import scan_and_mint
+
+    minted = asyncio.run(scan_and_mint(embedder=get_embedding(), llm=get_llm()))
+    for tid, heads in minted.items():
+        for _head, _support, cases in heads:
+            for cid in cases:
+                extract_case_task.defer(tenant_id=str(tid), case_id=str(cid))
+    return "ok"
+
+
 @app.task(name="pipeline.promote_scan", queue=DEFAULT_QUEUE)
 def promote_scan() -> str:
     """DEBOUNCED promotion trigger — never per case (a promotion mid-burst must not cascade backfill

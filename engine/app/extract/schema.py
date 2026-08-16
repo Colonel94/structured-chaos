@@ -15,6 +15,8 @@ Spike-4.0 corrections baked in (the "refuse to guess" trust invariant, CLAUDE.md
 
 from __future__ import annotations
 
+from collections.abc import Sequence
+
 from .head_nouns import HEAD_NOUNS
 
 # Universal starter taxonomy (GOVERNED-CORE-SCHEMA §2) — hierarchical archetypes + UNCLEAR.
@@ -56,41 +58,48 @@ GOVERNED_KEYS: tuple[str, ...] = (
 
 # The JSON schema Ollama constrains the output to (llama.cpp GBNF). Guarantees valid, typed JSON so
 # "refuse to guess" is a null, never a malformed field (EDD §5 — grammar-constrained decoding).
-EXTRACTION_SCHEMA: dict[str, object] = {
-    "type": "object",
-    "properties": {
-        "category": {"type": "string", "enum": list(TAXONOMY)},
-        "fault": {"type": "string"},
-        # nullable → the model must NOT invent an outcome the customer didn't state.
-        "desired_outcome": {"type": ["string", "null"], "enum": [*DESIRED_OUTCOMES, None]},
-        "emotion_signal": {"type": "string", "enum": list(EMOTIONS)},
-        "severity_signal": {"type": "string", "enum": list(SEVERITIES)},
-        "anchor_value": {"type": ["string", "null"]},
-        # Path A (2026-08-14): an emergent attribute is {head, qualifier, value}. The HEAD is the
-        # column and is grammar-constrained to the closed vocabulary (enum) — the convergence fix is
-        # enforced here in code, not left to the model. The QUALIFIER is open free text carrying the
-        # specificity (charged/pension/refunded); it may be null. Both qualifier and value are
-        # grounded against the source independently (closed-world grounding, extractor).
-        "emergent_attributes": {
-            "type": "array",
-            "items": {
-                "type": "object",
-                "properties": {
-                    "head": {"type": "string", "enum": list(HEAD_NOUNS)},
-                    "qualifier": {"type": ["string", "null"]},
-                    "value": {"type": "string"},
+def build_extraction_schema(heads: Sequence[str] = HEAD_NOUNS) -> dict[str, object]:
+    """The extraction JSON schema for a given head vocabulary. ``heads`` is the tenant's EFFECTIVE head
+    set = seed ``HEAD_NOUNS`` + any minted heads (head-minting) — so once a tenant mints a ``regulation``
+    column the grammar lets the model emit it directly. Defaults to the seed so every existing caller is
+    unchanged. The head enum is what enforces the closed-then-emergent column space in code, not prose."""
+    return {
+        "type": "object",
+        "properties": {
+            "category": {"type": "string", "enum": list(TAXONOMY)},
+            "fault": {"type": "string"},
+            # nullable → the model must NOT invent an outcome the customer didn't state.
+            "desired_outcome": {"type": ["string", "null"], "enum": [*DESIRED_OUTCOMES, None]},
+            "emotion_signal": {"type": "string", "enum": list(EMOTIONS)},
+            "severity_signal": {"type": "string", "enum": list(SEVERITIES)},
+            "anchor_value": {"type": ["string", "null"]},
+            # Path A: an emergent attribute is {head, qualifier, value}. The HEAD is grammar-constrained
+            # to ``heads`` (seed + minted). The QUALIFIER is open free text carrying specificity; it may
+            # be null. Both qualifier and value are grounded against the source (closed-world grounding).
+            "emergent_attributes": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "head": {"type": "string", "enum": list(heads)},
+                        "qualifier": {"type": ["string", "null"]},
+                        "value": {"type": "string"},
+                    },
+                    "required": ["head", "qualifier", "value"],
                 },
-                "required": ["head", "qualifier", "value"],
             },
         },
-    },
-    "required": [
-        "category",
-        "fault",
-        "desired_outcome",
-        "emotion_signal",
-        "severity_signal",
-        "anchor_value",
-        "emergent_attributes",
-    ],
-}
+        "required": [
+            "category",
+            "fault",
+            "desired_outcome",
+            "emotion_signal",
+            "severity_signal",
+            "anchor_value",
+            "emergent_attributes",
+        ],
+    }
+
+
+# The seed-vocabulary schema (backward-compatible constant for callers that don't mint heads).
+EXTRACTION_SCHEMA: dict[str, object] = build_extraction_schema()

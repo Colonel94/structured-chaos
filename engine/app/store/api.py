@@ -363,6 +363,62 @@ def list_promotable_qualifier_variants(
     return [(str(r[0]), str(r[1]), str(r[2]), int(r[4]), bool(r[3])) for r in rows]
 
 
+# ------------------------------------------------------- head-minting (emergent columns are born here)
+
+
+def list_escape_valve_facts(
+    session: Session, heads: Sequence[str] = ("other", "description")
+) -> list[tuple[UUID, str]]:
+    """Current facts sitting under the escape-valve heads — ``(case_id, value)`` — the un-homed novelty
+    that head-minting clusters. Reads ``field_current`` (the latest value per field, not the whole log)
+    joined to the registry by head, so a value corrected/re-extracted away is not re-clustered.
+    RLS-scoped."""
+    rows = session.execute(
+        text("""
+            SELECT fc.case_id, fc.value #>> '{}' AS value
+            FROM field_current fc
+            JOIN emergent_field ef ON ef.field_name = fc.field_path
+            WHERE ef.head = ANY(:heads) AND fc.value IS NOT NULL
+            """),
+        {"heads": list(heads)},
+    ).all()
+    return [(r[0], str(r[1])) for r in rows if r[1]]
+
+
+def register_minted_head(
+    session: Session, *, head: str, support: int, source: str | None = None
+) -> None:
+    """Register (or refresh) a minted head — a NEW emergent column born from an `other` cluster, not in
+    the seed ``HEAD_NOUNS``. Upsert on ``(tenant_id, head)`` so a re-scan updates support idempotently.
+    This is what extends the tenant's extraction vocabulary (``effective_heads``)."""
+    session.execute(
+        text(f"""
+            INSERT INTO minted_head (tenant_id, head, support_count, source)
+            VALUES ({_GUC_TENANT}, :head, :support, :source)
+            ON CONFLICT (tenant_id, head) DO UPDATE
+                SET support_count = EXCLUDED.support_count,
+                    source = COALESCE(EXCLUDED.source, minted_head.source),
+                    updated_at = now()
+            """),
+        {"head": head, "support": support, "source": source},
+    )
+
+
+def list_minted_heads(session: Session) -> list[str]:
+    """This tenant's minted head names — appended to the seed ``HEAD_NOUNS`` to form the effective
+    extraction vocabulary. RLS-scoped."""
+    rows = session.execute(text("SELECT head FROM minted_head ORDER BY head")).all()
+    return [str(r[0]) for r in rows]
+
+
+def list_minted_heads_detail(session: Session) -> list[tuple[str, int, str | None]]:
+    """``(head, support_count, source)`` for observability. RLS-scoped."""
+    rows = session.execute(
+        text("SELECT head, support_count, source FROM minted_head ORDER BY support_count DESC, head")
+    ).all()
+    return [(str(r[0]), int(r[1]), (str(r[2]) if r[2] is not None else None)) for r in rows]
+
+
 # ------------------------------------------------------- Path A: retroactive backfill (STAGE 6)
 
 

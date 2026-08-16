@@ -17,10 +17,18 @@ import re
 
 from ..backends.interfaces import LLMBackend
 from ..obs.logging import get_logger
+from collections.abc import Sequence
+
 from .head_nouns import HEAD_NOUNS, normalise_token
 from .models import EmergentAttribute, ExtractionResult
+from .profile import profile_value
 from .prompt import PROMPT_VERSION, build_prompt
-from .schema import EXTRACTION_SCHEMA, GOVERNED_KEYS
+from .schema import GOVERNED_KEYS, build_extraction_schema
+
+# The escape-valve heads: genuinely-new concepts land here, but so do narrative clauses. R4 filters
+# clauses OUT of these two (they pollute head-minting) while leaving content heads (condition, action,
+# status, product…) free to carry a descriptive value — a symptom or safety observation is real signal.
+_ESCAPE_HEADS = frozenset({"other", "description"})
 
 log = get_logger(__name__)
 
@@ -77,9 +85,15 @@ def _is_grounded(value: str, source_lower: str) -> bool:
     return hits / len(significant) >= _GROUNDING_MIN_OVERLAP
 
 
-async def extract(case_text: str, *, llm: LLMBackend) -> ExtractionResult:
-    """Extract one case's governed core + grounded emergent candidates from its normalised text."""
-    raw = await llm.complete(build_prompt(case_text), schema=EXTRACTION_SCHEMA)
+async def extract(
+    case_text: str, *, llm: LLMBackend, heads: Sequence[str] = HEAD_NOUNS
+) -> ExtractionResult:
+    """Extract one case's governed core + grounded emergent candidates from its normalised text.
+    ``heads`` is the tenant's EFFECTIVE head vocabulary — seed ``HEAD_NOUNS`` + any minted heads
+    (head-minting) — used for both the prompt and the grammar enum, and to validate the returned heads.
+    Defaults to the seed so callers that don't mint are unchanged."""
+    head_set = frozenset(normalise_token(h) for h in heads)
+    raw = await llm.complete(build_prompt(case_text, heads), schema=build_extraction_schema(heads))
     # Schema-constrained → valid JSON. Be defensive anyway: a backend without grammar support could
     # return prose, in which case we surface an empty, fully-flagged result rather than crashing.
     try:
@@ -99,7 +113,7 @@ async def extract(case_text: str, *, llm: LLMBackend) -> ExtractionResult:
         if not isinstance(item, dict):
             continue
         head = normalise_token(str(item.get("head", "")))
-        if head not in HEAD_NOUNS:  # grammar enum guarantees this; defensive against a raw backend
+        if head not in head_set:  # grammar enum guarantees this; defensive against a raw backend
             continue
         raw_qual = item.get("qualifier")
         qualifier = normalise_token(str(raw_qual)) if raw_qual else None
@@ -107,6 +121,11 @@ async def extract(case_text: str, *, llm: LLMBackend) -> ExtractionResult:
         value = str(item.get("value", "")).strip()
         if not value or _is_all_redacted(value):
             continue  # empty or all-XXXX → no real content to store (R3 hygiene)
+        # R4 (stats-before-semantics): keep the escape valve clean — a clause / junk value in `other`
+        # or `description` is narrative (already in `fault`) and would cluster into a garbage minted
+        # head. Content heads keep descriptive values (a symptom/condition is real signal).
+        if head in _ESCAPE_HEADS and not profile_value(value).is_concrete:
+            continue
         # Closed-world grounding on BOTH free-text slots, independently (owner constraint #3) — but the
         # two slots are handled asymmetrically because they mean different things:
         #  * VALUE gates the attribute: an ungrounded value has nothing real to store → drop the whole

@@ -30,6 +30,7 @@ from ..obs.logging import get_logger
 from ..store import api, meter
 from ..store.db import SessionFactory, tenant_session
 from .extractor import extract
+from .head_nouns import HEAD_NOUNS
 from .prompt import PROMPT_VERSION
 
 log = get_logger(__name__)
@@ -59,6 +60,17 @@ async def extract_case(
             log.info("extract.skip_empty", case_id=str(case_id))
             return False
 
+        # Effective head vocabulary = universal seed + this tenant's MINTED heads (head-minting). Once a
+        # tenant has minted e.g. `regulation`, extraction offers it directly instead of dumping to `other`.
+        minted = api.list_minted_heads(session)
+        effective_heads = (*HEAD_NOUNS, *minted)
+        # The minted heads change what extraction can PRODUCE, so they belong in the idempotency key:
+        # minting a head must FORCE re-extraction of history (re-home the `other` facts into the new
+        # column) rather than being skipped as "already done". No minted heads → signature empty → key
+        # unchanged (backward compatible with every pre-minting extraction).
+        vocab_sig = (
+            "+h" + hashlib.sha256(",".join(sorted(minted)).encode()).hexdigest()[:8] if minted else ""
+        )
         key = api.compute_idempotency_key(
             source_sha256=hashlib.sha256(case_text.encode("utf-8")).hexdigest(),
             stage=_STAGE,
@@ -66,14 +78,15 @@ async def extract_case(
             # PROMPT_VERSION is in the key so a prompt bump (e.g. v8→v10) forces a fresh re-extraction
             # of already-extracted cases instead of the ledger skipping them as "done" — the §3/§4
             # guarantee that a better prompt re-runs history (was "" here, a silent re-extraction hole).
-            prompt_version=PROMPT_VERSION,
+            # ``vocab_sig`` extends that to minted-head changes (head-minting re-homes history).
+            prompt_version=PROMPT_VERSION + vocab_sig,
             code_version=settings.code_version,
         )
         if not api.claim_stage(session, stage=_STAGE, idempotency_key=key, case_id=case_id):
             log.info("extract.skip_done", case_id=str(case_id))
             return False
 
-        result = await extract(case_text, llm=llm)
+        result = await extract(case_text, llm=llm, heads=effective_heads)
 
         # Every extracted value cites the case's source documents (its provenance). Locator is null
         # (whole-source) — per-field span attribution is a Phase-7 review refinement.
