@@ -162,6 +162,34 @@ be corrected (except the two research-backed spec deltas in §6, which supersede
 > Gate-A5 owner recordings (spikes #1/#2). **Standing practice:** commit fixes directly ([[commit-fixes-directly]]).
 > **Status page (private):** https://claude.ai/code/artifact/4c909fb2-b42e-4f3e-96d2-e7367b366635
 
+**UPDATE (2026-08-16b, MOAT'S FIRST LIVE RUN — qualifier-space dedup MEASURED; wiring it live is BLOCKED on qualifier hygiene; task 4 now PRECEDES task 3).** `origin/main` @ `6f2ca06`.
+Ran the built-but-never-run dedup end-to-end for the first time (`eval/run_qualifier_dedup.py`, head-scoped,
+reuses `app/schema/dedup.py`'s BGE + τ gate + `_adjudicate` — not reimplemented) on real data (cfpb 120,
+multidomain 96, combined 216). **Confirmed live: dedup is ABSENT from the live flow** — `dedup_field` appears
+ONLY in `run_convergence.py`; `stage.py`/`promote.py`/`backfill.py` never call it. **Results (harsh read
+first):** (1) mechanism FIRES correctly on true synonyms (`wells_fargo_bank`/`wellsfargo`→`wells_fargo`,
+`citibank`→`citi_bank`, `account_was_closed`→`account_closed`, `rejected`→`declined`) and the fail-safe holds
+(`bank_of_america`≠`us_bank`, `charged_off`≠`charged`). (2) Raw qualifier dup rate **13.9% combined** (17.3%
+cfpb / 7.1% multidomain) — NOT the §4 gate (qualifiers are data, expected to proliferate). (3) The real §4
+COLUMN-dup gate is **unmeasurable-grade at n=216**: only **2 qualifiers promote** (support≥8), so 0/2=0% is
+NOT reported as a pass (§10 substance-free-pass trap). **Non-obvious win: dedup ENABLED promotion 0→2** by
+pooling fragmented synonym support over M=8 — its real value at this n is anti-fragmentation, not
+dup-prevention. (4) **BLOCKER — 36% of qualifier variants are leaked VALUES, and dedup over values
+OVER-MERGES distinct data even in the hard-merge band:** `6_weeks`→`6_months`, `over_a_month`→`over_a_week`,
+`6_inch_wrap`→`12_inch_wrap`, distinct dates collapsed. **⟹ wiring dedup into the live promote flow NOW would
+corrupt data — deliberately NOT wired.** The qualifier slot is verbatim-grounded but at VALUE altitude, not
+specificity-label altitude — an ALTITUDE problem, not a grounding problem, so "qualifier grounding" (task 4 as
+framed) would read misleadingly HIGH; the honest metric is the value-leakage/altitude rate (36% here).
+**⇒ RE-SEQUENCED: task 4 (clean the qualifier slot to specificity-labels, kill value-leakage) is now the
+PREREQUISITE for task 3 (safe live dedup wiring), not a follow-on.** Also fixed `score.py` crashing on its own
+tail (Windows cp1252 can't encode `≤`/`∅` → the confusion matrix never printed); forced UTF-8 stdout — the
+matrix now prints and confirms a SECOND error cluster beyond billing↔service: `service_fault→access_availability`
+×8 + `billing_charge→access_availability` ×5 (~13 errors on a service/access boundary). Adjudication still
+PENDING OWNER (below); added Claude's adversarial per-row read of all 23 as a PROPOSAL in the fixture (owner's
+`your call` column untouched) — decisive fork: where do record-accuracy disputes go (billing / service / a new
+`record_dispute` category — Claude's rec is the new category, since forcing them into a binary is why the
+boundary wobbles; governed-core change = owner call).
+
 **UPDATE (2026-08-16, HONEST CORRECTION — accuracy is FAILING on finance (near baseline), NOT "unproven off finance"; confusion matrix + adjudication PENDING OWNER).**
 Owner caught the **5th comfortable reframe** — a standing trap to stop repeating ([[comfortable-reframe-trap]]):
 stop framing failures in the direction that feels better. **The real read:** on the 100-case CFPB gold the
