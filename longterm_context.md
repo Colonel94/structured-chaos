@@ -192,16 +192,24 @@ minted-vocab signature into the idempotency key so minting FORCES re-extraction 
 (cluster escape-valve facts via BGE at a looser concept-τ, mint a head per cluster recurring ≥PROMOTE_HEAD_N
 cases, LLM-named, fail-safe: name-collision-with-seed → rejected, below-floor → stays in `other`);
 `queue.mint_scan` task + scheduler order **dedup → MINT → promote**; minting re-extracts affected cases.
-**101 tests +1 skip green, NO regression.** Tests: recurring `other` cluster mints a head that joins the
-vocab; below-floor doesn't; seed-collision rejected; R4 profiler unit + escape-valve-scoped filter.
-**PENDING (this session, GPU-bound): (a) cfpb v14 re-extraction (R4 applied) finishing; (b) run
-`eval/spike_head_minting.py` on v14-clean data to confirm the mints are now CLEAN (v13 spike gave garbage
-heads like `miscellaneous_info` from clause junk — R4 should fix that); (c) commit the v14 fixtures. THE
-big live demonstration still to do: full pipeline in the DB (ingest real cases → extract → dedup_scan →
-mint_scan mints `regulation` live → re-extract → cases use it) — architecture is ready + unit-proven, the
-end-to-end worker run is the final proof.** Remaining remediation: R5 PII gate, R6 record_accuracy (folds the
-pending billing↔service adjudication). Then the honest column-level convergence proof (new-head-per-bucket
-INCLUDING minted heads, on data we didn't author) = the 8/10 result.
+**101 tests +1 skip green, NO regression.** Tests: recurring `other` cluster mints a head (with gloss) that
+joins the vocab; below-floor doesn't; seed-collision rejected; R4 profiler unit + escape-valve-scoped filter.
+**✅ VERIFIED LIVE END-TO-END (real Ollama, data we didn't author):** (a) v14 (R4) re-extraction cut `other`
+46→28 (clause junk filtered), grounding 0.979 held, composites 189→173; the head-minting spike on clean data
+mints a GENUINE concept (`regulatory_reference`) — the `miscellaneous_info` garbage is gone. (b) **THE GLOSS
+FINDING (a live test a fake-LLM unit test can't catch): extending the grammar enum is necessary but NOT
+sufficient — the model dumped `15 U.S.C. 1692g` into `other` even with `regulation` in the vocab, because the
+prompt never said what `regulation` MEANS. Fixed: mint now produces a GLOSS (mig 0012), injected into the
+prompt.** Re-test: seed→`other`; +regulation-no-gloss→still `other`; **+regulation+gloss → model EMITS
+head=regulation ✓.** So an emergent column never seeded is BORN from data AND used by the model —
+"specialisation is emergent, never seeded" made literally true and verified. **Remaining (next session):** the
+full-pipeline DB demonstration (ingest real cases → extract → dedup_scan → mint_scan mints live → re-extract →
+cases use it) — every piece is built + unit-proven + the model-uses-it step is live-proven; the worker run is
+the last integration proof. Also: re-extract multidomain to v14 (still v13). Then R5 PII gate, R6
+record_accuracy (folds the pending billing↔service adjudication), and the honest column-level convergence proof
+(new-head-per-bucket INCLUDING minted heads) = the 8/10 result. NOTE: minting at n=120 is threshold-sensitive
+(thin fuel: 34 clean escape-valve facts) — robust emergence wants the 200+ corpus or a cluster-coherence gate;
+do NOT over-tune MINT_TAU on one dataset (self-grading, §10).
 
 **UPDATE (2026-08-17b, R7+R3+R1 BUILT/TESTED/COMMITTED + R2 MEASURED — the composite curve does NOT bend; the real moat piece (emergent head-minting from `other`) is still MISSING).** `origin/main` @ `68b961d`.
 Executed remediation in dependency order, all verified live (96 tests +1 skip green; NO regression).
