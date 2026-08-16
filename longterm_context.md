@@ -213,6 +213,20 @@ history against it (backfill). This is what makes "specialisation is emergent, n
 demonstrable — a `regulation` head emerging from CFPB with zero configuration.** Remaining remediation: R4
 stats-before-semantics (filters the clausal junk still in `other` like "you are in violation"), R5 PII gate,
 R6 record_accuracy category (folds the pending billing↔service adjudication), R7-determinism DONE.
+**HEAD-MINTING SPIKE (this session, `eval/spike_head_minting.py`, on real cfpb v13 — premise PROVEN):** embed
+`other`/`description` facts (BGE), greedy concept-cluster, mint an LLM-named head when a cluster spans ≥
+PROMOTE_HEAD_N distinct cases. Real concepts DO emerge — a credit-report/financial-reference head recurs across
+~14 distinct cases → column-level emergence is viable, the moat CAN work. **BUT the decisive blocker: `other`
+is polluted with CLAUSES ("you are in violation" ×3, "stress causing stress") + redacted junk that cluster into
+GARBAGE heads (`miscellaneous_info`) at every τ tried (0.55/0.63) — tightening just fragments, doesn't clean.**
+⟹ **R4 IS THE LYNCHPIN: clean `other` (deterministic clause/junk filter) BEFORE both clean dedup AND clean
+head-minting.** REFINED BUILD ORDER (evidence-backed): **R4 (clean the escape valve) → head-minting
+architecture (cluster + mint + PER-TENANT grammar extension so the head enum = seed + minted, + backfill
+re-extracts history) → the honest column-level convergence proof.** R2 corroborated on multidomain too (other
+0→8.3%, dup rate 3.1% — dedup does almost nothing because qualifiers are distinct data, both sets). The one
+architectural fork for head-minting (flagged, not assumed): a minted head EXTENDS the live extraction grammar
+per-tenant (so future cases emit it directly — the §4 "enters via the promotion path" reading) vs a post-hoc
+re-clustering of `other`. Plan = the former.
 
 **UPDATE (2026-08-17, CONVERGENCE PROOF RETRACTED — remediation R0 DONE; R0–R7 is now THE plan; do NOT start Phase 5 until R1–R3).**
 Owner + an external repo read (`repo-analysis-remediation.md`, now committed) invalidated the Path-A
