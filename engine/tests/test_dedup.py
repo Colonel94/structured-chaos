@@ -101,3 +101,48 @@ async def test_gray_band_llm_split_keeps_them_separate(
     with tenant_session(tenant, factory=app_factory) as s:
         canon = api.list_canonical_fields(s)
     assert len(canon) == 2  # LLM said different -> not over-merged
+
+
+async def test_dedup_registry_is_head_scoped_and_idempotent(
+    admin_session: Session, app_factory: sessionmaker[Session]
+) -> None:
+    """The live qualifier-space pass (remediation R1): synonyms under the SAME head merge; an identical
+    embedding under a DIFFERENT head does NOT merge (the closed head is the anchor); re-running is a
+    no-op (idempotent). This is the mechanism that turns qualifier sprawl into a converging schema."""
+    from app.schema.dedup import dedup_registry
+
+    tenant = api.create_tenant(admin_session, "Registry-Co")
+    admin_session.commit()
+    # `total_amount` and `total_fee` embed to the SAME vector — but different heads → must NOT merge.
+    emb = _FakeEmbedder(
+        {
+            "total amount": _vec(1.0),
+            "totaling amount": _vec(0.90),  # >=0.85, same head=amount -> merge into total_amount
+            "owed amount": _vec(0.05),  # <0.70 -> admit new under amount
+            "total fee": _vec(1.0),  # identical vector, head=fee -> head-scoped, must seed separately
+        }
+    )
+    variants = [
+        ("total_amount", "amount"),
+        ("totaling_amount", "amount"),
+        ("owed_amount", "amount"),
+        ("total_fee", "fee"),
+    ]
+    with tenant_session(tenant, factory=app_factory) as s:
+        for name, head in variants:
+            h = api.compute_idempotency_key(
+                source_sha256=name, stage="f", model_version="m", prompt_version="p", code_version="c"
+            )
+            api.register_emergent_field(s, field_name=name, field_name_hash=h, head=head)
+        methods = await dedup_registry(s, embedder=emb, llm=_LLM(same=False))  # type: ignore[arg-type]
+
+    # total_amount seeds amount; totaling_amount merges; owed_amount admits new (compared vs the amount
+    # canonical, cos low); total_fee seeds fee. 3 canonicals created (2 seed + 1 admit_new), 1 merge.
+    assert methods == {"seed": 2, "admit_new": 1, "merge": 1}
+    with tenant_session(tenant, factory=app_factory) as s:
+        canon = {name for _h, name, _p in api.list_canonical_fields(s)}
+        # totaling_amount merged away; total_fee survives DESPITE the identical vector (head anchor).
+        assert canon == {"total_amount", "owed_amount", "total_fee"}
+        # Idempotent: everything is embedded now, so a second pass finds nothing to do.
+        again = await dedup_registry(s, embedder=emb, llm=_LLM(same=False))  # type: ignore[arg-type]
+    assert again == {}

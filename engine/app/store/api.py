@@ -200,23 +200,30 @@ def _vec_literal(embedding: Sequence[float]) -> str:
 
 
 def nearest_canonical_field(
-    session: Session, *, embedding: Sequence[float], exclude_hash: str
+    session: Session, *, embedding: Sequence[float], exclude_hash: str, head: str | None = None
 ) -> tuple[str, str, float] | None:
     """The nearest CANONICAL emergent field to ``embedding`` (cosine), excluding ``exclude_hash`` —
     the dedup lookup (EDD §6.2 STAGE 3). A field is canonical iff it is its own canonical
     (``canonical_hash = field_name_hash``); aliases are skipped so we never chain-merge. Returns
-    ``(hash, name, cosine_similarity)`` or ``None`` if no canonical is embedded yet. RLS-scoped."""
+    ``(hash, name, cosine_similarity)`` or ``None`` if no canonical is embedded yet. RLS-scoped.
+
+    ``head`` (Path A qualifier-space dedup, remediation R1): when given, the comparison universe is
+    restricted to canonicals UNDER THE SAME HEAD — the closed head vocabulary is the ANCHOR, so a
+    qualifier under ``amount`` never merges with one under ``date`` (``6 weeks`` under ``duration`` must
+    not collapse into a ``date``). Without it the lookup is global (legacy pre-Path-A name dedup)."""
+    where_head = "AND head = :head" if head is not None else ""
     row = session.execute(
-        text("""
+        text(f"""
             SELECT field_name_hash, field_name, 1 - (embedding <=> CAST(:emb AS vector)) AS sim
             FROM emergent_field
             WHERE embedding IS NOT NULL
               AND field_name_hash = canonical_hash
               AND field_name_hash <> :exclude
+              {where_head}
             ORDER BY embedding <=> CAST(:emb AS vector)
             LIMIT 1
             """),
-        {"emb": _vec_literal(embedding), "exclude": exclude_hash},
+        {"emb": _vec_literal(embedding), "exclude": exclude_hash, "head": head},
     ).first()
     if row is None:
         return None
@@ -309,6 +316,51 @@ def list_emergent_field_variants(session: Session) -> list[tuple[str, str, str |
         (str(r[0]), str(r[1]), (str(r[2]) if r[2] is not None else None), int(r[3]), bool(r[4]))
         for r in rows
     ]
+
+
+def list_undeduped_variants(session: Session) -> list[tuple[str, str, str]]:
+    """Qualifier variants awaiting dedup: ``(field_name_hash, field_name, head)`` for composites that
+    have a head, carry a real qualifier (``field_name <> head`` — the bare-head row IS the head column,
+    not a qualifier to merge), and have no embedding yet (never run through dedup). First-seen order
+    (``created_at``) so the incremental canonical set grows deterministically. RLS-scoped. The dedup
+    scan (remediation R1) embeds + canonicalises exactly these; once embedded a variant is skipped, so
+    the pass is idempotent."""
+    rows = session.execute(
+        text(
+            "SELECT field_name_hash, field_name, head FROM emergent_field "
+            "WHERE head IS NOT NULL AND field_name <> head AND embedding IS NULL "
+            "ORDER BY first_seen_at, field_name"
+        )
+    ).all()
+    return [(str(r[0]), str(r[1]), str(r[2])) for r in rows]
+
+
+def list_promotable_qualifier_variants(
+    session: Session,
+) -> list[tuple[str, str, str, int, bool]]:
+    """Qualifier variants ELIGIBLE for promotion (dimension 2), dedup-aware — the alias-collapsed view
+    promotion must gate on so two SYNONYMS never both promote as duplicate columns (remediation R1).
+    Returns ``(field_name_hash, field_name, head, effective_support, promoted)`` for each NON-ALIAS
+    qualifier variant (``field_name <> head``; ``canonical_hash`` is NULL/self — merged aliases are
+    excluded). ``effective_support`` = POOLED canonical support (distinct cases attesting the canonical
+    OR any merged alias) once deduped, else the raw ``support_count`` (un-deduped variants behave as
+    before dedup ran — backward compatible). RLS-scoped."""
+    rows = session.execute(
+        text("""
+            SELECT ef.field_name_hash, ef.field_name, ef.head, ef.promoted,
+              CASE WHEN ef.canonical_hash IS NULL THEN ef.support_count
+                   ELSE (SELECT count(DISTINCT fe.case_id)
+                           FROM field_extraction fe
+                           JOIN emergent_field a ON a.field_name = fe.field_path
+                          WHERE fe.layer = 'emergent' AND a.canonical_hash = ef.field_name_hash)
+              END AS eff_support
+            FROM emergent_field ef
+            WHERE ef.head IS NOT NULL AND ef.field_name <> ef.head
+              AND (ef.canonical_hash IS NULL OR ef.canonical_hash = ef.field_name_hash)
+            ORDER BY ef.head, ef.field_name
+            """)
+    ).all()
+    return [(str(r[0]), str(r[1]), str(r[2]), int(r[4]), bool(r[3])) for r in rows]
 
 
 # ------------------------------------------------------- Path A: retroactive backfill (STAGE 6)

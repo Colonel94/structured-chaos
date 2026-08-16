@@ -23,22 +23,25 @@ import asyncio
 import sys
 
 from app.obs.logging import get_logger
-from app.queue import app, promote_scan, worker_app
+from app.queue import app, dedup_scan, promote_scan, worker_app
 
 log = get_logger(__name__)
 
-# How often the intake worker defers a promote-scan (the old @app.periodic cron was */30 min).
+# How often the intake worker defers the dedup+promote scans (the old @app.periodic cron was */30 min).
 PROMOTE_SCAN_INTERVAL_SECONDS = 30 * 60
 
 
 async def _scheduler() -> None:
-    """Defer a promote-scan every interval. ``.defer()`` is a quick sync call on the already-open
-    sync ``app`` — a few ms of blocking every 30 min is negligible against the worker loop.
+    """Defer a dedup-scan then a promote-scan every interval. Order matters: dedup collapses synonym
+    qualifiers to their canonical FIRST, so the promote-scan that follows counts pooled canonical
+    support and never splits two synonyms into duplicate columns (remediation R1). ``.defer()`` is a
+    quick sync call on the already-open sync ``app`` — a few ms every 30 min against the worker loop.
     """
     while True:
         await asyncio.sleep(PROMOTE_SCAN_INTERVAL_SECONDS)
+        dedup_scan.defer()
         promote_scan.defer()
-        log.info("scheduler.promote_scan_deferred")
+        log.info("scheduler.dedup_and_promote_scan_deferred")
 
 
 async def _run(queues: list[str], schedule: bool) -> None:

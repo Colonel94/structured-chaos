@@ -28,6 +28,7 @@ scored set — never guessed in prod (EDD §6.2).
 from __future__ import annotations
 
 import json
+from collections import Counter
 from collections.abc import Mapping, Sequence
 
 from sqlalchemy.orm import Session
@@ -106,6 +107,7 @@ async def dedup_field(
     field_name: str,
     field_name_hash: str,
     llm: LLMBackend,
+    head: str | None = None,
     embedder: EmbeddingBackend | None = None,
     embedding: Sequence[float] | None = None,
     example_values: Mapping[str, Sequence[str]] | None = None,
@@ -113,8 +115,9 @@ async def dedup_field(
     """Assign one emergent field to a canonical (embed → nearest → threshold gate). ``embedding`` may
     be supplied precomputed (batch efficiency); otherwise ``embedder`` computes it. ``example_values``
     maps a field name → a few real attested values, handed to the gray-band adjudicator for context.
-    Returns ``(canonical_hash, method, similarity)`` where method ∈
-    seed|merge|admit_new|llm_merge|llm_admit.
+    ``head`` (Path A, remediation R1) scopes the comparison to canonicals under the SAME head — the
+    closed head is the merge anchor, so cross-head collapses are impossible. Returns
+    ``(canonical_hash, method, similarity)`` where method ∈ seed|merge|admit_new|llm_merge|llm_admit.
     """
     if embedding is None:
         if embedder is None:
@@ -122,7 +125,7 @@ async def dedup_field(
         [embedding] = await embedder.embed([_name_text(field_name)])
 
     nearest = api.nearest_canonical_field(
-        session, embedding=embedding, exclude_hash=field_name_hash
+        session, embedding=embedding, exclude_hash=field_name_hash, head=head
     )
     if nearest is None:
         # First field in the tenant → it seeds the canonical set.
@@ -154,3 +157,36 @@ async def dedup_field(
         session, field_name_hash=field_name_hash, embedding=embedding, canonical_hash=canonical
     )
     return canonical, method, sim
+
+
+async def dedup_registry(
+    session: Session, *, embedder: EmbeddingBackend, llm: LLMBackend, batch_size: int = 256
+) -> dict[str, int]:
+    """The LIVE qualifier-space dedup pass (remediation R1) — head-scoped synonym-merge over the
+    emergent registry, run OFF the hot path (the periodic dedup scan, never inline in extract, so the
+    sub-60s intake latency is untouched). For every qualifier variant not yet embedded
+    (``list_undeduped_variants``), embed its composite name and assign it to a canonical UNDER ITS HEAD
+    (the closed head is the anchor — no cross-head collapse). Incremental + idempotent: a variant is
+    embedded exactly once, in first-seen order, comparing only to existing canonicals, so re-running
+    merges only what is new. Returns the method tally for observability. Over-merge fails safe to
+    not-merging (τ gate + adjudicator) — a duplicate is cheaper than a lossy collapse (§3)."""
+    pending = api.list_undeduped_variants(session)
+    if not pending:
+        return {}
+    methods: Counter[str] = Counter()
+    for start in range(0, len(pending), batch_size):
+        chunk = pending[start : start + batch_size]
+        # Batch-embed once; then dedup sequentially so each variant sees the canonicals the previous
+        # ones in this chunk just created (the incremental growth the convergence proof depends on).
+        vecs = await embedder.embed([_name_text(name) for _h, name, _hd in chunk])
+        for (fhash, name, head), emb in zip(chunk, vecs, strict=True):
+            _canon, method, _sim = await dedup_field(
+                session,
+                field_name=name,
+                field_name_hash=fhash,
+                head=head,
+                llm=llm,
+                embedding=list(emb),
+            )
+            methods[method] += 1
+    return dict(methods)

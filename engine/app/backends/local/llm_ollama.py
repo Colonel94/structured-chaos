@@ -28,7 +28,10 @@ class OllamaLLM:
             "messages": [{"role": "user", "content": prompt}],
             "stream": False,
             "think": False,  # qwen3 is a reasoning model — suppress the <think> block for extraction
-            "options": {"temperature": 0},
+            # temperature 0 = greedy (verified deterministic, R7 2026-08-17); the explicit seed hardens
+            # that against any future Ollama batching/kv-cache change — determinism is a trust-gate
+            # (idempotent replay must re-extract identically), not just a convenience.
+            "options": {"temperature": 0, "seed": 0},
         }
         if schema is not None:
             payload["format"] = schema  # constrain output to the JSON schema

@@ -132,6 +132,22 @@ def backfill(
     return concept_key
 
 
+@app.task(name="pipeline.dedup_scan", queue=DEFAULT_QUEUE)
+def dedup_scan() -> str:
+    """Off-hot-path qualifier-space dedup (remediation R1) — head-scoped synonym-merge over every
+    tenant's emergent registry, so synonym qualifiers collapse to ONE canonical BEFORE promote_scan can
+    split them into duplicate columns. Deferred on an interval by the worker scheduler loop, immediately
+    BEFORE promote_scan. Sync task → ``asyncio.run`` drives the async embed/adjudicate. Lazy imports
+    keep ``queue`` import-light."""
+    import asyncio
+
+    from .backends.registry import get_embedding, get_llm
+    from .schema.dedup_scan import scan_and_dedup
+
+    asyncio.run(scan_and_dedup(embedder=get_embedding(), llm=get_llm()))
+    return "ok"
+
+
 @app.task(name="pipeline.promote_scan", queue=DEFAULT_QUEUE)
 def promote_scan() -> str:
     """DEBOUNCED promotion trigger — never per case (a promotion mid-burst must not cascade backfill

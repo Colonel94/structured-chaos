@@ -9,6 +9,7 @@ promote; a qualifier below M does not split even under a promoted head.
 from __future__ import annotations
 
 import hashlib
+import math
 from datetime import UTC, datetime
 from uuid import uuid4
 
@@ -16,6 +17,7 @@ import pytest
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.extract.head_nouns import compose_name
+from app.schema.dedup import dedup_registry
 from app.schema.promote import PROMOTE_HEAD_N, PROMOTE_QUALIFIER_M, promote
 from app.store import api
 from app.store.db import tenant_session
@@ -23,6 +25,27 @@ from app.store.db import tenant_session
 pytestmark = pytest.mark.usefixtures("pg")
 
 _DT = datetime(2026, 8, 14, 12, 0, tzinfo=UTC)
+_DIM = 1024
+
+
+def _vec(cos: float) -> list[float]:
+    v = [0.0] * _DIM
+    v[0] = cos
+    v[1] = math.sqrt(max(0.0, 1 - cos * cos))
+    return v
+
+
+class _FakeEmbedder:
+    def __init__(self, mapping: dict[str, list[float]]) -> None:
+        self._m = mapping
+
+    async def embed(self, texts: list[str]) -> list[list[float]]:
+        return [self._m[t] for t in texts]
+
+
+class _LLM:
+    async def complete(self, prompt: str, *, schema: dict[str, object] | None = None) -> str:
+        return '{"same": false}'
 
 
 def _h(s: str) -> str:
@@ -107,3 +130,38 @@ def test_two_dimensional_promotion(
     assert {c.head for c in concepts2 if c.kind == "head"} == heads
     assert {c.concept_key for c in concepts2 if c.kind == "variant"} == splits
     assert all(c.is_new is False for c in concepts2)  # already promoted → not re-enqueued
+
+
+async def test_dedup_prevents_duplicate_promoted_columns(
+    admin_session: Session, app_factory: sessionmaker[Session]
+) -> None:
+    """The moat's convergence claim, end to end (remediation R1): two SYNONYM qualifiers
+    (``total``/``totaling`` under ``amount``), each attested across enough cases to promote on their
+    own, must NOT both promote as duplicate columns — dedup collapses them to one canonical whose
+    POOLED support promotes a SINGLE column. Without the dedup pass this would split into two."""
+    tenant = api.create_tenant(admin_session, "Dedup-Promote-Co")
+    admin_session.commit()
+
+    with tenant_session(tenant, factory=app_factory) as s:
+        cases = [
+            api.create_case(s, channel="file_drop", first_contact_at=_DT)
+            for _ in range(PROMOTE_QUALIFIER_M)
+        ]
+        # Both synonyms attested across ALL M cases → each ALONE reaches the promotion floor. Pre-dedup
+        # that is two duplicate columns; the whole point of R1 is that it becomes one.
+        for c in cases:
+            _attest(s, head="amount", qualifier="total", case_id=c)
+            _attest(s, head="amount", qualifier="totaling", case_id=c)
+
+        # Run the live dedup pass: totaling_amount ~ total_amount (cos 0.9) merges under head=amount.
+        emb = _FakeEmbedder({"total amount": _vec(1.0), "totaling amount": _vec(0.90)})
+        methods = await dedup_registry(s, embedder=emb, llm=_LLM())  # type: ignore[arg-type]
+        assert methods.get("merge") == 1  # exactly one synonym merged away
+
+        concepts = promote(s)
+
+    amount_splits = [c for c in concepts if c.kind == "variant" and c.head == "amount"]
+    # ONE column, not two: the canonical total_amount promotes; totaling_amount is an alias, excluded.
+    assert len(amount_splits) == 1
+    assert amount_splits[0].concept_key == "total_amount"
+    assert not any(c.concept_key == "totaling_amount" for c in concepts)

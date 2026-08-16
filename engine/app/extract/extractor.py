@@ -49,6 +49,15 @@ def _is_extractive(qualifier_norm: str, source_lower: str) -> bool:
     return phrase in source_tokens
 
 
+def _is_all_redacted(value: str) -> bool:
+    """A value that is only redaction placeholder (``XXXX``, ``XXXX XXXX``) carries no real content —
+    it should not become a stored fact (remediation R3 hygiene). True iff the value's alphanumeric core
+    is empty or consists solely of ``x``. Keeps partially-real values (``XXXX Bank``, ``$500``,
+    ``XX/XX/2023`` — has a year) which do carry content."""
+    alnum = "".join(_TOKEN.findall(value.lower()))
+    return alnum == "" or set(alnum) == {"x"}
+
+
 def _is_grounded(value: str, source_lower: str) -> bool:
     """Whether ``value`` traces back to the source text — the anti-hallucination check. Exact
     substring wins; otherwise require a strong overlap of the value's significant tokens (so a
@@ -96,8 +105,8 @@ async def extract(case_text: str, *, llm: LLMBackend) -> ExtractionResult:
         qualifier = normalise_token(str(raw_qual)) if raw_qual else None
         qualifier = qualifier or None  # normalised-to-empty → no qualifier
         value = str(item.get("value", "")).strip()
-        if not value:
-            continue
+        if not value or _is_all_redacted(value):
+            continue  # empty or all-XXXX → no real content to store (R3 hygiene)
         # Closed-world grounding on BOTH free-text slots, independently (owner constraint #3) — but the
         # two slots are handled asymmetrically because they mean different things:
         #  * VALUE gates the attribute: an ungrounded value has nothing real to store → drop the whole

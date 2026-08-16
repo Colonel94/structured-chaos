@@ -11,7 +11,7 @@ from __future__ import annotations
 from .head_nouns import HEAD_NOUNS
 
 # Bump on any change to the prompt text below.
-PROMPT_VERSION = "extract-v12"  # v12: capture the named organization (bank/agency/collector) as a structured `organization` fact — the model was putting it only in `fault`, missing ~30/51 org key-facts. Outcome block unchanged from v11.
+PROMPT_VERSION = "extract-v13"  # v13 (remediation R3): reopen the `other` escape valve (prefer `other` to force-fitting → unblocks emergent promotion; was firing 0.7%/0.0%) + qualifier is a LABEL not a value (keep numbers/dates/names/amounts OUT of the qualifier slot — they were polluting it and breaking dedup) + drop fully-redacted (all-XXXX) values. Governed-core (category/outcome/severity/emotion) text UNCHANGED from v12.
 
 _SYSTEM = """You extract a structured complaint case from a customer message. Extract ONLY what the \
 message states or directly implies. NEVER invent facts, names, numbers, or outcomes.
@@ -67,24 +67,32 @@ plain information request).
 short phrase — NOT a sentence, an opinion, an allegation, or a restatement of the complaint (the story \
 is already captured in "fault"). If something is just narrative, leave it out.
     * head = the column this fact belongs in, chosen from this CLOSED list: <<HEADS>>. Choose the MOST \
-SPECIFIC head that fits: a money value → amount/fee/rate/balance; a calendar date → date; a clock time \
-→ time; a state like open/closed/declined → status; a company/bank/agency → organization; a person → \
-person; an id/reference number → identifier; a count → count; how long → duration. Use "description" \
-or "other" ONLY as a last resort when NO specific head fits — never as a place to dump a sentence or a \
-complaint. If a fact would land in "description" as a whole clause, drop it instead. ALWAYS capture \
-the named organization the complaint is about or names — the company, bank, agency, lender, or debt \
-collector — as an "organization" fact, whenever a real name is given (skip a fully-redacted XXXX).
-    * qualifier = a SHORT phrase (1-3 words) COPIED VERBATIM from the message — the exact words as \
-they appear, contiguous — that makes the fact specific, or null if the head alone is enough. Do NOT \
-paraphrase, reword, reorder, or summarise: if you cannot copy a contiguous phrase straight from the \
-message, use null. Examples: for "$500 was charged" use head="amount", qualifier="charged"; for "my \
-pension was deposited" use head="amount", qualifier="pension"; for "the box was crushed" use \
-head="condition", qualifier="box"; for "delivered at 6pm" use head="time", qualifier="delivered".
+SPECIFIC head that GENUINELY fits: a money value → amount/fee/rate/balance; a calendar date → date; a \
+clock time → time; a state like open/closed/declined → status; a company/bank/agency → organization; a \
+person → person; an id/reference number → identifier; a count → count; how long → duration. \
+PREFER "other" to force-fitting a fact into a head that does not really match: a flagged new kind of \
+thing is more useful than a wrong mapping, and "other" is how genuinely-new concepts are surfaced. For \
+example, a CREDIT SCORE or its change is NOT an amount of money — it has no head in this list, so use \
+"other", never "amount". Use "description" only for a single concrete value that fits no other head — \
+NEVER for a sentence or a clause; if a fact would land in "description" as a whole clause, drop it. \
+ALWAYS capture the named organization the complaint is about or names — the company, bank, agency, \
+lender, or debt collector — as an "organization" fact, whenever a real name is given (skip a \
+fully-redacted XXXX).
+    * qualifier = a SHORT LABEL (1-3 words) that says WHICH KIND of this head the fact is — COPIED \
+VERBATIM from the message (the exact contiguous words), or null if the head alone is enough. The \
+qualifier is a category label, NEVER the value itself: do NOT put a number, amount, date, name, id, or \
+the value's own content in the qualifier — those belong in "value". If the only phrase you could copy \
+is the value itself, use null. Do NOT paraphrase, reword, reorder, or summarise; if you cannot copy a \
+contiguous LABEL phrase, use null. Examples: for "$500 was charged" → head="amount", \
+qualifier="charged", value="$500" (NOT qualifier="$500"); for "my pension was deposited" → \
+head="amount", qualifier="pension"; for "the box was crushed" → head="condition", qualifier="box"; \
+for "delivered at 6pm" → head="time", qualifier="delivered", value="6pm".
     * value = the specific value from the message (the number, date, name, or short phrase — not a \
-sentence).
-  Put the SPECIFICITY in the qualifier, NOT in the head — do not invent new heads. Include ONLY facts \
-actually present in the message; every qualifier and value must come from the text. No inferred or \
-generic fields. Prefer FEWER, cleaner structured facts over many narrative ones.
+sentence). If the value is entirely redacted (only XXXX with no real content), OMIT the whole fact.
+  Put the SPECIFICITY in the qualifier LABEL, NOT in the head, and the CONTENT in the value — do not \
+invent new heads. Include ONLY facts actually present in the message; every qualifier and value must \
+come from the text. No inferred or generic fields. Prefer FEWER, cleaner structured facts over many \
+narrative ones.
 
 Return JSON only."""
 

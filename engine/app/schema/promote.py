@@ -71,11 +71,12 @@ def promote_qualifiers(session: Session) -> list[PromotedConcept]:
     AFTER ``promote_heads`` so the head-promoted precondition sees this scan's promotions."""
     promoted_heads = {h for h, _s, is_p in api.list_emergent_heads(session) if is_p}
     out: list[PromotedConcept] = []
-    for fhash, fname, head, support, already in api.list_emergent_field_variants(session):
-        if head is None or head not in promoted_heads:
+    # Dedup-aware view: aliases are already collapsed and support is POOLED to the canonical, so two
+    # synonym qualifiers can never both promote as duplicate columns (remediation R1). Un-deduped
+    # variants fall back to raw support, so this is a superset-safe replacement for the raw variant list.
+    for fhash, fname, head, support, already in api.list_promotable_qualifier_variants(session):
+        if head not in promoted_heads:
             continue  # a qualifier can only split under a promoted head — no orphan variants
-        if fname == head:
-            continue  # the bare-head variant IS the head column, not a split of it
         if support >= PROMOTE_QUALIFIER_M:
             if not already:
                 api.mark_field_promoted(session, canonical_hash=fhash)

@@ -31,6 +31,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import sys
 from collections import Counter, defaultdict
 from pathlib import Path
 
@@ -72,6 +73,8 @@ def _load() -> list[dict[str, object]]:
 
 
 async def main() -> int:
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8")  # type: ignore[union-attr]  # Windows cp1252 chokes on → / ≥
     cases = _load()
 
     # Per head: distinct qualifiers, first-seen order, support (distinct cases attesting the composite),
@@ -175,6 +178,42 @@ async def main() -> int:
     print(f"duplicates merged         : {merged}")
     print(f"QUALIFIER duplicate rate  : {dup_rate:.1%}   (merged / raw distinct variants)")
     print(f"methods                   : {dict(methods)}")
+
+    # ---- THE §4 GATE (remediation R2): does the composite curve BEND after dedup? ----------------
+    # Replay cases in first-seen order; count NEW distinct composites per bucket, RAW (pre-dedup) vs
+    # CANONICAL (post-merge). Raw is the flat curve R0 exposed; if dedup works, the canonical curve
+    # bends BELOW it and declines. This is the pass/fail number, measured on data we did not author.
+    B = 20
+    raw_new: list[int] = []
+    can_new: list[int] = []
+    seen_raw: set[tuple[str, str]] = set()
+    seen_can: set[tuple[str, str]] = set()
+    for i, c in enumerate(cases):
+        if i % B == 0:
+            raw_new.append(0)
+            can_new.append(0)
+        for a in c.get("attributes", []):  # type: ignore[union-attr]
+            head = str(a.get("head") or "")
+            q = a.get("qualifier")
+            if not head or not q:
+                continue
+            raw_key = (head, str(q))
+            can_key = (head, canonical_of.get(raw_key, str(q)))
+            if raw_key not in seen_raw:
+                seen_raw.add(raw_key)
+                raw_new[-1] += 1
+            if can_key not in seen_can:
+                seen_can.add(can_key)
+                can_new[-1] += 1
+    print("\n-- COMPOSITE CURVE, RAW vs AFTER-DEDUP (the §4 gate; must bend down to converge) --")
+    print(f"  raw (pre-dedup)   new-composite/bucket : {raw_new}   total {len(seen_raw)}")
+    print(f"  canonical (dedup) new-composite/bucket : {can_new}   total {len(seen_can)}")
+    if len(seen_raw):
+        print(
+            f"  reduction from dedup : {len(seen_raw) - len(seen_can)} composites "
+            f"({1 - len(seen_can) / len(seen_raw):.1%}); tail-vs-head bend "
+            f"{can_new[0]}→{can_new[-1]} (raw {raw_new[0]}→{raw_new[-1]})"
+        )
 
     # The TRUE §4 gate under Path A: duplicate/synonym COLUMNS < 5%. A promoted COLUMN is a canonical
     # qualifier whose POOLED (post-merge) support reaches M. Two measures, both honest:
