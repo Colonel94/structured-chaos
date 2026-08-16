@@ -48,13 +48,14 @@ class _FakeEmbedder:
 
 
 class _NameLLM:
-    def __init__(self, name: str) -> None:
+    def __init__(self, name: str, gloss: str = "a learned column") -> None:
         self._name = name
+        self._gloss = gloss
 
     async def complete(self, prompt: str, *, schema: dict[str, object] | None = None) -> str:
         import json
 
-        return json.dumps({"head": self._name})
+        return json.dumps({"head": self._name, "gloss": self._gloss})
 
 
 def _attest_other(session: Session, *, value: str, case_id: object, head: str = "other") -> None:
@@ -108,7 +109,8 @@ async def test_recurring_other_cluster_mints_a_new_head(
             _attest_other(s, value=val, case_id=c)
         # All citations embed to one cluster (same vector); the LLM names it `regulation`.
         emb = _FakeEmbedder({v: _vec(1.0) for v in citations})
-        minted = await mint_for_tenant(s, embedder=emb, llm=_NameLLM("regulation"))
+        llm = _NameLLM("regulation", gloss="a cited law, statute, or regulation")
+        minted = await mint_for_tenant(s, embedder=emb, llm=llm)
 
     assert len(minted) == 1
     head, support, affected = minted[0]
@@ -117,6 +119,8 @@ async def test_recurring_other_cluster_mints_a_new_head(
     assert len(affected) == PROMOTE_HEAD_N
     with tenant_session(tenant, factory=app_factory) as s:
         assert "regulation" in api.list_minted_heads(s)  # joins the extraction vocabulary
+        glosses = api.list_minted_head_glosses(s)  # and carries its gloss for the prompt
+        assert glosses["regulation"] == "a cited law, statute, or regulation"
 
 
 async def test_cluster_below_floor_does_not_mint(

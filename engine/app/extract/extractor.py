@@ -86,14 +86,21 @@ def _is_grounded(value: str, source_lower: str) -> bool:
 
 
 async def extract(
-    case_text: str, *, llm: LLMBackend, heads: Sequence[str] = HEAD_NOUNS
+    case_text: str,
+    *,
+    llm: LLMBackend,
+    heads: Sequence[str] = HEAD_NOUNS,
+    minted_glosses: dict[str, str] | None = None,
 ) -> ExtractionResult:
     """Extract one case's governed core + grounded emergent candidates from its normalised text.
     ``heads`` is the tenant's EFFECTIVE head vocabulary — seed ``HEAD_NOUNS`` + any minted heads
-    (head-minting) — used for both the prompt and the grammar enum, and to validate the returned heads.
-    Defaults to the seed so callers that don't mint are unchanged."""
+    (head-minting) — used for the prompt, the grammar enum, and head validation. ``minted_glosses``
+    (head → definition) is injected into the prompt so the model actually routes to minted heads.
+    Defaults to the seed / no glosses so callers that don't mint are unchanged."""
     head_set = frozenset(normalise_token(h) for h in heads)
-    raw = await llm.complete(build_prompt(case_text, heads), schema=build_extraction_schema(heads))
+    raw = await llm.complete(
+        build_prompt(case_text, heads, minted_glosses), schema=build_extraction_schema(heads)
+    )
     # Schema-constrained → valid JSON. Be defensive anyway: a backend without grammar support could
     # return prose, in which case we surface an empty, fully-flagged result rather than crashing.
     try:

@@ -99,10 +99,21 @@ narrative ones.
 Return JSON only."""
 
 
-def build_prompt(case_text: str, heads: Sequence[str] = HEAD_NOUNS) -> str:
+def build_prompt(
+    case_text: str,
+    heads: Sequence[str] = HEAD_NOUNS,
+    minted_glosses: dict[str, str] | None = None,
+) -> str:
     """The full extraction prompt for one case's normalised text. ``heads`` is the tenant's effective
-    head vocabulary (seed + minted); it defaults to the seed so existing callers are unchanged. The
-    minted heads appear in the closed list the model chooses from, so an emerged column is offered
-    directly rather than forcing the concept back into ``other``."""
+    head vocabulary (seed + minted); it defaults to the seed so existing callers are unchanged.
+    ``minted_glosses`` (head → definition) is injected as explicit guidance — the enum alone does NOT
+    make the model use a minted head; it needs to know what the column MEANS or it defaults to ``other``
+    (2026-08-17c live finding). Each minted head is offered with its gloss so an emerged column is used."""
     system = _SYSTEM.replace("<<HEADS>>", ", ".join(heads))
+    if minted_glosses:
+        defs = "\n".join(f"    {h} = {g}" for h, g in minted_glosses.items())
+        system += (
+            "\n\nThis account has LEARNED additional columns from past cases. Use one of these when a "
+            "fact clearly matches it, in preference to `other`:\n" + defs
+        )
     return f'{system}\n\nCustomer message:\n"""{case_text}"""'

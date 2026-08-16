@@ -62,7 +62,8 @@ async def extract_case(
 
         # Effective head vocabulary = universal seed + this tenant's MINTED heads (head-minting). Once a
         # tenant has minted e.g. `regulation`, extraction offers it directly instead of dumping to `other`.
-        minted = api.list_minted_heads(session)
+        minted_glosses = api.list_minted_head_glosses(session)
+        minted = list(minted_glosses)
         effective_heads = (*HEAD_NOUNS, *minted)
         # The minted heads change what extraction can PRODUCE, so they belong in the idempotency key:
         # minting a head must FORCE re-extraction of history (re-home the `other` facts into the new
@@ -86,7 +87,9 @@ async def extract_case(
             log.info("extract.skip_done", case_id=str(case_id))
             return False
 
-        result = await extract(case_text, llm=llm, heads=effective_heads)
+        result = await extract(
+            case_text, llm=llm, heads=effective_heads, minted_glosses=minted_glosses
+        )
 
         # Every extracted value cites the case's source documents (its provenance). Locator is null
         # (whole-source) — per-field span attribution is a Phase-7 review refinement.

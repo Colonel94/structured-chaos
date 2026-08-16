@@ -386,21 +386,24 @@ def list_escape_valve_facts(
 
 
 def register_minted_head(
-    session: Session, *, head: str, support: int, source: str | None = None
+    session: Session, *, head: str, support: int, gloss: str | None = None, source: str | None = None
 ) -> None:
     """Register (or refresh) a minted head — a NEW emergent column born from an `other` cluster, not in
-    the seed ``HEAD_NOUNS``. Upsert on ``(tenant_id, head)`` so a re-scan updates support idempotently.
-    This is what extends the tenant's extraction vocabulary (``effective_heads``)."""
+    the seed ``HEAD_NOUNS``. ``gloss`` is the one-line definition injected into the extraction prompt so
+    the model actually routes facts to it (without it a minted head is dead — 2026-08-17c live finding).
+    Upsert on ``(tenant_id, head)`` so a re-scan updates support/gloss idempotently. This is what
+    extends the tenant's extraction vocabulary (``effective_heads``)."""
     session.execute(
         text(f"""
-            INSERT INTO minted_head (tenant_id, head, support_count, source)
-            VALUES ({_GUC_TENANT}, :head, :support, :source)
+            INSERT INTO minted_head (tenant_id, head, support_count, gloss, source)
+            VALUES ({_GUC_TENANT}, :head, :support, :gloss, :source)
             ON CONFLICT (tenant_id, head) DO UPDATE
                 SET support_count = EXCLUDED.support_count,
+                    gloss = COALESCE(EXCLUDED.gloss, minted_head.gloss),
                     source = COALESCE(EXCLUDED.source, minted_head.source),
                     updated_at = now()
             """),
-        {"head": head, "support": support, "source": source},
+        {"head": head, "support": support, "gloss": gloss, "source": source},
     )
 
 
@@ -409,6 +412,15 @@ def list_minted_heads(session: Session) -> list[str]:
     extraction vocabulary. RLS-scoped."""
     rows = session.execute(text("SELECT head FROM minted_head ORDER BY head")).all()
     return [str(r[0]) for r in rows]
+
+
+def list_minted_head_glosses(session: Session) -> dict[str, str]:
+    """``head → gloss`` for this tenant's minted heads — injected into the prompt so the model knows
+    when to use each emerged column. Heads with no gloss fall back to their name. RLS-scoped."""
+    rows = session.execute(
+        text("SELECT head, COALESCE(gloss, head) FROM minted_head ORDER BY head")
+    ).all()
+    return {str(r[0]): str(r[1]) for r in rows}
 
 
 def list_minted_heads_detail(session: Session) -> list[tuple[str, int, str | None]]:

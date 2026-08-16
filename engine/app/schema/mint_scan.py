@@ -43,8 +43,8 @@ MINT_TAU = 0.55
 
 _NAME_SCHEMA: dict[str, object] = {
     "type": "object",
-    "properties": {"head": {"type": "string"}},
-    "required": ["head"],
+    "properties": {"head": {"type": "string"}, "gloss": {"type": "string"}},
+    "required": ["head", "gloss"],
 }
 
 # Names that must never be minted (would collide with the escape valve or be meaningless).
@@ -60,26 +60,29 @@ def _cos(a: Sequence[float], b: Sequence[float]) -> float:
 
 async def _name_cluster(
     llm: LLMBackend, examples: list[str], existing: frozenset[str]
-) -> str | None:
-    """One LLM call: propose a single snake_case head naming the cluster, distinct from every existing
-    head. Returns the normalised name, or None if it collides / is forbidden / the call fails (fail
-    safe → don't mint, the facts stay in `other`)."""
+) -> tuple[str, str] | None:
+    """One LLM call: propose a single snake_case head naming the cluster AND a short gloss (what belongs
+    in it). The gloss is essential — it goes into the extraction prompt so the model actually routes
+    facts to the minted head instead of `other` (2026-08-17c live finding). Returns ``(name, gloss)``,
+    or None if the name collides / is forbidden / the call fails (fail safe → don't mint)."""
     sample = "; ".join(f'"{e}"' for e in examples[:6])
     prompt = (
         "These facts were extracted from customer complaints and did not fit any existing column, but "
         "they are all the SAME kind of thing. Propose a SINGLE snake_case noun naming the column that "
-        "would hold them all (e.g. regulation, warranty, symptom, coverage). It MUST NOT be any of "
-        f"these existing columns: {', '.join(sorted(existing))}.\nFacts: {sample}\n"
-        'Answer JSON: {"head": "<one snake_case noun>"}.'
+        "would hold them all (e.g. regulation, warranty, symptom, coverage), AND a short gloss (one "
+        "clause) describing what belongs in that column. The name MUST NOT be any of these existing "
+        f"columns: {', '.join(sorted(existing))}.\nFacts: {sample}\n"
+        'Answer JSON: {"head": "<one snake_case noun>", "gloss": "<short definition>"}.'
     )
     try:
-        raw = await llm.complete(prompt, schema=_NAME_SCHEMA)
-        name = normalise_token(str(json.loads(raw).get("head", "")))
+        obj = json.loads(await llm.complete(prompt, schema=_NAME_SCHEMA))
+        name = normalise_token(str(obj.get("head", "")))
+        gloss = str(obj.get("gloss", "")).strip()
     except Exception:  # noqa: BLE001 — a naming failure must not mint garbage
         return None
     if name in _FORBIDDEN or name in existing:
         return None
-    return name
+    return name, gloss or name
 
 
 async def mint_for_tenant(
@@ -121,11 +124,16 @@ async def mint_for_tenant(
         if len(cases) < PROMOTE_HEAD_N:
             continue
         examples = [facts[i][1] for i in mem][:6]
-        name = await _name_cluster(llm, examples, existing)
-        if name is None:
+        named = await _name_cluster(llm, examples, existing)
+        if named is None:
             continue
+        name, gloss = named
         api.register_minted_head(
-            session, head=name, support=len(cases), source=f"other_cluster: {examples[:3]}"
+            session,
+            head=name,
+            support=len(cases),
+            gloss=gloss,
+            source=f"other_cluster: {examples[:3]}",
         )
         existing = existing | {name}  # two clusters can't mint the same name in one scan
         minted.append((name, len(cases), cases))
