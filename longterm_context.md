@@ -162,6 +162,32 @@ be corrected (except the two research-backed spec deltas in §6, which supersede
 > Gate-A5 owner recordings (spikes #1/#2). **Standing practice:** commit fixes directly ([[commit-fixes-directly]]).
 > **Status page (private):** https://claude.ai/code/artifact/4c909fb2-b42e-4f3e-96d2-e7367b366635
 
+**UPDATE (2026-08-16, MULTI-DOMAIN SET STOOD UP — the taxonomy was STARVED, not weak; + Phase-4 reframe).**
+Owner: "why is everything financial?!" — because the whole eval was CFPB (financial-only by
+construction). Built a real, non-authored, multi-sector set (§10-Q3): **`eval/fetch_multidomain.py`** →
+96 cases across **9 sectors** — NHTSA vehicle complaints (US-gov public domain, product/safety) +
+Trustpilot (`Kerassy/trustpilot-reviews-123k`, **MIT**, filter stars≤2) across electronics, retail,
+restaurants, travel, utilities, home services, health, legal/government. (Rejected: gov service APIs =
+no prose; Twitter/support corpora = non-commercial; Yelp = restrictive.) Harness made **dataset-agnostic**
+(`eval/_dataset.py` + `EVAL_DATASET=multidomain`); blind label sheet `multidomain_labels.csv` (96 rows)
+PENDING OWNER LABELS for the first non-financial ACCURACY numbers. **STRUCTURAL RESULT (v12, no labels
+needed) — the reveal:** the universal taxonomy SPREADS across every class on real product+service data —
+**product_fault 3→32, service_fault 21→29, delivery_fulfilment 1→13, safety_health 1→7, staff_conduct
+2→4, billing_charge 53→3**; severity now fires on SAFETY (safety_health 1→10), not just financial. The
+self-converging schema **CONVERGED on a brand-new domain** (new-head `[15,3,2,3,0]`, 23 bounded heads,
+json 100%, grounding 0.969). ⟹ the category/severity "weakness" was CFPB starving the taxonomy, NOT a
+taxonomy flaw — validates the §4 domain-agnostic claim. Shape note: desired_outcome 90/96 null (reviews
+VENT, don't ASK — refuse-to-guess correctly abstains; a real intake channel prompts for the outcome).
+**PHASE-4 REFRAME (owner: "stuck in Phase 4 for ages"):** the exit gate is about MECHANISMS (extract →
+merge → promote → backfill → converge → no-hallucination) — 4/5 DONE + proven. The endless-feeling part
+was open-ended ACCURACY tuning (v6→v12), which the gate never asked for and is really Phase-6
+calibration. **Remaining true Phase-4 gaps:** (1) BGE-M3 synonym-merge dedup is built+unit-tested but NOT
+WIRED into the live flow (post-Path-A → reframe to qualifier-space under a head); (2) stats-before-
+semantics profiling (4.2) never built; (3) light PII gate at promotion (4.5) never built; (4) the <5%-dup
+half of the convergence gate never explicitly measured; (5) accuracy is finance-only until the
+multi-domain set is labeled. **Plan: close Phase 4 on mechanisms (wire dedup, PII gate, <5%-dup metric,
+profiler build-or-log-defer), move accuracy to Phase 6.** `origin/main` push pending.
+
 **UPDATE (2026-08-16, ACCURACY — outcome value-side 51→63 (v11) + org capture 41→98% (v12); both probe-first, not blind-tuned).**
 Two grounded fixes, each diagnosed on the real data BEFORE touching the prompt (§10). **LEVER: outcome
 wrong-VALUE (v11).** Probe of the 32 gold=value/model=wrong cases → **21/32 (66%) were `refund`

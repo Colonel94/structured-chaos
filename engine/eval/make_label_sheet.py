@@ -23,14 +23,13 @@ from __future__ import annotations
 import csv
 import json
 import sys
-from pathlib import Path
+
+from _dataset import DATASET
+from _dataset import INSTRUCTIONS as _INSTRUCTIONS
+from _dataset import LABELS as _SHEET
+from _dataset import SAMPLE as _SAMPLE
 
 from app.extract.schema import DESIRED_OUTCOMES, EMOTIONS, SEVERITIES, TAXONOMY
-
-_DIR = Path(__file__).resolve().parent / "fixtures"
-_SAMPLE = _DIR / "cfpb_sample.jsonl"
-_SHEET = _DIR / "cfpb_labels.csv"
-_INSTRUCTIONS = _DIR / "cfpb_labels_INSTRUCTIONS.md"
 
 _GOLD_COLS = [
     "gold_category",
@@ -86,17 +85,19 @@ def main() -> int:
             )
 
     _INSTRUCTIONS.write_text(
-        "# Labeling instructions — CFPB accuracy slice\n\n"
-        f"{len(sample)} real complaints ({per_product} per product), of which {preserved} are already "
-        "labelled from the first pass (leave those rows as they are). Fill the `gold_*` columns for the "
-        "REMAINING blank rows with the CORRECT answer — what a careful human says the case is, reading "
-        "only the narrative. Leave a cell EMPTY to skip that field for that row (it won't be scored). "
-        "Do not look at the model output first.\n\n"
+        f"# Labeling instructions — {DATASET} accuracy slice\n\n"
+        f"{len(sample)} real complaints (up to {per_product} per sector), of which {preserved} are "
+        "already labelled from a prior pass (leave those rows as they are). Fill the `gold_*` columns "
+        "for the REMAINING blank rows with the CORRECT answer — what a careful human says the case is, "
+        "reading only the narrative. Leave a cell EMPTY to skip that field for that row (it won't be "
+        "scored). Do not look at the model output first.\n\n"
         "## Valid values (exact strings)\n"
         f"- **gold_category**: {' | '.join(TAXONOMY)}\n"
-        "  - Use `UNCLEAR` only if the narrative is genuinely too sparse/ambiguous to classify — NOT "
-        "just because the retail-flavoured list fits a financial complaint awkwardly. If `billing_charge` "
-        "is the least-bad fit for a disputed charge, use it.\n"
+        "  - Pick the SINGLE least-bad archetype. Use `UNCLEAR` only if the narrative is genuinely too "
+        "sparse/ambiguous to classify at all — not just because the wording is unusual for the "
+        "category. `service_fault` = the provider mishandled/delayed/botched a service; `product_fault` "
+        "= a physical item is defective; `delivery_fulfilment` = a shipping/delivery/fulfilment "
+        "problem.\n"
         f"- **gold_desired_outcome**: {' | '.join(DESIRED_OUTCOMES)} | `null`\n"
         "  - `null` = the customer did NOT state what they want. Pick the value only if they explicitly "
         "ask for it; if they state two, the one they say FIRST.\n"

@@ -17,11 +17,10 @@ import csv
 import json
 import re
 from collections import Counter
-from pathlib import Path
 
-_DIR = Path(__file__).resolve().parent / "fixtures"
-_SHEET = _DIR / "cfpb_labels.csv"
-_EXTRACTIONS = _DIR / "cfpb_extractions.jsonl"
+from _dataset import EXTRACTIONS as _EXTRACTIONS
+from _dataset import LABELS as _SHEET
+
 _TOKEN = re.compile(r"[a-z0-9]+")
 _GOVERNED = ["category", "desired_outcome", "severity_signal", "emotion_signal"]
 # Fields where a BLANK gold cell is a real label meaning "null / not stated" (scored against a model

@@ -31,15 +31,15 @@ import re
 import sys
 import time
 from collections import Counter
-from pathlib import Path
 
 import httpx
+from _dataset import DATASET
+from _dataset import EXTRACTIONS as _OUT
+from _dataset import SAMPLE as _FIX
 
 from app.backends.local.llm_ollama import OllamaLLM
 from app.extract.extractor import extract
 
-_FIX = Path(__file__).resolve().parent / "fixtures" / "cfpb_sample.jsonl"
-_OUT = Path(__file__).resolve().parent / "fixtures" / "cfpb_extractions.jsonl"
 _BUCKET = 20
 _TOKEN = re.compile(r"[a-z0-9]+")
 
@@ -157,7 +157,9 @@ async def main() -> int:
     n = len(rows)
     from app.extract.prompt import PROMPT_VERSION
 
-    print(f"\n===== REAL-DATA EXTRACTION REPORT (CFPB, n={n}) — Path A ({PROMPT_VERSION}) =====")
+    print(
+        f"\n===== REAL-DATA EXTRACTION REPORT ({DATASET}, n={n}) — Path A ({PROMPT_VERSION}) ====="
+    )
     print(f"json_valid              : {json_ok}/{n} ({json_ok / n:.0%})")
     vo = (value_only_grounded / candidates_all) if candidates_all else 1.0
     print(f"grounding (value)        : {vo:.3f}   (over ALL candidates — vs pre-Path-A 0.941)")
