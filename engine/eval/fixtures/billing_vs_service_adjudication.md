@@ -34,6 +34,48 @@ These are the rows where gold and model disagree on exactly the billing↔servic
 
 ---
 
+## Claude's adversarial read (PROPOSAL ONLY — not gold; your `your call` column above is untouched)
+Read all 23. Sorted by the CORE grievance, which is fold-independent. The decisive fact: **~11 rows are
+credit-report/record-accuracy disputes** ("this item on my report is factually wrong — fix/remove it"),
+which are neither a wrong-charge nor an ordinary service-handling failure. They flip entirely on ONE
+decision (below). I did NOT pick that decision or re-score against it — that is self-grading (§10).
+
+**THE ONE DECISION (resolves ~10–15 of the 23):** where do record-accuracy disputes go?
+- (A) `billing_charge` — your drafted rule. Flips ~10 gold labels to the model's side (model was right).
+- (B) `service_fault` — "failure to keep/correct an accurate record is a handling failure." Gold stands; tune the prompt.
+- (C) a NEW governed category `record_dispute` — cleanest; the honest read of why finance starved the taxonomy. **Claude's rec.** Governed-core change → your call, logged.
+
+| # | id | core grievance (my read) | unambiguous? | if fold=A | if fold=B/C→service |
+|---|---|---|---|---|---|
+| 1 | 24118620 | funds wrongfully removed after refund | **billing (model wrong)** | billing | billing |
+| 2 | 24225751 | fraud claim denied twice — process | service (leans, model right) | service | service |
+| 3 | 24473525 | deceptive overdraft fees | **billing (model wrong)** | billing | billing |
+| 4 | 24491609 | unauth txns + bank won't help refund | service (leans, model right) | service | service |
+| 5 | 24476203 | bank REFUSES to evaluate dispute | **service (model wrong)** | service | service |
+| 6 | 24478374 | paid off, still reports $24k owed | record-accuracy | billing | service/record |
+| 7 | 24479671 | disputed, agency failed to validate | record + validation-fail | billing | service/record |
+| 8 | 24483813 | "inaccurate info on report, remove" | record-accuracy | billing | service/record |
+| 9 | 24490268 | identical to 8 | record-accuracy | billing | service/record |
+| 10 | 24508215 | inaccurate acct added, no validation | record + process | billing | service/record |
+| 11 | 24510840 | dispute accuracy, delete if unverified | record-accuracy | billing | service/record |
+| 12 | 24514281 | re-aging, wrong Date Opened | record-accuracy | billing | service/record |
+| 13 | 24516265 | sent validation notice, no validation | **service (model wrong)** | service | service |
+| 14 | 24520638 | no initial notice, no validation sent | **service (model wrong)** | service | service |
+| 15 | 7448709 | remove inaccurate late payment | record-accuracy | billing | service/record |
+| 16 | 7450437 | reporting me late, never late | record-accuracy | billing | service/record |
+| 17 | 7450469 | owed $6200 refund, got $500 | billing (money owed, model right) | billing | billing |
+| 18 | 7450669 | trip-delay coverage claim $230 | service (claim handling, leans) | service | service |
+| 19 | 7450993 | remove inaccuracies, timely payer | record-accuracy | billing | service/record |
+| 20 | 7451012 | fraudulent line, unauth charges | billing (fraud/charges, model right) | billing | billing |
+| 21 | 7451352 | wants to PAY, jerked around 10 calls | **service (model wrong)** | service | service |
+| 22 | 7452822 | fraud inquiry, CapOne won't respond 6mo | service (leans, model right) | service | service |
+| 23 | 7452911 | settled, balance now shows wrong amount | record/number-wrong | billing | service/record |
+
+**Unambiguous model errors (fold-independent): 6 rows — 1, 3, 5, 13, 14, 21.** Everything else hinges on
+the fold. Fill `your call` (or just tell me the fold letter and I'll apply it) → then the TRUE baseline.
+
+---
+
 ## Narratives
 
 ### 1. 24118620 — gold=`billing_charge` · model=`service_fault`

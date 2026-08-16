@@ -16,6 +16,7 @@ from __future__ import annotations
 import csv
 import json
 import re
+import sys
 from collections import Counter
 
 from _dataset import EXTRACTIONS as _EXTRACTIONS
@@ -43,6 +44,10 @@ def _tokens(s: str) -> set[str]:
 
 
 def main() -> int:
+    # Windows consoles default to cp1252, which can't encode the ≤ / ∅ glyphs below and crashes the
+    # run on its tail (losing the confusion matrix). Force UTF-8 so the whole report always prints.
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8")  # type: ignore[union-attr]
     if not _SHEET.exists():
         print(f"no label sheet at {_SHEET} — run eval/make_label_sheet.py and fill it first.")
         return 1
