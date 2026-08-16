@@ -162,6 +162,33 @@ be corrected (except the two research-backed spec deltas in §6, which supersede
 > Gate-A5 owner recordings (spikes #1/#2). **Standing practice:** commit fixes directly ([[commit-fixes-directly]]).
 > **Status page (private):** https://claude.ai/code/artifact/4c909fb2-b42e-4f3e-96d2-e7367b366635
 
+**UPDATE (2026-08-16, HONEST CORRECTION — accuracy is FAILING on finance (near baseline), NOT "unproven off finance"; confusion matrix + adjudication PENDING OWNER).**
+Owner caught the **5th comfortable reframe** — a standing trap to stop repeating ([[comfortable-reframe-trap]]):
+stop framing failures in the direction that feels better. **The real read:** on the 100-case CFPB gold the
+governed core scores NEAR the majority-class baseline — **severity 66% vs 62% always-"financial_harm" = +4 =
+WORTHLESS; category 60% vs 37% = +23; outcome 63% vs 39%-blank = +24.** §4 gate wants **≥90% category, ≥95%
+governed-core** → we're **~30 pts short on the only domain measured.** **CONFUSION MATRIX (owner-demanded,
+decisive):** 90% of category errors (36/40) are inside the billing/service/access triad; **57% (23) are the
+single `service_fault`↔`billing_charge` pair** the owner wobbled on (19 gold=service→model=billing, 4
+reverse); only 4 scatter. ⟹ CONCENTRATED = a taxonomy-DEFINITION problem (cheap branch), NOT prompt-scatter;
+clean classes (product/delivery/staff/safety) near-perfect. **⇒ ADJUDICATION PENDING OWNER:**
+`eval/fixtures/billing_vs_service_adjudication.md` (23 rows + proposed decision rule + a "your call" column).
+Some of the 19 are **LABEL NOISE not model error** — the credit-report-inaccuracy cluster (7448709 · 7450437
+· 7450993 · 7451012 · 7452822 · 7452911) is `billing_charge`=reporting-problem under the proposed rule →
+MODEL right / gold wrong. **DO NOT tune the prompt until the boundary is adjudicated (tune to TRUTH, not noisy
+labels).** Sequence: owner fills "your call" → update `cfpb_labels.csv` → re-score for the TRUE baseline →
+encode the rule in the category prompt ONLY if real errors remain → then wire dedup live + measure the dup
+rate. **PHASE-4 REFRAME (owner-ranked by cost-of-delay): DO NOT START PHASE 5** (5–9 consume extraction
+output; building elicitation/confidence on a 60% classifier = rebuild). Ranked gaps: **(1+4) dedup is
+built+unit-tested but NEVER RUN LIVE + the duplicate rate is NEVER MEASURED = the moat has never executed
+end-to-end [TOP]**; (2) stats-before-semantics profiling = the published fix for the hallucination mode we're
+exposed to (may be why grounding is softer than 0.941 implies); (3) PII gate = low urgency, unbounded
+liability. **Owner's MISSING-gaps (verified this session):** head-noun list is CLOSED → dedup HAS a merge
+anchor ✓; backfill=re-extraction is implemented+unit-tested+cost-measured but **100%-on-real-history NOT
+measured E2E**; cost/case IS measured ($0 local ~6s, backfill fan-out ~46min); **qualifier-grounding NOT
+separately measured** — the 0.969 is VALUE-only; the qualifier is a 2nd invention site (guarded by
+extractive-null, but unmetered). `origin/main` @ `c6fd79e`.
+
 **UPDATE (2026-08-16, MULTI-DOMAIN SET STOOD UP — the taxonomy was STARVED, not weak; + Phase-4 reframe).**
 Owner: "why is everything financial?!" — because the whole eval was CFPB (financial-only by
 construction). Built a real, non-authored, multi-sector set (§10-Q3): **`eval/fetch_multidomain.py`** →
