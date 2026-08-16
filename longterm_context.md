@@ -18,7 +18,7 @@ see `repo-analysis-remediation.md` and §0.)*
 
 ## 0. Current state & next actions  ← read this first every session; keep it current
 
-> ### ⇢ SESSION HANDOFF — read this box first (updated 2026-08-17, Phase 4 CONVERGENCE CLAIM RETRACTED). The dated UPDATE blocks below are the audit trail (newest first); THIS box is the current truth. Read the 2026-08-17 + 2026-08-16b UPDATE blocks top-down — they are the live frontier.
+> ### ⇢ SESSION HANDOFF — read this box first (updated 2026-08-17b: R0/R7/R3/R1 DONE; R2 shows the composite curve does NOT converge → the real moat piece = emergent head-minting from `other`, still to build). The dated UPDATE blocks below are the audit trail (newest first); THIS box is the current truth. **Read the 2026-08-17b UPDATE block first — it is the live frontier**, then 2026-08-17 (the retraction).
 >
 > **🚩 CONVERGENCE PROOF RETRACTED (2026-08-17, owner + `repo-analysis-remediation.md` R0).** The earlier
 > "Phase 4 the moat — PROVEN, self-converging schema" claim was INVALID and is withdrawn. `HEAD_NOUNS` is a
@@ -177,6 +177,42 @@ see `repo-analysis-remediation.md` and §0.)*
 > test number, track T2) + email drop (needs UAE mailbox) — file-drop is the $0 PoC channel. **Parked:**
 > Gate-A5 owner recordings (spikes #1/#2). **Standing practice:** commit fixes directly ([[commit-fixes-directly]]).
 > **Status page (private):** https://claude.ai/code/artifact/4c909fb2-b42e-4f3e-96d2-e7367b366635
+
+**UPDATE (2026-08-17b, R7+R3+R1 BUILT/TESTED/COMMITTED + R2 MEASURED — the composite curve does NOT bend; the real moat piece (emergent head-minting from `other`) is still MISSING).** `origin/main` @ `68b961d`.
+Executed remediation in dependency order, all verified live (96 tests +1 skip green; NO regression).
+**R7 (determinism):** extraction verified reproducible (greedy temp0, 3 identical runs) + hardened with an
+Ollama `seed` — idempotent replay is a trust-gate. **R3 (hygiene + escape valve), prompt v13:** reopened
+`other` (prefer to force-fitting) → **`other` 0.7% → 11.7%** (R3 target 5–15% HIT); qualifier is a LABEL not
+a value + drop fully-redacted (all-XXXX) values (code guard in extractor). Effect: raw composite variants
+**275 → 189 (−31%)**, qualifier dup rate **17.3% → 6.9%**, hapax 89%→87%. **NO governed-core regression:**
+category 60% (held), outcome 63→65, emotion 71→74, severity 66→64 (re-extraction noise; governed text
+unchanged). Retention 0.66→0.52 is legit hygiene (v12 invented junk qualifiers like `company` on org names;
+v13 nulls them — 104/105 orgs null, correct). **A REAL emergent cluster surfaced in `other`: legal citations**
+(`15 U.S.C. 1692c`, `Fair Debt Collection Practices Act`, `12 CFR 1006.34`; quals `act`/`law`/`regulation`/
+`u_s_code`) — a `regulation`/`statute` head trying to be born. **R1 (dedup LIVE, head-scoped):** built +
+committed + tested end-to-end — `nearest_canonical_field` head anchor, `list_undeduped_variants`,
+`list_promotable_qualifier_variants` (alias-collapsed, pooled support), `dedup_field` head-scoping,
+`dedup_registry` (incremental/idempotent), `dedup_scan` module + `queue.dedup_scan` task + `run_worker`
+scheduler defers dedup BEFORE promote, `promote_qualifiers` gates on pooled canonical support. Tests: head
+anchor (identical vector, different head → NO merge), idempotency, **dedup-prevents-duplicate-promoted-columns**
+end-to-end. (Live worker firing not re-verified E2E this session; mirrors the already-proven promote_scan
+pattern + unit-tested scan fn.)
+**⚠ R2 — THE PIVOTAL FINDING, not spun: even after v13 hygiene + live dedup the composite curve does NOT
+bend.** cfpb raw new-composite/bucket `[22,29,30,38,37,18]` → after-dedup `[21,24,28,35,37,17]`, only 12/174
+merged. **A 6.9% dup rate means ~93% of qualifiers are genuinely DISTINCT data, not synonym sprawl** — so the
+composite (`qualifier_head`) is NOT a convergence unit dedup can bend; qualifiers are DATA and proliferate by
+nature (Path A always said so). This is the remediation's explicit checkpoint ("if the curve doesn't bend
+after dedup, the concept is wrong") firing: **column-level, not composite-level, is the only honest
+convergence unit.** ⟹ **THE REAL MOAT PIECE IS STILL MISSING: minting a NEW head from `other` clusters.**
+Today `other` catches novelty (11.7%, the legal cluster) but `promote.py` can only mark the literal head
+`other` promoted — it CANNOT cluster `other` facts into a new named head (`regulation`). So R3's own
+verification ("confirm ≥1 head promotes from `other`, else §4's central claim fails") WILL FAIL until this is
+built. **NEXT BUILD (the masterpiece move): emergent head-minting — cluster `other` (+`description`) facts by
+value/qualifier embedding; when a cluster recurs ≥N distinct cases, mint a new governed head, re-extract
+history against it (backfill). This is what makes "specialisation is emergent, never seeded" TRUE and
+demonstrable — a `regulation` head emerging from CFPB with zero configuration.** Remaining remediation: R4
+stats-before-semantics (filters the clausal junk still in `other` like "you are in violation"), R5 PII gate,
+R6 record_accuracy category (folds the pending billing↔service adjudication), R7-determinism DONE.
 
 **UPDATE (2026-08-17, CONVERGENCE PROOF RETRACTED — remediation R0 DONE; R0–R7 is now THE plan; do NOT start Phase 5 until R1–R3).**
 Owner + an external repo read (`repo-analysis-remediation.md`, now committed) invalidated the Path-A
