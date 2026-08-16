@@ -18,7 +18,7 @@ see `repo-analysis-remediation.md` and §0.)*
 
 ## 0. Current state & next actions  ← read this first every session; keep it current
 
-> ### ⇢ SESSION HANDOFF — read this box first (updated 2026-08-17b: R0/R7/R3/R1 DONE; R2 shows the composite curve does NOT converge → the real moat piece = emergent head-minting from `other`, still to build). The dated UPDATE blocks below are the audit trail (newest first); THIS box is the current truth. **Read the 2026-08-17b UPDATE block first — it is the live frontier**, then 2026-08-17 (the retraction).
+> ### ⇢ SESSION HANDOFF — read this box first (updated 2026-08-17c: R0/R7/R3/R1/R4 DONE + emergent HEAD-MINTING architecture BUILT+TESTED; the moat's missing piece now exists — live real-data mint verification pending). The dated UPDATE blocks below are the audit trail (newest first); THIS box is the current truth. **Read the 2026-08-17c UPDATE block first — it is the live frontier**, then 2026-08-17b (R2 pivot) and 2026-08-17 (the retraction).
 >
 > **🚩 CONVERGENCE PROOF RETRACTED (2026-08-17, owner + `repo-analysis-remediation.md` R0).** The earlier
 > "Phase 4 the moat — PROVEN, self-converging schema" claim was INVALID and is withdrawn. `HEAD_NOUNS` is a
@@ -177,6 +177,31 @@ see `repo-analysis-remediation.md` and §0.)*
 > test number, track T2) + email drop (needs UAE mailbox) — file-drop is the $0 PoC channel. **Parked:**
 > Gate-A5 owner recordings (spikes #1/#2). **Standing practice:** commit fixes directly ([[commit-fixes-directly]]).
 > **Status page (private):** https://claude.ai/code/artifact/4c909fb2-b42e-4f3e-96d2-e7367b366635
+
+**UPDATE (2026-08-17c, R4 + EMERGENT HEAD-MINTING ARCHITECTURE BUILT + TESTED — the moat's missing piece is now built; live real-data mint verification pending v14 re-extraction).** `origin/main` @ `1907702`.
+Built the two pieces the R2 finding pointed to. **R4 (stats-before-semantics, `app/extract/profile.py`):**
+a deterministic value profiler — discriminator is the FUNCTION-WORD RATIO not length, so it keeps concrete
+values incl. long proper names (legal citations, "Fair Debt Collection Practices Act") and rejects CLAUSES
+("you are in violation") + redaction junk. Extractor drops non-concrete values from the escape-valve heads
+(`other`/`description`) ONLY — content heads keep descriptive values (a symptom is signal). Measured scoped
+drop 4% cfpb / 3% multidomain, all junk. prompt v13→v14 (text unchanged; busts idempotency key). **HEAD-MINTING
+ARCHITECTURE — emergent columns are now BORN, not only seeded:** `minted_head` registry (mig 0011, RLS'd) +
+store api; **per-tenant EFFECTIVE vocabulary** threaded through schema/prompt/extractor (all take `heads`,
+default=seed HEAD_NOUNS so callers unchanged); the extract stage loads seed+minted heads AND folds a
+minted-vocab signature into the idempotency key so minting FORCES re-extraction (re-homes history); `mint_scan`
+(cluster escape-valve facts via BGE at a looser concept-τ, mint a head per cluster recurring ≥PROMOTE_HEAD_N
+cases, LLM-named, fail-safe: name-collision-with-seed → rejected, below-floor → stays in `other`);
+`queue.mint_scan` task + scheduler order **dedup → MINT → promote**; minting re-extracts affected cases.
+**101 tests +1 skip green, NO regression.** Tests: recurring `other` cluster mints a head that joins the
+vocab; below-floor doesn't; seed-collision rejected; R4 profiler unit + escape-valve-scoped filter.
+**PENDING (this session, GPU-bound): (a) cfpb v14 re-extraction (R4 applied) finishing; (b) run
+`eval/spike_head_minting.py` on v14-clean data to confirm the mints are now CLEAN (v13 spike gave garbage
+heads like `miscellaneous_info` from clause junk — R4 should fix that); (c) commit the v14 fixtures. THE
+big live demonstration still to do: full pipeline in the DB (ingest real cases → extract → dedup_scan →
+mint_scan mints `regulation` live → re-extract → cases use it) — architecture is ready + unit-proven, the
+end-to-end worker run is the final proof.** Remaining remediation: R5 PII gate, R6 record_accuracy (folds the
+pending billing↔service adjudication). Then the honest column-level convergence proof (new-head-per-bucket
+INCLUDING minted heads, on data we didn't author) = the 8/10 result.
 
 **UPDATE (2026-08-17b, R7+R3+R1 BUILT/TESTED/COMMITTED + R2 MEASURED — the composite curve does NOT bend; the real moat piece (emergent head-minting from `other`) is still MISSING).** `origin/main` @ `68b961d`.
 Executed remediation in dependency order, all verified live (96 tests +1 skip green; NO regression).
