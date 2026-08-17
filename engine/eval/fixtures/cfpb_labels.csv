@@ -99,3 +99,23 @@ id,product,gold_category,gold_desired_outcome,gold_severity_signal,gold_emotion_
 24359371,"Money transfer, virtual currency, or money service",access_availability,,financial_harm,frustrated,platform=Kraken; holdings locked=17 days with no reason given; price fell substantially during the lock; withdrawal attempted repeatedly while the price was high and refused; funds released only after the fall; over a month of contact with generic responses and no resolution
 24365881,"Money transfer, virtual currency, or money service",service_fault,escalation,financial_harm,frustrated,merchant of record=Google Play; charges described as tens of thousands of dollars; in-app purchase history erased after a game developer ban; bank closed the billing disputes on the basis that services were rendered; itemised receipts and backend transaction data withheld; repeated requests met with timeline extensions; requested=escalation to senior technical compliance and a complete itemised ledger
 24392170,"Money transfer, virtual currency, or money service",access_availability,,financial_harm,frustrated,deposits=$2000 and $1500 on one date and $3000 later; clearing time quoted in working days; hold placed on the account; total held=$7300; deposits still showing pending; resolution attempts unsuccessful
+24532811,Debt collection,service_fault,,,,
+24532000,Debt collection,service_fault,,,,
+24531589,Debt collection,record_accuracy,,,,
+24528862,Debt collection,record_accuracy,,,,
+24527193,Debt collection,billing_charge,,,,
+7453368,Credit card or prepaid card,service_fault,,,,
+7452938,Credit card or prepaid card,billing_charge,,,,
+7453024,Credit card or prepaid card,other,,,,
+7453081,Credit card or prepaid card,service_fault,,,,
+7453257,Credit card or prepaid card,service_fault,,,,
+24534915,Checking or savings account,billing_charge,,,,
+24533041,Checking or savings account,billing_charge,,,,
+24530790,Checking or savings account,access_availability,,,,
+24527724,Checking or savings account,service_fault,,,,
+24525732,Checking or savings account,service_fault,,,,
+24520324,"Money transfer, virtual currency, or money service",service_fault,,,,
+24484895,"Money transfer, virtual currency, or money service",service_fault,,,,
+24482050,"Money transfer, virtual currency, or money service",service_fault,,,,
+24466200,"Money transfer, virtual currency, or money service",billing_charge,,,,
+24456695,"Money transfer, virtual currency, or money service",billing_charge,,,,
