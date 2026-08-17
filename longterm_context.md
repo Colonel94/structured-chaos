@@ -265,16 +265,14 @@ cease-and-desist → service EVEN IF an account is named). Result (CFPB n=100, n
 (24134219 conduct-framed fraud; 24186443 access→delivery unrelated). Kept v16 (owner). Scorers built:
 `eval/score_r6_matrix.py` (the 4-number matrix), `score_v15_v16.py` (v15↔v16 per-category), `score_combined.py`
 (the ~200 combined). v15/v14 extractions preserved (`cfpb_extractions_v15.jsonl`, `*_v14.jsonl`).
-**⇒ IN PROGRESS — FINISH THIS FIRST NEXT SESSION (grow gold toward 200):** two background jobs were running at
-handoff — (a) a subagent labelling the **20 unlabelled CFPB** cases (sample has 120, only 100 labelled) with the
-v16 rule+anchors → its output must be MERGED into `cfpb_labels.csv` (→120); (b) **multidomain re-extraction at
-v16** (`/tmp/md_v16.log`, writes `multidomain_extractions.jsonl`) so the 96 already-labelled multidomain rows
-score against the current prompt. **COMPLETION STEPS:** 1) confirm both finished (check the labeler's returned
-20 labels; `grep REPORT /tmp/md_v16.log`); 2) merge the 20 labels into cfpb_labels.csv (keep other columns; the
-20 predictions ALREADY exist in `cfpb_extractions.jsonl` at v16); 3) `uv run python eval/score_combined.py` →
-the **216-row cross-domain gold** number (CFPB 120 + multidomain 96), per-domain + pooled, with majority
-baselines; 4) commit gold + report. If the subagent's labels didn't come back, re-spawn the labeler (same prompt:
-label the 20 cfpb_sample ids not in cfpb_labels.csv, v16 three-way rule + service↔record discriminator).
+**⇒ GOLD GROWN — CFPB 100→120 DONE (committed `77a6c7c`):** labelled the 20 extra cases (subagent, v16 rule).
+**CFPB-120 v16 category accuracy = 96/120 = 80% (majority 26%, +54); record_accuracy 31/31 (perfect on the
+expanded set).** New CFPB-120 dist: billing 31 / record 31 / service 30 / access 22 (balanced). Dip 82→80 is the
+harder new 20 (10 service_fault), honest not regression. **ONE STEP LEFT (trivial): the combined 216-row
+cross-domain number.** Multidomain was re-extracting at v16 at handoff (`/tmp/md_v16.log` → `multidomain_
+extractions.jsonl`); once `grep REPORT /tmp/md_v16.log` shows done, run `uv run python eval/score_combined.py`
+→ prints CFPB-120 + multidomain-96 + pooled 216 with majority baselines; commit + report. (If md v16 didn't
+finish, just re-run `EVAL_DATASET=multidomain uv run python eval/run_extraction.py` first.)
 **Generalisation stands: record_accuracy is finance-weighted (2/96 off finance).** Then: to push category past
 82%, more gold + settle service↔access + owner spot-check of the ~9 contestable service↔record rows; OR move to
 Phase 5 (elicitation) now extraction is at 82% not 60%. 14 migrations, 104 tests +1 skip, prompt extract-v16.
