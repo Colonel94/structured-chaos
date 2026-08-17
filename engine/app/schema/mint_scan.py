@@ -97,22 +97,31 @@ async def mint_for_tenant(
     if len(facts) < PROMOTE_HEAD_N:
         return []
 
-    vecs = await embedder.embed([v for _c, v in facts])
-    centroids: list[list[float]] = []
-    members: list[list[int]] = []
-    for i, v in enumerate(vecs):
-        best, best_sim = -1, -1.0
-        for ci, cen in enumerate(centroids):
-            s = _cos(list(v), cen)
-            if s > best_sim:
-                best, best_sim = ci, s
-        if best_sim >= tau:
-            members[best].append(i)
-            n = len(members[best])
-            centroids[best] = [(c * (n - 1) + x) / n for c, x in zip(centroids[best], v, strict=True)]
-        else:
-            centroids.append(list(v))
-            members.append([i])
+    vecs = [list(v) for v in await embedder.embed([v for _c, v in facts])]
+    # Connected-components clustering on the similarity graph (union-find): two facts LINK if cosine ≥
+    # tau, and a cluster is a connected component. This is order-independent and TRANSITIVE, so a
+    # semantically-coherent but lexically-diverse concept — legal citations spanning cos 0.45–0.77 —
+    # stays ONE cluster even when some pairs fall below tau (which greedy single-centroid clustering
+    # fragments). An outlier linking to nothing stays a correct singleton. O(n²) over the bounded
+    # escape-valve set. (2026-08-17c: greedy fragmented the citation cluster in the live E2E demo.)
+    parent = list(range(len(facts)))
+
+    def _find(x: int) -> int:
+        while parent[x] != x:
+            parent[x] = parent[parent[x]]
+            x = parent[x]
+        return x
+
+    for i in range(len(facts)):
+        for j in range(i + 1, len(facts)):
+            if _cos(vecs[i], vecs[j]) >= tau:
+                ri, rj = _find(i), _find(j)
+                if ri != rj:
+                    parent[ri] = rj
+    comps: dict[int, list[int]] = {}
+    for i in range(len(facts)):
+        comps.setdefault(_find(i), []).append(i)
+    members: list[list[int]] = list(comps.values())
 
     existing = frozenset(normalise_token(h) for h in HEAD_NOUNS) | frozenset(
         api.list_minted_heads(session)
