@@ -213,11 +213,21 @@ greedy fragmented the citation concept (spans cos 0.45–0.77) below the floor; 
 MINT_TAU, outliers ("12 CFR") stay correct singletons.** Infra note: the compose db was stuck at mig 0010 (the
 `migrate` container runs a STALE image without 0011/0012) — apply new migrations to the compose db from host via
 `POSTGRES_ADMIN_PASSWORD=change_me_admin_local uv run python -m app.init_db`, or rebuild the migrate image.
-**Remaining (next session):** re-extract multidomain to v14 (still v13); R5 PII gate; R6 record_accuracy (folds
-the pending billing↔service adjudication); then the honest column-level convergence proof (new-head-per-bucket
-INCLUDING minted heads, on data we didn't author) = the 8/10 result. NOTE: minting is threshold/fuel-sensitive
-at small n — robust emergence wants the 200+ corpus or a cluster-coherence gate; do NOT over-tune MINT_TAU on
-one dataset (self-grading, §10). 102-ish tests green (profile+mint+dedup added this session); 12 migrations.
+**✅ R5 PII GATE DONE (`app/schema/pii.py`, mig 0013, 104 tests green):** protected data never becomes governed
+schema, at BOTH paths. Deterministic-first classifier — SSN/Luhn-card patterns in values + a curated keyword
+set on the concept NAME that excludes every seed HEAD_NOUNS word (so condition/status/amount are never
+false-flagged, asserted). Minting: the naming LLM call also returns a semantic `protected?` read; deterministic
+OR llm flags → the concept is RECORDED with its sensitivity but BARRED from the vocab (list_minted_heads
+excludes it) + not re-homed. Promotion: promote_heads/qualifiers skip + flag a protected concept. Categories:
+health/government_id/payment_card/biometric/credentials. **Multidomain re-extracted to v14 (done, `40b09a6`).**
+**Remaining (next session):** R6 record_accuracy — **GATED on the owner's billing↔service adjudication fold
+decision (A/B/C; Claude rec = C new category); a governed-core change halts for the owner (§4/§10), so it's
+the one plan item that needs you.** Then the honest column-level convergence proof (new-COLUMN-per-bucket where
+column = seed-head-used + minted + promoted-qualifier, + the <5% duplicate rate, on data we didn't author) =
+the 8/10 result — buildable now, but note at n=120 the emergent additions are thin (mint ~1-2, promote ~0-2),
+so honest framing is "column set bounded + settling; the EARNED additions are few but real (regulatory_reference
+minted live)", NOT a dramatic bend. Robust emergence wants the 200+ corpus. Do NOT over-tune MINT_TAU (§10).
+13 migrations; scans order dedup→mint→promote.
 
 **UPDATE (2026-08-17b, R7+R3+R1 BUILT/TESTED/COMMITTED + R2 MEASURED — the composite curve does NOT bend; the real moat piece (emergent head-minting from `other`) is still MISSING).** `origin/main` @ `68b961d`.
 Executed remediation in dependency order, all verified live (96 tests +1 skip green; NO regression).
