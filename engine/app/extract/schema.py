@@ -20,11 +20,22 @@ from collections.abc import Sequence
 from .head_nouns import HEAD_NOUNS
 
 # Universal starter taxonomy (GOVERNED-CORE-SCHEMA §2) — hierarchical archetypes + UNCLEAR.
+# `record_accuracy` added 2026-08-17 (owner decision R6, option C): a record the company holds/publishes
+# about the customer is inaccurate/unverified/improperly disclosed/improperly dated — the ask is
+# verify/correct/delete, not money (billing) or conduct (service). 15 of 23 boundary errors were this
+# missing third thing.
+#   GENERALISATION VERDICT (owner requirement, measured 2026-08-17): FINANCE-WEIGHTED, not universal-
+#   frequency. It occurs off finance (real analogues exist → NOT a seeded industry field, §4-safe: a
+#   wrong house-number held on record, a booking confirmation with wrong dates) but is RARE there — the
+#   96-row multi-domain gold has 2/96 = 2% record_accuracy vs 29/100 = 29% on CFPB. So it earns its
+#   place in the universal core (genuine cross-domain concept) but is concentrated in record-keeping-
+#   heavy domains (finance, credit). Treat as universal-but-finance-weighted, never as finance-only.
 TAXONOMY: tuple[str, ...] = (
     "product_fault",
     "service_fault",
     "delivery_fulfilment",
     "billing_charge",
+    "record_accuracy",
     "access_availability",
     "staff_conduct",
     "safety_health",

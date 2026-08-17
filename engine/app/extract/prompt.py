@@ -13,7 +13,7 @@ from collections.abc import Sequence
 from .head_nouns import HEAD_NOUNS
 
 # Bump on any change to the prompt text below.
-PROMPT_VERSION = "extract-v14"  # v14 (remediation R4, stats-before-semantics): the extractor now drops CLAUSE/junk values from the escape-valve heads (`other`/`description`) via the deterministic profiler (app/extract/profile.py) so head-minting clusters on concrete facts, not narrative. Prompt TEXT is unchanged from v13; the version bump busts the idempotency key so the live pipeline re-extracts under the new storage behaviour. v13 was: reopen `other`, qualifier-is-a-label, drop fully-redacted.
+PROMPT_VERSION = "extract-v15"  # v15 (owner R6, option C): add the `record_accuracy` category (a record the company holds/publishes about the customer is wrong → verify/correct/delete, NOT money or conduct) + the three-way billing/service/record rule, the fraud sub-rule, and the primary-ask tiebreak. This is the taxonomy fix for the 57%-of-errors billing↔service boundary. v14 was R4 stats-before-semantics (escape-valve clause filter).
 
 _SYSTEM = """You extract a structured complaint case from a customer message. Extract ONLY what the \
 message states or directly implies. NEVER invent facts, names, numbers, or outcomes.
@@ -22,11 +22,17 @@ Fields:
 - category: the SINGLE best archetype (universal, domain-agnostic — the same list serves a bakery \
 and a bank). Definitions:
     product_fault = a physical item/product is defective or poor quality;
-    service_fault = a service was done wrong, mishandled, delayed by the provider, or not as promised \
-(includes a company mishandling a dispute, request, claim, or account);
+    service_fault = the company MISHANDLED, ignored, delayed, or botched a request, dispute, or claim. \
+The dispute is about CONDUCT or PROCESS — not the money, not the record. (jerked me around, never \
+responded, refused to investigate, failed to act);
     delivery_fulfilment = a problem with delivery, shipping, or fulfilment of an order;
-    billing_charge = a disputed charge, fee, overcharge, debt, refund, or billing/payment/reporting \
-problem;
+    billing_charge = a specific CHARGE, fee, amount, or balance is WRONG. The dispute is about THE \
+NUMBER (an overcharge, a fee, a debt wrongly owed, money to be returned);
+    record_accuracy = a RECORD the company holds or publishes ABOUT THE CUSTOMER is inaccurate, \
+unverified, improperly disclosed, or improperly dated — a credit file entry, a tradeline, a reported \
+balance, a late marker, an account status. The ask is VERIFY / CORRECT / DELETE, not money. ("this is \
+falsely reporting on my credit", "remove this inaccurate item", "validate this debt", "re-aged / wrong \
+date opened");
     access_availability = trouble accessing or using an account, funds, or service (locked, frozen, \
 closed, blocked, unavailable);
     staff_conduct = the behaviour/conduct of a specific person or agent is the complaint;
@@ -34,6 +40,10 @@ closed, blocked, unavailable);
     other = a real complaint that genuinely fits none of the above.
   Pick the least-bad fit. Use "UNCLEAR" ONLY when the message is too sparse to tell what kind of \
 complaint it is at all — a true last resort, NOT because the wording is unusual for the category.
+  FRAUD SUB-RULE: an unauthorised transaction is a wrong charge -> billing_charge, UNLESS the \
+customer's own framing is about the company's CONDUCT rather than the money (then service_fault).
+  TIEBREAK (classify by the PRIMARY ask): money back -> billing_charge; fix/correct/delete my file or \
+record -> record_accuracy; stop jerking me around / you never acted -> service_fault.
 - fault: one sentence — what specifically went wrong, grounded in the message.
 - desired_outcome: what the customer wants done — but ONLY if they explicitly ask for it. Decide \
 first: did they actually state a request or instruction (e.g. "I want a refund", "please reverse \
