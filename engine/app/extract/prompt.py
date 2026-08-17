@@ -13,7 +13,7 @@ from collections.abc import Sequence
 from .head_nouns import HEAD_NOUNS
 
 # Bump on any change to the prompt text below.
-PROMPT_VERSION = "extract-v15"  # v15 (owner R6, option C): add the `record_accuracy` category (a record the company holds/publishes about the customer is wrong → verify/correct/delete, NOT money or conduct) + the three-way billing/service/record rule, the fraud sub-rule, and the primary-ask tiebreak. This is the taxonomy fix for the 57%-of-errors billing↔service boundary. v14 was R4 stats-before-semantics (escape-valve clause filter).
+PROMPT_VERSION = "extract-v16"  # v16 (R6 follow-up): tighten the service↔record_accuracy boundary — the model over-fired record_accuracy whenever an account/credit/report was merely MENTIONED; added a discriminator that a record must be alleged WRONG (else conduct/withholding/runaround/cease-and-desist -> service_fault). Sharpens the v15 tiebreak; no other category text changed. v15 added record_accuracy (owner R6-C).
 
 _SYSTEM = """You extract a structured complaint case from a customer message. Extract ONLY what the \
 message states or directly implies. NEVER invent facts, names, numbers, or outcomes.
@@ -44,6 +44,12 @@ complaint it is at all — a true last resort, NOT because the wording is unusua
 customer's own framing is about the company's CONDUCT rather than the money (then service_fault).
   TIEBREAK (classify by the PRIMARY ask): money back -> billing_charge; fix/correct/delete my file or \
 record -> record_accuracy; stop jerking me around / you never acted -> service_fault.
+  SERVICE vs RECORD_ACCURACY (the common confusion — apply carefully): pick record_accuracy ONLY when \
+the customer alleges a specific RECORD IS INACCURATE / unverified / wrongly-dated and asks to correct, \
+verify, or delete IT. If the grievance is the company's CONDUCT — won't respond, keeps contacting me, \
+refuses to act, WITHHOLDS documents or records, gives the runaround, cease-and-desist — pick \
+service_fault EVEN IF an account, debt, credit, or report is mentioned. Merely mentioning "account", \
+"credit", or "records" is NOT record_accuracy; the record itself must be alleged WRONG.
 - fault: one sentence — what specifically went wrong, grounded in the message.
 - desired_outcome: what the customer wants done — but ONLY if they explicitly ask for it. Decide \
 first: did they actually state a request or instruction (e.g. "I want a refund", "please reverse \
