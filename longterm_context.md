@@ -222,12 +222,22 @@ excludes it) + not re-homed. Promotion: promote_heads/qualifiers skip + flag a p
 health/government_id/payment_card/biometric/credentials. **Multidomain re-extracted to v14 (done, `40b09a6`).**
 **Remaining (next session):** R6 record_accuracy — **GATED on the owner's billing↔service adjudication fold
 decision (A/B/C; Claude rec = C new category); a governed-core change halts for the owner (§4/§10), so it's
-the one plan item that needs you.** Then the honest column-level convergence proof (new-COLUMN-per-bucket where
-column = seed-head-used + minted + promoted-qualifier, + the <5% duplicate rate, on data we didn't author) =
-the 8/10 result — buildable now, but note at n=120 the emergent additions are thin (mint ~1-2, promote ~0-2),
-so honest framing is "column set bounded + settling; the EARNED additions are few but real (regulatory_reference
-minted live)", NOT a dramatic bend. Robust emergence wants the 200+ corpus. Do NOT over-tune MINT_TAU (§10).
-13 migrations; scans order dedup→mint→promote.
+the one plan item that needs you.** **✅ COLUMN-LEVEL CONVERGENCE PROOF DONE (`eval/run_column_convergence.py`, real dedup+mint logic, combined
+n=216):** measures the COLUMN a reviewer sees (seed-head-used + minted + promoted-qualifier), separating the
+bounded seed enumeration (DIAGNOSTIC, declines by construction) from EARNED columns (the real signal). Result:
+**31 total columns (28 seed + 3 earned) across 216 mixed-domain cases; earned curve `[0,2,0,1,0,0,0,0,0,0,0]`
+PLATEAUS** (0 new earned in the last 140 cases). **Honest framing (comfortable-reframe check applied): the
+bucket count ALONE can't distinguish this plateau from noise (random `other` rarely clusters ≥4); what proves
+it's real convergence is that the earned columns are SEMANTICALLY coherent — the E2E demo minted a genuine
+`regulatory_reference`. So: schema is BOUNDED + SETTLES with a small, REAL emergent layer — NOT that emergence
+is rich (3 earned columns is thin; §4's full weight wants a corpus with richer recurring novelty).** This is
+the honest §4 gate R0 pointed to, no longer the retracted head-noun tautology.
+**⇒ ONLY REMAINING PLAN ITEM: R6 record_accuracy — GATED ON THE OWNER'S billing↔service adjudication fold
+(A=billing / B=service / C=new `record_accuracy` category; Claude rec = C). A governed-core taxonomy change
+halts for the owner (§4/§10). Everything else in the remediation (R0/R1/R3/R4/R5/R7 + head-minting + both live
+demos + convergence proof) is DONE + verified.** 13 migrations; scans order dedup→mint→promote; 104 tests +1
+skip. Score has moved 4/10 → the moat mechanism is now built, verified end-to-end, and honestly measured;
+the remaining lift is data scale (200+ richer corpus) + the owner's R6 fold, not architecture.
 
 **UPDATE (2026-08-17b, R7+R3+R1 BUILT/TESTED/COMMITTED + R2 MEASURED — the composite curve does NOT bend; the real moat piece (emergent head-minting from `other`) is still MISSING).** `origin/main` @ `68b961d`.
 Executed remediation in dependency order, all verified live (96 tests +1 skip green; NO regression).
