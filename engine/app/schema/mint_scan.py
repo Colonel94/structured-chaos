@@ -33,6 +33,7 @@ from ..extract.profile import profile_value
 from ..obs.logging import get_logger
 from ..store import api
 from ..store.db import SessionFactory, admin_session, tenant_session
+from . import pii
 from .promote import PROMOTE_HEAD_N
 
 log = get_logger(__name__)
@@ -43,8 +44,18 @@ MINT_TAU = 0.55
 
 _NAME_SCHEMA: dict[str, object] = {
     "type": "object",
-    "properties": {"head": {"type": "string"}, "gloss": {"type": "string"}},
-    "required": ["head", "gloss"],
+    "properties": {
+        "head": {"type": "string"},
+        "gloss": {"type": "string"},
+        # The semantic PII layer: does this column hold PROTECTED personal data? Catches the nuanced
+        # cases the deterministic keyword floor misses (a cluster of disease names named "ailment").
+        "protected": {"type": "boolean"},
+        "protected_category": {
+            "type": "string",
+            "enum": ["none", "health", "government_id", "payment_card", "biometric", "credentials"],
+        },
+    },
+    "required": ["head", "gloss", "protected", "protected_category"],
 }
 
 # Names that must never be minted (would collide with the escape valve or be meaningless).
@@ -60,29 +71,39 @@ def _cos(a: Sequence[float], b: Sequence[float]) -> float:
 
 async def _name_cluster(
     llm: LLMBackend, examples: list[str], existing: frozenset[str]
-) -> tuple[str, str] | None:
-    """One LLM call: propose a single snake_case head naming the cluster AND a short gloss (what belongs
-    in it). The gloss is essential — it goes into the extraction prompt so the model actually routes
-    facts to the minted head instead of `other` (2026-08-17c live finding). Returns ``(name, gloss)``,
-    or None if the name collides / is forbidden / the call fails (fail safe → don't mint)."""
+) -> tuple[str, str, str] | None:
+    """One LLM call: propose a single snake_case head naming the cluster, a short gloss (what belongs
+    in it), AND whether it holds PROTECTED data. The gloss is essential — it goes into the extraction
+    prompt so the model actually routes facts to the minted head (2026-08-17c live finding). Returns
+    ``(name, gloss, sensitivity)`` where sensitivity is a PII category or ``none``; None if the name
+    collides / is forbidden / the call fails (fail safe → don't mint)."""
     sample = "; ".join(f'"{e}"' for e in examples[:6])
     prompt = (
         "These facts were extracted from customer complaints and did not fit any existing column, but "
         "they are all the SAME kind of thing. Propose a SINGLE snake_case noun naming the column that "
-        "would hold them all (e.g. regulation, warranty, symptom, coverage), AND a short gloss (one "
-        "clause) describing what belongs in that column. The name MUST NOT be any of these existing "
-        f"columns: {', '.join(sorted(existing))}.\nFacts: {sample}\n"
-        'Answer JSON: {"head": "<one snake_case noun>", "gloss": "<short definition>"}.'
+        "would hold them all (e.g. regulation, warranty, symptom, coverage), a short gloss (one clause) "
+        "describing what belongs in it, and whether the column would hold PROTECTED personal data (a "
+        "health condition, a government ID, a payment-card number, a biometric, or a credential). The "
+        f"name MUST NOT be any of these existing columns: {', '.join(sorted(existing))}.\n"
+        f"Facts: {sample}\n"
+        'Answer JSON: {"head": "<one snake_case noun>", "gloss": "<short definition>", '
+        '"protected": <true|false>, "protected_category": "<none|health|government_id|payment_card|'
+        'biometric|credentials>"}.'
     )
     try:
         obj = json.loads(await llm.complete(prompt, schema=_NAME_SCHEMA))
         name = normalise_token(str(obj.get("head", "")))
         gloss = str(obj.get("gloss", "")).strip()
+        llm_sens = str(obj.get("protected_category", "none")) if obj.get("protected") else pii.NONE
     except Exception:  # noqa: BLE001 — a naming failure must not mint garbage
         return None
     if name in _FORBIDDEN or name in existing:
         return None
-    return name, gloss or name
+    # Combine the deterministic floor (name + values) with the LLM's semantic read; either flags → block.
+    sens = pii.classify_sensitivity(name, examples)
+    if sens == pii.NONE and llm_sens and llm_sens != pii.NONE:
+        sens = llm_sens
+    return name, gloss or name, sens
 
 
 async def mint_for_tenant(
@@ -136,15 +157,22 @@ async def mint_for_tenant(
         named = await _name_cluster(llm, examples, existing)
         if named is None:
             continue
-        name, gloss = named
+        name, gloss, sensitivity = named
+        # Record every minted concept (audit), but a PROTECTED one is stored with its sensitivity flag
+        # and BARRED from the vocabulary (list_minted_heads excludes it) — protected data never becomes
+        # a first-class column (R5). It stays in `other`, and its cases are NOT re-homed.
         api.register_minted_head(
             session,
             head=name,
             support=len(cases),
             gloss=gloss,
             source=f"other_cluster: {examples[:3]}",
+            sensitivity=None if sensitivity == pii.NONE else sensitivity,
         )
-        existing = existing | {name}  # two clusters can't mint the same name in one scan
+        existing = existing | {name}  # reserve the name (two clusters can't mint it; nor can a re-scan)
+        if sensitivity != pii.NONE:
+            log.info("mint.blocked_sensitive", head=name, sensitivity=sensitivity, support=len(cases))
+            continue  # blocked — not added to the vocab, not re-homed
         minted.append((name, len(cases), cases))
         log.info("mint.head", head=name, support=len(cases))
     return minted

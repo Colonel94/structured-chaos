@@ -26,6 +26,7 @@ from sqlalchemy.orm import Session
 from ..extract.head_nouns import split_qualifier
 from ..obs.logging import get_logger
 from ..store import api
+from . import pii
 
 log = get_logger(__name__)
 
@@ -58,6 +59,12 @@ def promote_heads(session: Session) -> list[PromotedConcept]:
     out: list[PromotedConcept] = []
     for head, support, already in api.list_emergent_heads(session):
         if support >= PROMOTE_HEAD_N:
+            sens = pii.classify_sensitivity(head)
+            if sens != pii.NONE:  # protected data never enters the governed layer (R5)
+                if not already:
+                    api.set_head_sensitivity(session, head=head, sensitivity=sens)
+                    log.info("promote.blocked_sensitive", head=head, sensitivity=sens)
+                continue
             if not already:
                 api.mark_head_promoted(session, head=head)
                 log.info("promote.head", head=head, support=support)
@@ -78,6 +85,12 @@ def promote_qualifiers(session: Session) -> list[PromotedConcept]:
         if head not in promoted_heads:
             continue  # a qualifier can only split under a promoted head — no orphan variants
         if support >= PROMOTE_QUALIFIER_M:
+            sens = pii.classify_sensitivity(fname)
+            if sens != pii.NONE:  # a protected qualifier never splits into a governed column (R5)
+                if not already:
+                    api.set_field_sensitivity(session, canonical_hash=fhash, sensitivity=sens)
+                    log.info("promote.blocked_sensitive_qualifier", field=fname, sensitivity=sens)
+                continue
             if not already:
                 api.mark_field_promoted(session, canonical_hash=fhash)
                 log.info("promote.qualifier", field=fname, head=head, support=support)

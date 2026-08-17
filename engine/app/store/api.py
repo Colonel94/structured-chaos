@@ -386,49 +386,94 @@ def list_escape_valve_facts(
 
 
 def register_minted_head(
-    session: Session, *, head: str, support: int, gloss: str | None = None, source: str | None = None
+    session: Session,
+    *,
+    head: str,
+    support: int,
+    gloss: str | None = None,
+    source: str | None = None,
+    sensitivity: str | None = None,
 ) -> None:
     """Register (or refresh) a minted head — a NEW emergent column born from an `other` cluster, not in
     the seed ``HEAD_NOUNS``. ``gloss`` is the one-line definition injected into the extraction prompt so
     the model actually routes facts to it (without it a minted head is dead — 2026-08-17c live finding).
-    Upsert on ``(tenant_id, head)`` so a re-scan updates support/gloss idempotently. This is what
-    extends the tenant's extraction vocabulary (``effective_heads``)."""
+    ``sensitivity`` (PII gate, R5): a non-``none`` value RECORDS that the concept holds protected data
+    (health/id/card/…); such heads are stored for audit but EXCLUDED from the extraction vocabulary
+    (``list_minted_heads``) so protected data never becomes a first-class column. Upsert on
+    ``(tenant_id, head)`` so a re-scan updates idempotently."""
     session.execute(
         text(f"""
-            INSERT INTO minted_head (tenant_id, head, support_count, gloss, source)
-            VALUES ({_GUC_TENANT}, :head, :support, :gloss, :source)
+            INSERT INTO minted_head (tenant_id, head, support_count, gloss, source, sensitivity)
+            VALUES ({_GUC_TENANT}, :head, :support, :gloss, :source, :sensitivity)
             ON CONFLICT (tenant_id, head) DO UPDATE
                 SET support_count = EXCLUDED.support_count,
                     gloss = COALESCE(EXCLUDED.gloss, minted_head.gloss),
                     source = COALESCE(EXCLUDED.source, minted_head.source),
+                    sensitivity = EXCLUDED.sensitivity,
                     updated_at = now()
             """),
-        {"head": head, "support": support, "gloss": gloss, "source": source},
+        {"head": head, "support": support, "gloss": gloss, "source": source, "sensitivity": sensitivity},
     )
 
 
 def list_minted_heads(session: Session) -> list[str]:
-    """This tenant's minted head names — appended to the seed ``HEAD_NOUNS`` to form the effective
-    extraction vocabulary. RLS-scoped."""
-    rows = session.execute(text("SELECT head FROM minted_head ORDER BY head")).all()
+    """This tenant's NON-SENSITIVE minted head names — appended to the seed ``HEAD_NOUNS`` to form the
+    effective extraction vocabulary. Heads the PII gate flagged (health/id/card/…) are EXCLUDED so
+    protected data never becomes a first-class column (R5). RLS-scoped."""
+    rows = session.execute(
+        text(
+            "SELECT head FROM minted_head "
+            "WHERE sensitivity IS NULL OR sensitivity = 'none' ORDER BY head"
+        )
+    ).all()
     return [str(r[0]) for r in rows]
 
 
 def list_minted_head_glosses(session: Session) -> dict[str, str]:
-    """``head → gloss`` for this tenant's minted heads — injected into the prompt so the model knows
-    when to use each emerged column. Heads with no gloss fall back to their name. RLS-scoped."""
+    """``head → gloss`` for this tenant's NON-SENSITIVE minted heads — injected into the prompt so the
+    model knows when to use each emerged column. Excludes PII-gated heads (R5). RLS-scoped."""
     rows = session.execute(
-        text("SELECT head, COALESCE(gloss, head) FROM minted_head ORDER BY head")
+        text(
+            "SELECT head, COALESCE(gloss, head) FROM minted_head "
+            "WHERE sensitivity IS NULL OR sensitivity = 'none' ORDER BY head"
+        )
     ).all()
     return {str(r[0]): str(r[1]) for r in rows}
 
 
-def list_minted_heads_detail(session: Session) -> list[tuple[str, int, str | None]]:
-    """``(head, support_count, source)`` for observability. RLS-scoped."""
+def list_minted_heads_detail(session: Session) -> list[tuple[str, int, str | None, str | None]]:
+    """``(head, support_count, source, sensitivity)`` for observability — includes PII-gated heads so a
+    reviewer can see what was blocked and why. RLS-scoped."""
     rows = session.execute(
-        text("SELECT head, support_count, source FROM minted_head ORDER BY support_count DESC, head")
+        text(
+            "SELECT head, support_count, source, sensitivity "
+            "FROM minted_head ORDER BY support_count DESC, head"
+        )
     ).all()
-    return [(str(r[0]), int(r[1]), (str(r[2]) if r[2] is not None else None)) for r in rows]
+    return [
+        (str(r[0]), int(r[1]), (str(r[2]) if r[2] else None), (str(r[3]) if r[3] else None))
+        for r in rows
+    ]
+
+
+def set_head_sensitivity(session: Session, *, head: str, sensitivity: str) -> None:
+    """Flag an emergent HEAD as holding protected data (PII gate, R5) — recorded so promotion skips it
+    and a reviewer sees why. RLS-scoped."""
+    session.execute(
+        text("UPDATE emergent_head SET sensitivity = :s, updated_at = now() WHERE head = :head"),
+        {"s": sensitivity, "head": head},
+    )
+
+
+def set_field_sensitivity(session: Session, *, canonical_hash: str, sensitivity: str) -> None:
+    """Flag an emergent QUALIFIER variant as holding protected data (PII gate, R5). RLS-scoped."""
+    session.execute(
+        text(
+            "UPDATE emergent_field SET sensitivity = :s, updated_at = now() "
+            "WHERE field_name_hash = :h"
+        ),
+        {"s": sensitivity, "h": canonical_hash},
+    )
 
 
 # ------------------------------------------------------- Path A: retroactive backfill (STAGE 6)

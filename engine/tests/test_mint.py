@@ -48,14 +48,24 @@ class _FakeEmbedder:
 
 
 class _NameLLM:
-    def __init__(self, name: str, gloss: str = "a learned column") -> None:
+    def __init__(
+        self, name: str, gloss: str = "a learned column", protected_category: str = "none"
+    ) -> None:
         self._name = name
         self._gloss = gloss
+        self._cat = protected_category
 
     async def complete(self, prompt: str, *, schema: dict[str, object] | None = None) -> str:
         import json
 
-        return json.dumps({"head": self._name, "gloss": self._gloss})
+        return json.dumps(
+            {
+                "head": self._name,
+                "gloss": self._gloss,
+                "protected": self._cat != "none",
+                "protected_category": self._cat,
+            }
+        )
 
 
 def _attest_other(session: Session, *, value: str, case_id: object, head: str = "other") -> None:
