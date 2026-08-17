@@ -13,7 +13,7 @@ from collections.abc import Sequence
 from .head_nouns import HEAD_NOUNS
 
 # Bump on any change to the prompt text below.
-PROMPT_VERSION = "extract-v19"  # v19 (off-finance discriminators, iteration 3 = synthesis): the two boundaries proved independent — v17 fixed safety (recall 11->15/17) but v18's safety tightening over-corrected into under-firing (back to 10/17), while v18 fixed delivery (service->delivery errors 8->4) that v17 barely touched. v19 keeps v17's recall-preserving SAFETY block (+ a one-line scam/fraud carve-out that killed v17's worst false-positive) AND v18's strict goods-logistics-only DELIVERY block — the best-performing general rule for each. No eval-case-specific examples (no test-set overfitting). No enum change; finance boundaries unchanged. v18 fixed delivery/broke safety; v17 first off-finance probe; v16 tightened service↔record_accuracy; v15 added record_accuracy (owner R6-C).
+PROMPT_VERSION = "extract-v20"  # v20 (STRUCTURAL FIX, owner directive): service_fault was defined by CONDUCT, and conduct is present in EVERY complaint, so it bled into every category (lowest recall while posing as a peer). Fix = make service_fault EXPLICITLY RESIDUAL ("mishandled AND no other category's primary harm applies; the conduct itself is the harm"), and add the dominance rule THE BLOCK WINS — access_availability is a checkable STATE (blocked/frozen/closed/declined/withheld) and beats arguable service conduct when both apply; pure refusal with no block -> service_fault. Right for the product too (a block drives SLA/priority regardless of conduct). INTEGRITY: this rule is defensible on its own terms and was fixed BEFORE re-scoring; it will TRADE errors — if accuracy drops it STAYS (reverting on a fallen score = the 7th cheap-path instance). This is the LAST category prompt change: the close-call gold is owner-authored, so further grinding optimises toward label inconsistency (a gold ceiling, not a model ceiling). Category work done-for-now -> Phase 5. v19 was the off-finance synthesis; the two boundaries proved independent — v17 fixed safety (recall 11->15/17) but v18's safety tightening over-corrected into under-firing (back to 10/17), while v18 fixed delivery (service->delivery errors 8->4) that v17 barely touched. v19 keeps v17's recall-preserving SAFETY block (+ a one-line scam/fraud carve-out that killed v17's worst false-positive) AND v18's strict goods-logistics-only DELIVERY block — the best-performing general rule for each. No eval-case-specific examples (no test-set overfitting). No enum change; finance boundaries unchanged. v18 fixed delivery/broke safety; v17 first off-finance probe; v16 tightened service↔record_accuracy; v15 added record_accuracy (owner R6-C).
 
 _SYSTEM = """You extract a structured complaint case from a customer message. Extract ONLY what the \
 message states or directly implies. NEVER invent facts, names, numbers, or outcomes.
@@ -22,9 +22,11 @@ Fields:
 - category: the SINGLE best archetype (universal, domain-agnostic — the same list serves a bakery \
 and a bank). Definitions:
     product_fault = a physical item/product is defective or poor quality;
-    service_fault = the company MISHANDLED, ignored, delayed, or botched a request, dispute, or claim. \
-The dispute is about CONDUCT or PROCESS — not the money, not the record. (jerked me around, never \
-responded, refused to investigate, failed to act);
+    service_fault = the RESIDUAL class: the company mishandled, ignored, delayed, or botched something \
+AND no other category's primary harm applies. Use ONLY when the CONDUCT ITSELF is the harm (jerked me \
+around, never responded, refused to investigate, failed to act). It is NOT a peer category — if a \
+concrete harm fits another class (a wrong charge, an inaccurate record, a currently blocked account, a \
+failed delivery, a safety hazard, a specific person's behaviour), pick THAT, never service_fault;
     delivery_fulfilment = a problem with delivery, shipping, or fulfilment of an order;
     billing_charge = a specific CHARGE, fee, amount, or balance is WRONG. The dispute is about THE \
 NUMBER (an overcharge, a fee, a debt wrongly owed, money to be returned);
@@ -33,8 +35,11 @@ unverified, improperly disclosed, or improperly dated — a credit file entry, a
 balance, a late marker, an account status. The ask is VERIFY / CORRECT / DELETE, not money. ("this is \
 falsely reporting on my credit", "remove this inaccurate item", "validate this debt", "re-aged / wrong \
 date opened");
-    access_availability = trouble accessing or using an account, funds, or service (locked, frozen, \
-closed, blocked, unavailable);
+    access_availability = an account, funds, or service is in a currently BLOCKED STATE — locked, \
+frozen, closed, declined, withheld, restricted, or otherwise unreachable. This is a STATE (objectively \
+checkable) and it WINS over service_fault when both apply: if anything is currently blocked / frozen / \
+closed / declined / withheld, pick access_availability EVEN IF the company also mishandled it; only a \
+pure refusal with NO actual block is service_fault;
     staff_conduct = the behaviour/conduct of a specific person or agent is the complaint;
     safety_health = a genuine safety or health hazard;
     other = a real complaint that genuinely fits none of the above.
@@ -42,8 +47,11 @@ closed, blocked, unavailable);
 complaint it is at all — a true last resort, NOT because the wording is unusual for the category.
   FRAUD SUB-RULE: an unauthorised transaction is a wrong charge -> billing_charge, UNLESS the \
 customer's own framing is about the company's CONDUCT rather than the money (then service_fault).
-  TIEBREAK (classify by the PRIMARY ask): money back -> billing_charge; fix/correct/delete my file or \
-record -> record_accuracy; stop jerking me around / you never acted -> service_fault.
+  TIEBREAK (classify by the PRIMARY harm; service_fault is the RESIDUAL, chosen only when nothing else \
+fits): a currently blocked / frozen / closed / declined / withheld account or funds -> \
+access_availability (a checkable STATE beats arguable conduct); money back -> billing_charge; fix / \
+correct / delete my file or record -> record_accuracy; pure runaround with no concrete harm above -> \
+service_fault.
   SERVICE vs RECORD_ACCURACY (the common confusion — apply carefully): pick record_accuracy ONLY when \
 the customer alleges a specific RECORD IS INACCURATE / unverified / wrongly-dated and asks to correct, \
 verify, or delete IT. If the grievance is the company's CONDUCT — won't respond, keeps contacting me, \
