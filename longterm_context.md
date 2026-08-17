@@ -18,7 +18,7 @@ see `repo-analysis-remediation.md` and §0.)*
 
 ## 0. Current state & next actions  ← read this first every session; keep it current
 
-> ### ⇢ SESSION HANDOFF — read this box first (updated 2026-08-17c: R0/R7/R3/R1/R4 DONE + emergent HEAD-MINTING architecture BUILT+TESTED; the moat's missing piece now exists — live real-data mint verification pending). The dated UPDATE blocks below are the audit trail (newest first); THIS box is the current truth. **Read the 2026-08-17c UPDATE block first — it is the live frontier**, then 2026-08-17b (R2 pivot) and 2026-08-17 (the retraction).
+> ### ⇢ SESSION HANDOFF — read this box first (updated 2026-08-17c: R0/R7/R3/R1/R4 DONE + emergent HEAD-MINTING built, tested, AND PROVEN END-TO-END LIVE — the full-pipeline demo minted `regulation_reference` from real data and the re-extracted model routes citations to it. The moat's central claim is verified, not asserted). The dated UPDATE blocks below are the audit trail (newest first); THIS box is the current truth. **Read the 2026-08-17c UPDATE block first — it is the live frontier**, then 2026-08-17b (R2 pivot) and 2026-08-17 (the retraction).
 >
 > **🚩 CONVERGENCE PROOF RETRACTED (2026-08-17, owner + `repo-analysis-remediation.md` R0).** The earlier
 > "Phase 4 the moat — PROVEN, self-converging schema" claim was INVALID and is withdrawn. `HEAD_NOUNS` is a
@@ -202,14 +202,22 @@ sufficient — the model dumped `15 U.S.C. 1692g` into `other` even with `regula
 prompt never said what `regulation` MEANS. Fixed: mint now produces a GLOSS (mig 0012), injected into the
 prompt.** Re-test: seed→`other`; +regulation-no-gloss→still `other`; **+regulation+gloss → model EMITS
 head=regulation ✓.** So an emergent column never seeded is BORN from data AND used by the model —
-"specialisation is emergent, never seeded" made literally true and verified. **Remaining (next session):** the
-full-pipeline DB demonstration (ingest real cases → extract → dedup_scan → mint_scan mints live → re-extract →
-cases use it) — every piece is built + unit-proven + the model-uses-it step is live-proven; the worker run is
-the last integration proof. Also: re-extract multidomain to v14 (still v13). Then R5 PII gate, R6
-record_accuracy (folds the pending billing↔service adjudication), and the honest column-level convergence proof
-(new-head-per-bucket INCLUDING minted heads) = the 8/10 result. NOTE: minting at n=120 is threshold-sensitive
-(thin fuel: 34 clean escape-valve facts) — robust emergence wants the 200+ corpus or a cluster-coherence gate;
-do NOT over-tune MINT_TAU on one dataset (self-grading, §10).
+"specialisation is emergent, never seeded" made literally true and verified. **✅ FULL-PIPELINE E2E DEMO DONE + VERIFIED LIVE (`eval/demo_head_minting_e2e.py`, real DB + real Ollama+BGE,
+data we didn't author):** ingested 12 real citation-bearing CFPB cases → extract (citations → `other`) →
+dedup_scan → **`mint_scan` MINTED `regulation_reference`** (4 recurring cases) with an LLM gloss → re-extracted
+the affected cases → **5 legal citations (15 U.S.C. 1692g, FDCPA, FCRA, …) now sit under the MINTED column** —
+a column no one configured. The moat's central claim ("specialisation is emergent, never seeded") is now proven
+END TO END through the production code paths, not asserted. **Clustering hardened (an algorithm fix the demo
+forced, NOT a threshold tune): mint_scan uses CONNECTED-COMPONENTS (union-find) not greedy single-centroid —
+greedy fragmented the citation concept (spans cos 0.45–0.77) below the floor; union-find holds it at the same
+MINT_TAU, outliers ("12 CFR") stay correct singletons.** Infra note: the compose db was stuck at mig 0010 (the
+`migrate` container runs a STALE image without 0011/0012) — apply new migrations to the compose db from host via
+`POSTGRES_ADMIN_PASSWORD=change_me_admin_local uv run python -m app.init_db`, or rebuild the migrate image.
+**Remaining (next session):** re-extract multidomain to v14 (still v13); R5 PII gate; R6 record_accuracy (folds
+the pending billing↔service adjudication); then the honest column-level convergence proof (new-head-per-bucket
+INCLUDING minted heads, on data we didn't author) = the 8/10 result. NOTE: minting is threshold/fuel-sensitive
+at small n — robust emergence wants the 200+ corpus or a cluster-coherence gate; do NOT over-tune MINT_TAU on
+one dataset (self-grading, §10). 102-ish tests green (profile+mint+dedup added this session); 12 migrations.
 
 **UPDATE (2026-08-17b, R7+R3+R1 BUILT/TESTED/COMMITTED + R2 MEASURED — the composite curve does NOT bend; the real moat piece (emergent head-minting from `other`) is still MISSING).** `origin/main` @ `68b961d`.
 Executed remediation in dependency order, all verified live (96 tests +1 skip green; NO regression).
