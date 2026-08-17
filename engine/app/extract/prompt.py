@@ -13,7 +13,7 @@ from collections.abc import Sequence
 from .head_nouns import HEAD_NOUNS
 
 # Bump on any change to the prompt text below.
-PROMPT_VERSION = "extract-v16"  # v16 (R6 follow-up): tighten the service↔record_accuracy boundary — the model over-fired record_accuracy whenever an account/credit/report was merely MENTIONED; added a discriminator that a record must be alleged WRONG (else conduct/withholding/runaround/cease-and-desist -> service_fault). Sharpens the v15 tiebreak; no other category text changed. v15 added record_accuracy (owner R6-C).
+PROMPT_VERSION = "extract-v19"  # v19 (off-finance discriminators, iteration 3 = synthesis): the two boundaries proved independent — v17 fixed safety (recall 11->15/17) but v18's safety tightening over-corrected into under-firing (back to 10/17), while v18 fixed delivery (service->delivery errors 8->4) that v17 barely touched. v19 keeps v17's recall-preserving SAFETY block (+ a one-line scam/fraud carve-out that killed v17's worst false-positive) AND v18's strict goods-logistics-only DELIVERY block — the best-performing general rule for each. No eval-case-specific examples (no test-set overfitting). No enum change; finance boundaries unchanged. v18 fixed delivery/broke safety; v17 first off-finance probe; v16 tightened service↔record_accuracy; v15 added record_accuracy (owner R6-C).
 
 _SYSTEM = """You extract a structured complaint case from a customer message. Extract ONLY what the \
 message states or directly implies. NEVER invent facts, names, numbers, or outcomes.
@@ -50,6 +50,19 @@ verify, or delete IT. If the grievance is the company's CONDUCT — won't respon
 refuses to act, WITHHOLDS documents or records, gives the runaround, cease-and-desist — pick \
 service_fault EVEN IF an account, debt, credit, or report is mentioned. Merely mentioning "account", \
 "credit", or "records" is NOT record_accuracy; the record itself must be alleged WRONG.
+  PRODUCT vs SAFETY_HEALTH (apply carefully): if a product, vehicle, or item defect creates a \
+PHYSICAL-SAFETY hazard in use — loss of control, cannot brake / steer / accelerate, stalls or loses \
+power in traffic, fire / electrical / gas / smoke, allergen, injury or crash risk — pick safety_health, \
+NOT product_fault, even though a product is involved. product_fault is a defect or poor quality with NO \
+safety hazard (it simply doesn't work well, is worn, or underperforms). A financial scam, fraud, or \
+money loss is NEVER safety_health (that is billing_charge or service_fault).
+  DELIVERY vs SERVICE (apply carefully): delivery_fulfilment is STRICTLY the shipment / logistics of \
+goods failing as the standalone grievance — a parcel that never arrived, arrived late, arrived damaged, \
+or was the wrong item, with no larger complaint around it. It is NOT a catch-all for anything involving \
+an order. A service performed poorly (a stay, a repair visit, a meal served, a booking), a venue or \
+property problem (uncleaned, broken fixtures, a leak), a botched replacement or install, a returns / \
+refund runaround, an unreachable company, or any dissatisfaction with the company's overall HANDLING is \
+service_fault, NOT delivery_fulfilment, EVEN IF an order, booking, or delivery appears in the story.
 - fault: one sentence — what specifically went wrong, grounded in the message.
 - desired_outcome: what the customer wants done — but ONLY if they explicitly ask for it. Decide \
 first: did they actually state a request or instruction (e.g. "I want a refund", "please reverse \

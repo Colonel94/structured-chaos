@@ -18,7 +18,7 @@ see `repo-analysis-remediation.md` and §0.)*
 
 ## 0. Current state & next actions  ← read this first every session; keep it current
 
-> ### ⇢ SESSION HANDOFF — read this box first (updated 2026-08-17f: full remediation DONE (R0–R7 + head-minting live demo + column-convergence proof + R6 record_accuracy 59%→82%, v16 service↔record tighten). **COMBINED 216-ROW CROSS-DOMAIN NUMBER NOW MEASURED (v16): CFPB-120 80% · multidomain-96 66% · pooled-216 74% (majority 31%).** The honest read: category GENERALISES off-finance but WEAKER — 66% multidomain vs 80% CFPB, and both below the §4 ≥90% gate; record_accuracy is finance-weighted (31/31 CFPB, 0/2 off-finance). Composite curve does NOT bend — convergence is COLUMN-level, stated plainly. Remaining lift is DATA SCALE + off-finance category tuning, not architecture. Prompt is at extract-v16.) The dated UPDATE blocks below are the audit trail (newest first); THIS box is the current truth. **Read the 2026-08-17c UPDATE block first — it is the live frontier**, then 2026-08-17b (R2 pivot) and 2026-08-17 (the retraction).
+> ### ⇢ SESSION HANDOFF — read this box first (updated 2026-08-17g: full remediation DONE (R0–R7 + head-minting live demo + column-convergence proof + R6 record_accuracy 59%→82%). **OFF-FINANCE CATEGORY PROBE + FIX DONE (v17→v19):** the combined-216 probe found 42% of multidomain errors in two under-specified boundaries (service↔delivery, product↔safety) — CFPB-shaped prompt under-served off-finance. Fixed with two general discriminators (safety = active person-hazard, delivery = strictly goods-logistics), synthesized over 3 iterations (v17 safety-only, v18 delivery-only, **v19 = both**). **v19 result: CFPB 78% · multidomain 66→73% (+7) · pooled 73.6→75.9% (+2.3); service→delivery 8→3, safety→product 6→2, record_accuracy 31/31.** Cost: CFPB −2 on the pre-existing fuzzy service↔access boundary (now the next lever). Composite curve does NOT bend — convergence is COLUMN-level, stated plainly. Remaining lift is DATA SCALE + service↔access, not architecture. Prompt is at extract-v19.) The dated UPDATE blocks below are the audit trail (newest first); THIS box is the current truth. **Read the 2026-08-17c UPDATE block first — it is the live frontier**, then 2026-08-17b (R2 pivot) and 2026-08-17 (the retraction).
 >
 > **🚩 CONVERGENCE PROOF RETRACTED (2026-08-17, owner + `repo-analysis-remediation.md` R0).** The earlier
 > "Phase 4 the moat — PROVEN, self-converging schema" claim was INVALID and is withdrawn. `HEAD_NOUNS` is a
@@ -177,6 +177,33 @@ see `repo-analysis-remediation.md` and §0.)*
 > test number, track T2) + email drop (needs UAE mailbox) — file-drop is the $0 PoC channel. **Parked:**
 > Gate-A5 owner recordings (spikes #1/#2). **Standing practice:** commit fixes directly ([[commit-fixes-directly]]).
 > **Status page (private):** https://claude.ai/code/artifact/4c909fb2-b42e-4f3e-96d2-e7367b366635
+
+**UPDATE (2026-08-17g, OFF-FINANCE CATEGORY PROBE + FIX v17→v19 — combined 73.6%→75.9%, multidomain +7; capped at 3 iterations, best kept).**
+Owner: "probe the off-finance category errors before Phase 5." Confusion matrix on multidomain-96 (v16): 66%,
++26 over the 40% majority baseline but 24 under the §4 ≥90% gate. **Root cause (structural, not scatter):** the v16
+prompt lavishes 3 discriminator paragraphs on the FINANCE boundaries (billing/service/record, all R6 work) and gives
+the off-finance ones ONE LINE each. **42% of errors (14/33) sit in exactly the two most under-specified pairs:**
+service_fault→delivery_fulfilment (8 — the model treats `delivery_fulfilment` as a magnet for any order/logistics
+noun) and safety_health→product_fault (6 — all NHTSA, the model reads "a part malfunctioned" as product_fault and
+misses that a malfunction endangering the driver is safety). Rest (~19) = mostly LABEL NOISE on scraped consumer
+reviews that VENT rather than file clean grievances (subjective "not for me", fuzzy staff↔service, fraud→other) +
+2 off-finance record_accuracy misses (finance-weighted, expected). Owner adjudicated the 3 debatable delivery rows →
+all service. **Fix = two general R6-shaped discriminators (NO eval-case-specific examples — that would overfit the
+test set, §10). Three iterations, each on a diagnosed failure mode:** v17 (both discriminators) → safety worked
+(recall 11→15/17) but delivery barely moved (8→7) AND safety over-fired on wear/noise/scam; v18 (tightened both) →
+delivery FIXED (8→4) but the safety re-write over-corrected into under-firing (back to 10/17); **v19 = SYNTHESIS:
+v17's recall-preserving safety block + a one-line scam/fraud carve-out + v18's strict goods-logistics-only delivery
+block.** **FOUR-VERSION TABLE (category acc): v16 CFPB80/MD66/comb73.6 · v17 79/68/74.1 · v18 78/69/74.1 · v19
+78/73/75.9.** v19 clears BOTH clusters at once (service→delivery 8→3, safety→product 6→2, safety recall 14/17),
+record_accuracy held 31/31. **Cost: CFPB 80→78 (−2), concentrated on the PRE-EXISTING fuzzy service↔access boundary
+(3 of 4 losses = access→service bleed from the delivery "unreachable/runaround→service" language; 1 service↔billing
+noise) — not a core-finance break.** **Honest ceiling finding: combined sat at ~74% through v16–v18 because every
+off-finance gain grazes CFPB — a single UNIVERSAL prompt trades one domain's boundary for the other's; v19 only broke
+75% by getting both clusters cleanly. Past here the lever is MORE/BETTER GOLD (esp. cleaner multidomain labels +
+service↔access adjudication), not more prompt versions.** No enum change, finance defs unchanged, so no governed-core
+halt. Preserved `cfpb_extractions_v16/v17/v18.jsonl` + `multidomain_extractions_v16/v17/v18.jsonl`; current fixtures =
+v19. **Next lever = service↔access (the CFPB −2 + the known service→access ×8 cluster), then Phase 5 (elicitation) —
+extraction is at 76% combined / 78% CFPB, a floor elicitation can build on.** 104 tests +1 skip (prompt-only change).
 
 **UPDATE (2026-08-17c, R4 + EMERGENT HEAD-MINTING ARCHITECTURE BUILT + TESTED — the moat's missing piece is now built; live real-data mint verification pending v14 re-extraction).** `origin/main` @ `1907702`.
 Built the two pieces the R2 finding pointed to. **R4 (stats-before-semantics, `app/extract/profile.py`):**
