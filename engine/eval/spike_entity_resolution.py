@@ -58,11 +58,19 @@ def resolve(
     name_scores: dict[str, float] | None = None,
 ) -> Resolution:
     """Deterministic exact-key core + optional pre-computed BGE name_scores (order_id -> cosine)."""
-    # 1. order_id — the strongest key
+    # 1. order_id — the strongest key, BUT it must not contradict a second known anchor
     if order_id:
         hits = [o for o in store if o["order_id"].upper() == order_id.upper()]
         if len(hits) == 1:
-            return Resolution("silent", hits[0]["order_id"], reason="order_id exact & unique")
+            o = hits[0]
+            # multi-anchor cross-check: a quoted id that resolves to a DIFFERENT order than the
+            # sender's phone is a CONTRADICTION (a typo can collide with someone else's valid order)
+            # -> never silent-bind; surface it (winning-condition: acting on the wrong order > asking).
+            if phone and o["phone"] != phone:
+                return Resolution("confirm", candidates=[o["order_id"]],
+                                  reason="order_id and sender phone point to DIFFERENT orders — contradiction, do NOT silent-bind")
+            return Resolution("silent", o["order_id"],
+                              reason="order_id exact & unique" + (", phone agrees" if phone else ""))
         if len(hits) == 0:
             return Resolution("confirm", reason=f"order_id '{order_id}' not found — do NOT fuzzy-bind a typo")
         return Resolution("confirm", candidates=[o["order_id"] for o in hits], reason="order_id non-unique")
@@ -87,7 +95,25 @@ def resolve(
     return Resolution("elicit", reason="no usable anchor — open elicitation")
 
 
-# ---- planted hard cases: (label, kwargs, expected_mode, expected_object_or_None) ----
+# =========================================================================================
+# SCORING (per owner, 2026-08-18): report the PAIR, never accuracy alone.
+#   - silent-match RATE     = silent binds / all cases         (target >= 60%; abstention tanks this)
+#   - silent-match ACCURACY = correct binds / silent binds     (target >= 99%)
+#   accuracy UP while rate DOWN is a REGRESSION (abstention gaming), not progress.
+#   Small-n zero-error is NOT the gate: rule-of-three 95% upper bound on error ~ 3/n, so a >=99%
+#   claim needs ~300 clean binds with zero wrong. Report "no failures at n=X (<= ~Y% err)", not 100%.
+# =========================================================================================
+
+
+def rule_of_three_upper(n_binds: int, wrong: int) -> str:
+    if wrong > 0:
+        return f"err={wrong}/{n_binds}={wrong/n_binds:.1%} (measured)"
+    if n_binds == 0:
+        return "no binds"
+    return f"0/{n_binds}, 95% upper bound on error ~= {3/n_binds:.1%}"
+
+
+# ---- planted hard cases (a DEFECT PROBE, not the gate): (label, kwargs, expected_mode, expected_object) ----
 CASES: list[tuple[str, dict, str, str | None]] = [
     ("exact order_id, unique",        {"order_id": "BK-10236"},           "silent",  "BK-10236"),
     ("exact order_id #2, unique",     {"order_id": "BK-10239"},           "silent",  "BK-10239"),
@@ -104,6 +130,64 @@ CASES: list[tuple[str, dict, str, str | None]] = [
     ("name near-dup (Mohammed/Muhammad)", {"name": "Mohammed Ali"},       "confirm", None),
     ("name unique",                   {"name": "Priya Nair"},             "silent",  "BK-10236"),
 ]
+
+
+_FIRST = ["Sarah", "Sara", "James", "Aisha", "Tom", "Priya", "Daniel", "Emily", "Mohammed", "Muhammad",
+          "Grace", "Liam", "Olivia", "Noah", "Fatima", "Henry", "Chloe", "Jack", "Isabella", "William",
+          "Sophia", "Ava", "Ethan", "Mia", "Omar", "Layla", "Yusuf", "Zara", "Ryan", "Nina"]
+_LAST = ["Whitfield", "O'Connor", "Rahman", "Baker", "Nair", "Cohen", "Clarke", "Ali", "Thompson",
+         "Murphy", "Bennett", "Williams", "Khan", "Scott", "Evans", "Robinson", "Ward", "Hughes",
+         "Turner", "Mitchell", "Patel", "Ahmed", "Foster", "Brooks", "Reed"]
+
+
+def _synth_store(n_orders: int, rng) -> tuple[list[dict], set[str]]:
+    """A larger synthetic store with CONTROLLED ambiguity. Returns (store, set_of_shared_phones).
+    ~18% of orders share a phone with another (repeat customers -> phone is ambiguous)."""
+    store: list[dict] = []
+    phones: list[str] = []
+    for i in range(n_orders):
+        oid = f"BK-{20000 + i}"
+        # 18% of the time, reuse a recent phone (a repeat customer) -> ambiguity
+        if phones and rng.random() < 0.18:
+            phone = rng.choice(phones[-40:])
+        else:
+            phone = f"+4477009{rng.randint(0, 999999):06d}"
+        phones.append(phone)
+        name = f"{rng.choice(_FIRST)} {rng.choice(_LAST)}"
+        store.append({"order_id": oid, "phone": phone, "customer_name": name,
+                      "items": "order", "slot": "2026-08-18 15:00", "delivered_at": "2026-08-18 15:30"})
+    shared = {p for p in phones if phones.count(p) > 1}
+    return store, shared
+
+
+def _synth_cases(store: list[dict], shared: set[str], rng, *, include_name: bool):
+    """Realistic WhatsApp-channel case mix with OBJECTIVE ground truth.
+    Yields (kwargs, gt_mode, gt_object). The sender phone is (almost) always known on this channel."""
+    by_phone: dict[str, list[dict]] = {}
+    for o in store:
+        by_phone.setdefault(o["phone"], []).append(o)
+    cases = []
+    for o in store:
+        r = rng.random()
+        uniq = o["phone"] not in shared
+        if r < 0.45:                                   # phone-only (the WhatsApp default anchor)
+            if uniq:
+                cases.append(({"phone": o["phone"]}, "silent", o["order_id"]))
+            else:
+                cases.append(({"phone": o["phone"]}, "confirm", None))
+        elif r < 0.62:                                 # quotes the order id (+ phone) -> strong
+            cases.append(({"order_id": o["order_id"], "phone": o["phone"]}, "silent", o["order_id"]))
+        elif r < 0.72:                                 # typo'd order id -> must NOT bind
+            typo = o["order_id"][:-1] + str((int(o["order_id"][-1]) + 5) % 10)
+            cases.append(({"order_id": typo, "phone": o["phone"]}, "confirm", None))
+        elif r < 0.82:                                 # unknown sender, no id -> elicit
+            cases.append(({"phone": f"+4477000{rng.randint(0,999999):06d}"}, "elicit", None))
+        elif include_name:                             # name-only (web form; the fuzzy path)
+            cases.append(({"name": o["customer_name"]}, "silent", o["order_id"]))
+        else:
+            cases.append(({"phone": o["phone"]}, "silent" if uniq else "confirm", o["order_id"] if uniq else None))
+    rng.shuffle(cases)
+    return cases
 
 
 async def _bge_scores(store: list[dict], name: str) -> dict[str, float]:
@@ -123,51 +207,74 @@ async def _bge_scores(store: list[dict], name: str) -> dict[str, float]:
     return {store[i]["order_id"]: float(sims[i]) for i in range(len(store))}
 
 
-async def main() -> int:
-    fuzzy = "--fuzzy" in sys.argv
-    store = _load_store()
-    silent_total = silent_correct = wrong_silent = 0
-    resolvable = 0            # cases that SHOULD resolve silently (have a strong/unique anchor)
-    behaviour_correct = 0
-    total_scored = 0
-    print(f"Object store: {len(store)} bakery orders.  Fuzzy name layer: {'ON (BGE)' if fuzzy else 'OFF (deterministic core only)'}\n")
-    for label, kw, exp_mode, exp_obj in CASES:
-        is_name_case = "name" in kw
-        if is_name_case and not fuzzy:
-            print(f"  [skip] {label:34s} (needs --fuzzy)")
-            continue
-        name_scores = await _bge_scores(store, kw["name"]) if (is_name_case and fuzzy) else None
-        r = resolve(store, name_scores=name_scores, **kw)
-        total_scored += 1
-        if exp_mode == "silent":
-            resolvable += 1
-        ok_behaviour = (r.mode == exp_mode) or (exp_mode in {"confirm", "elicit"} and r.mode in {"confirm", "elicit"})
-        # trust gate: any silent bind to the WRONG object
-        if r.mode == "silent":
-            silent_total += 1
-            if r.object_id == exp_obj and exp_mode == "silent":
-                silent_correct += 1
-            elif exp_mode != "silent" or r.object_id != exp_obj:
-                wrong_silent += 1
-        if ok_behaviour and not (r.mode == "silent" and exp_mode != "silent"):
-            behaviour_correct += 1
-        flag = "OK " if (ok_behaviour and not (r.mode == "silent" and exp_mode != "silent")) else "XX "
-        got = f"{r.mode}" + (f"->{r.object_id}" if r.object_id else (f"?{r.candidates}" if r.candidates else ""))
-        print(f"  {flag}{label:34s} expect={exp_mode:7s}{('/'+exp_obj) if exp_obj else '':10s} got={got:22s} — {r.reason}")
+def _score(cases, results):
+    """Return the PAIR + trust counts over (gt_mode, gt_object) vs Resolution results."""
+    total = len(cases)
+    silent = [(c, r) for c, r in zip(cases, results) if r.mode == "silent"]
+    correct = sum(1 for (_, _, gt_obj), r in silent if r.object_id == gt_obj)  # gt_obj is 3rd of case tuple
+    wrong = len(silent) - correct
+    should_silent = sum(1 for _, m, _ in cases if m == "silent")
+    got_when_should = sum(1 for (_, m, gt_obj), r in zip(cases, results)
+                          if m == "silent" and r.mode == "silent" and r.object_id == gt_obj)
+    return {
+        "total": total, "silent": len(silent), "correct": correct, "wrong": wrong,
+        "rate": len(silent) / total if total else 0,
+        "accuracy": correct / len(silent) if silent else 0,
+        "should_silent": should_silent, "recall": got_when_should / should_silent if should_silent else 0,
+    }
 
-    print("\n--- METRICS (winning-condition §4) ---")
-    print(f"  silent-match accuracy   : {silent_correct}/{silent_total}"
-          + (f" = {silent_correct/silent_total:.0%}" if silent_total else "")
-          + "   (target >= 99%)")
-    print(f"  WRONG silent matches    : {wrong_silent}   (MUST be 0 — the trust gate)")
-    cov = silent_total / resolvable if resolvable else 0
-    print(f"  coverage (silent/should): {silent_total}/{resolvable} = {cov:.0%}   (target >= 60% of resolvable)")
-    print(f"  behaviour correct       : {behaviour_correct}/{total_scored}")
-    verdict = "PASS" if (wrong_silent == 0 and silent_total and silent_correct == silent_total) else "FAIL"
-    print(f"\n  RISKIEST-ASSUMPTION VERDICT: {verdict} — "
-          + ("silent match never bound a wrong object; safe to build elicitation on top."
-             if verdict == "PASS" else "silent match is UNSAFE; fix the resolver before building upstream."))
-    return 0 if verdict == "PASS" else 1
+
+async def _run(store, cases, *, fuzzy):
+    results = []
+    for kw, _, _ in cases:
+        ns = await _bge_scores(store, kw["name"]) if ("name" in kw and fuzzy) else None
+        results.append(resolve(store, name_scores=ns, **kw))
+    return results
+
+
+async def main() -> int:
+    import random
+    fuzzy = "--fuzzy" in sys.argv
+
+    # ---- 1. DEFECT PROBE (hand-authored planted cases; NOT the gate — reported as "no failures at n") ----
+    store = _load_store()
+    probe = [(kw, m, o) for _, kw, m, o in CASES if fuzzy or "name" not in kw]
+    labels = [lbl for lbl, kw, _, _ in CASES if fuzzy or "name" not in kw]
+    res = await _run(store, probe, fuzzy=fuzzy)
+    binds = [(c, r) for c, r in zip(probe, res) if r.mode == "silent"]
+    wrong = sum(1 for (_, _, gt), r in binds if r.object_id != gt or gt is None)
+    behaviour_ok = sum(1 for (_, m, gt), r in zip(probe, res)
+                       if (r.mode == m) or (m in {"confirm", "elicit"} and r.mode in {"confirm", "elicit"}))
+    print(f"DEFECT PROBE — {len(probe)} planted hard cases (fuzzy={'ON' if fuzzy else 'OFF'}):")
+    for lbl, (_, m, gt), r in zip(labels, probe, res):
+        got = r.mode + (f"->{r.object_id}" if r.object_id else (f"?{r.candidates}" if r.candidates else ""))
+        ok = (r.mode == m) or (m in {"confirm", "elicit"} and r.mode in {"confirm", "elicit"})
+        print(f"  {'OK ' if ok else 'XX '}{lbl:34s} expect={m:7s} got={got}")
+    print(f"  -> behaviour {behaviour_ok}/{len(probe)}; silent binds {rule_of_three_upper(len(binds), wrong)}")
+    print("  (this is DEFECT DETECTION at small n, NOT a 99% claim.)\n")
+
+    # ---- 2. GATE MEASUREMENT (scaled synthetic, objective ground truth; report the PAIR) ----
+    rng = random.Random(42)
+    n_orders = 60 if fuzzy else 700   # fuzzy embeds every name (GPU) -> smaller; deterministic -> big n (>=300 clean binds for a real >=99% bound)
+    sstore, shared = _synth_store(n_orders, rng)
+    scases = _synth_cases(sstore, shared, rng, include_name=fuzzy)
+    sres = await _run(sstore, scases, fuzzy=fuzzy)
+    m = _score(scases, sres)
+    print(f"GATE MEASUREMENT — {m['total']} synthetic cases over {n_orders} orders "
+          f"({len(shared)} shared phones; name-only path {'ON' if fuzzy else 'OFF'}):")
+    print(f"  silent-match RATE     : {m['silent']}/{m['total']} = {m['rate']:.0%}   (target >= 60%; abstention tanks this)")
+    print(f"  silent-match ACCURACY : {rule_of_three_upper(m['silent'], m['wrong'])}   (target >= 99%)")
+    print(f"  WRONG silent binds    : {m['wrong']}   (the trust gate — must be 0)")
+    print(f"  recall on resolvable  : {m['recall']:.0%}  (of cases that SHOULD silently resolve)")
+    print("\n  READ THE PAIR TOGETHER: high accuracy + low rate = abstention gaming = regression.")
+    if m["silent"] < 300:
+        print(f"  NOTE: {m['silent']} clean binds < ~300, so this run cannot yet CLAIM >=99% — it bounds error at ~{3/max(m['silent'],1):.1%}.")
+    verdict = "no-defect" if m["wrong"] == 0 else "FAIL"
+    print(f"\n  VERDICT: {verdict} — "
+          + (f"0 wrong binds across {m['silent']} silent matches; rate {m['rate']:.0%}. "
+             + ("Fuzzy layer is the real rate test." if not fuzzy else "Name-only path priced in.")
+             if m["wrong"] == 0 else "silent match bound a WRONG object — unsafe."))
+    return 0 if m["wrong"] == 0 else 1
 
 
 if __name__ == "__main__":
