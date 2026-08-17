@@ -18,7 +18,7 @@ see `repo-analysis-remediation.md` and §0.)*
 
 ## 0. Current state & next actions  ← read this first every session; keep it current
 
-> ### ⇢ SESSION HANDOFF — read this box first (updated 2026-08-17d: THE ENTIRE REMEDIATION IS DONE — R0–R7 + head-minting (live E2E demo minted `regulation_reference`) + column-convergence proof + R6 record_accuracy (category accuracy 59%→82%). The moat is built, verified end-to-end, and honestly measured. Composite curve does NOT bend (convergence is at the COLUMN level, stated plainly). Remaining lift is DATA SCALE + owner gold spot-check, not architecture). The dated UPDATE blocks below are the audit trail (newest first); THIS box is the current truth. **Read the 2026-08-17c UPDATE block first — it is the live frontier**, then 2026-08-17b (R2 pivot) and 2026-08-17 (the retraction).
+> ### ⇢ SESSION HANDOFF — read this box first (updated 2026-08-17e: full remediation DONE (R0–R7 + head-minting live demo + column-convergence proof + R6 record_accuracy 59%→82%, v16 service↔record tighten). IN PROGRESS at handoff: growing the gold toward ~200 (2 bg jobs) — FINISH IT FIRST next session (steps in the 2026-08-17e block). Composite curve does NOT bend — convergence is COLUMN-level, stated plainly. Remaining lift is DATA SCALE, not architecture. Prompt is at extract-v16.) The dated UPDATE blocks below are the audit trail (newest first); THIS box is the current truth. **Read the 2026-08-17c UPDATE block first — it is the live frontier**, then 2026-08-17b (R2 pivot) and 2026-08-17 (the retraction).
 >
 > **🚩 CONVERGENCE PROOF RETRACTED (2026-08-17, owner + `repo-analysis-remediation.md` R0).** The earlier
 > "Phase 4 the moat — PROVEN, self-converging schema" claim was INVALID and is withdrawn. `HEAD_NOUNS` is a
@@ -255,6 +255,29 @@ curve plateaus + mints semantically real), NOT the composite level. Stated plain
 signal + to push category past 82%) and owner spot-check of the service↔record gold — NOT architecture. Next
 natural work: settle the service↔record boundary (prompt tighten, re-score), grow the gold/corpus, or move to
 Phase 5 (elicitation) now that extraction is at 82% not 60%.
+
+**UPDATE (2026-08-17e, R6 v16 service↔record TIGHTEN done + GOLD-GROWING-TO-~200 in progress at handoff).** `origin/main` @ `e79a32e`.
+**v16 (committed `e79a32e`):** tightened service↔record — the model over-fired record_accuracy when an account/credit
+was merely MENTIONED; added a prompt discriminator (a record must be alleged WRONG; conduct/withholding/runaround/
+cease-and-desist → service EVEN IF an account is named). Result (CFPB n=100, new gold): **service_fault recall
+10→13 (+3, the 3 target cases fixed: 7451352, 24483748, 24365881), record_accuracy HELD 29/29, overall 82→82
+(FLAT)** — a clean win on the targeted boundary; the offsets (−1 billing/−2 access) are noise/defensible
+(24134219 conduct-framed fraud; 24186443 access→delivery unrelated). Kept v16 (owner). Scorers built:
+`eval/score_r6_matrix.py` (the 4-number matrix), `score_v15_v16.py` (v15↔v16 per-category), `score_combined.py`
+(the ~200 combined). v15/v14 extractions preserved (`cfpb_extractions_v15.jsonl`, `*_v14.jsonl`).
+**⇒ IN PROGRESS — FINISH THIS FIRST NEXT SESSION (grow gold toward 200):** two background jobs were running at
+handoff — (a) a subagent labelling the **20 unlabelled CFPB** cases (sample has 120, only 100 labelled) with the
+v16 rule+anchors → its output must be MERGED into `cfpb_labels.csv` (→120); (b) **multidomain re-extraction at
+v16** (`/tmp/md_v16.log`, writes `multidomain_extractions.jsonl`) so the 96 already-labelled multidomain rows
+score against the current prompt. **COMPLETION STEPS:** 1) confirm both finished (check the labeler's returned
+20 labels; `grep REPORT /tmp/md_v16.log`); 2) merge the 20 labels into cfpb_labels.csv (keep other columns; the
+20 predictions ALREADY exist in `cfpb_extractions.jsonl` at v16); 3) `uv run python eval/score_combined.py` →
+the **216-row cross-domain gold** number (CFPB 120 + multidomain 96), per-domain + pooled, with majority
+baselines; 4) commit gold + report. If the subagent's labels didn't come back, re-spawn the labeler (same prompt:
+label the 20 cfpb_sample ids not in cfpb_labels.csv, v16 three-way rule + service↔record discriminator).
+**Generalisation stands: record_accuracy is finance-weighted (2/96 off finance).** Then: to push category past
+82%, more gold + settle service↔access + owner spot-check of the ~9 contestable service↔record rows; OR move to
+Phase 5 (elicitation) now extraction is at 82% not 60%. 14 migrations, 104 tests +1 skip, prompt extract-v16.
 
 **UPDATE (2026-08-17b, R7+R3+R1 BUILT/TESTED/COMMITTED + R2 MEASURED — the composite curve does NOT bend; the real moat piece (emergent head-minting from `other`) is still MISSING).** `origin/main` @ `68b961d`.
 Executed remediation in dependency order, all verified live (96 tests +1 skip green; NO regression).
