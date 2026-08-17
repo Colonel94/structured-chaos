@@ -18,7 +18,7 @@ see `repo-analysis-remediation.md` and §0.)*
 
 ## 0. Current state & next actions  ← read this first every session; keep it current
 
-> ### ⇢ SESSION HANDOFF — read this box first (updated 2026-08-17e: full remediation DONE (R0–R7 + head-minting live demo + column-convergence proof + R6 record_accuracy 59%→82%, v16 service↔record tighten). IN PROGRESS at handoff: growing the gold toward ~200 (2 bg jobs) — FINISH IT FIRST next session (steps in the 2026-08-17e block). Composite curve does NOT bend — convergence is COLUMN-level, stated plainly. Remaining lift is DATA SCALE, not architecture. Prompt is at extract-v16.) The dated UPDATE blocks below are the audit trail (newest first); THIS box is the current truth. **Read the 2026-08-17c UPDATE block first — it is the live frontier**, then 2026-08-17b (R2 pivot) and 2026-08-17 (the retraction).
+> ### ⇢ SESSION HANDOFF — read this box first (updated 2026-08-17f: full remediation DONE (R0–R7 + head-minting live demo + column-convergence proof + R6 record_accuracy 59%→82%, v16 service↔record tighten). **COMBINED 216-ROW CROSS-DOMAIN NUMBER NOW MEASURED (v16): CFPB-120 80% · multidomain-96 66% · pooled-216 74% (majority 31%).** The honest read: category GENERALISES off-finance but WEAKER — 66% multidomain vs 80% CFPB, and both below the §4 ≥90% gate; record_accuracy is finance-weighted (31/31 CFPB, 0/2 off-finance). Composite curve does NOT bend — convergence is COLUMN-level, stated plainly. Remaining lift is DATA SCALE + off-finance category tuning, not architecture. Prompt is at extract-v16.) The dated UPDATE blocks below are the audit trail (newest first); THIS box is the current truth. **Read the 2026-08-17c UPDATE block first — it is the live frontier**, then 2026-08-17b (R2 pivot) and 2026-08-17 (the retraction).
 >
 > **🚩 CONVERGENCE PROOF RETRACTED (2026-08-17, owner + `repo-analysis-remediation.md` R0).** The earlier
 > "Phase 4 the moat — PROVEN, self-converging schema" claim was INVALID and is withdrawn. `HEAD_NOUNS` is a
@@ -268,11 +268,14 @@ cease-and-desist → service EVEN IF an account is named). Result (CFPB n=100, n
 **⇒ GOLD GROWN — CFPB 100→120 DONE (committed `77a6c7c`):** labelled the 20 extra cases (subagent, v16 rule).
 **CFPB-120 v16 category accuracy = 96/120 = 80% (majority 26%, +54); record_accuracy 31/31 (perfect on the
 expanded set).** New CFPB-120 dist: billing 31 / record 31 / service 30 / access 22 (balanced). Dip 82→80 is the
-harder new 20 (10 service_fault), honest not regression. **ONE STEP LEFT (trivial): the combined 216-row
-cross-domain number.** Multidomain was re-extracting at v16 at handoff (`/tmp/md_v16.log` → `multidomain_
-extractions.jsonl`); once `grep REPORT /tmp/md_v16.log` shows done, run `uv run python eval/score_combined.py`
-→ prints CFPB-120 + multidomain-96 + pooled 216 with majority baselines; commit + report. (If md v16 didn't
-finish, just re-run `EVAL_DATASET=multidomain uv run python eval/run_extraction.py` first.)
+harder new 20 (10 service_fault), honest not regression. **✅ COMBINED 216-ROW NUMBER DONE (2026-08-17f, `eval/score_combined.py` on v16
+multidomain re-extraction):** **CFPB-120 96/120=80% (maj 26%) · multidomain-96 63/96=66% (maj service_fault 40%) ·
+pooled-216 159/216=74% (maj 31%).** record_accuracy recall 31/31 CFPB, 0/2 off-finance (finance-weighted, as recorded).
+**Harsh read (comfortable-reframe check applied):** category GENERALISES off-finance (+26 over baseline) but MATERIALLY
+WEAKER than on the domain it was tuned on (66% vs 80%), and BOTH sit below the §4 ≥90% category gate. The v16 prompt's
+billing/service/record/access discriminators are CFPB-shaped; the 9-sector consumer-review classes (product_fault 28 /
+service_fault 25 / delivery 14 / safety 11 …) get less lift from that tuning. So the honest cross-domain category number
+is **74%**, not the 80% finance headline — off-finance category tuning is the next real lever, alongside data scale.
 **Generalisation stands: record_accuracy is finance-weighted (2/96 off finance).** Then: to push category past
 82%, more gold + settle service↔access + owner spot-check of the ~9 contestable service↔record rows; OR move to
 Phase 5 (elicitation) now extraction is at 82% not 60%. 14 migrations, 104 tests +1 skip, prompt extract-v16.
