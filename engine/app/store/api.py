@@ -1266,6 +1266,30 @@ def get_case_elicit_state(
     return str(row[0]), int(row[1]), bool(row[2]), (None if row[3] is None else str(row[3]))
 
 
+def get_case_channel(session: Session, case_id: UUID) -> str | None:
+    """The case's intake channel — needed to stamp a derived source (an object snapshot inherits the
+    case's channel, the only values the channel CHECK allows). RLS-scoped."""
+    row = session.execute(
+        text("SELECT channel FROM case_record WHERE id = :cid"), {"cid": case_id}
+    ).first()
+    return None if row is None else str(row[0])
+
+
+def get_latest_extraction_id(session: Session, case_id: UUID, field_path: str) -> UUID | None:
+    """The id of the most recent ``field_extraction`` for a value — what a later citation (e.g. a
+    ``contradicts`` link to an object snapshot) attaches to. Latest wins (a re-extraction supersedes).
+    """
+    row = session.execute(
+        text("""
+            SELECT id FROM field_extraction
+            WHERE case_id = :cid AND field_path = :fp
+            ORDER BY seq DESC LIMIT 1
+            """),
+        {"cid": case_id, "fp": field_path},
+    ).first()
+    return None if row is None else UUID(str(row[0]))
+
+
 def get_field_values(session: Session, case_id: UUID, field_paths: Sequence[str]) -> dict[str, str]:
     """The present (non-null) ``field_current`` values for the given paths — used to find which
     governed fields are STILL GAPS (an absent key = a gap the elicitation policy may ask about)."""

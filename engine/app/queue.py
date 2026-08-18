@@ -101,9 +101,11 @@ def elicit_case_task(*, tenant_id: str, case_id: str) -> str:
     import asyncio
     from uuid import UUID
 
+    from .backends.registry import get_blob, get_llm
     from .elicit.stage import elicit_case
 
-    asyncio.run(elicit_case(tenant_id, UUID(case_id)))
+    # blob → object-snapshot-on-bind (provenance); llm → complaint-vs-record contradiction check.
+    asyncio.run(elicit_case(tenant_id, UUID(case_id), llm=get_llm(), blob=get_blob()))
     return case_id
 
 

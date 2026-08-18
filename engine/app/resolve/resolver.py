@@ -42,6 +42,8 @@ class Resolution:
     object_id: UUID | None = None  # the silently-bound object, if any
     candidates: list[UUID] = field(default_factory=list)
     reason: str = ""
+    is_contradiction: bool = False  # the anchors disagree (quoted id ≠ sender phone) — a record-vs-
+    #                                 complaint contradiction to SURFACE (§5), not a mere ambiguity
 
 
 def _key_hash(value: str, *, as_phone: bool) -> str:
@@ -80,8 +82,10 @@ async def resolve_object(
             if phone_ids and oid not in phone_ids:
                 return Resolution(
                     "confirm",
+                    object_id=oid,
                     candidates=[oid],
                     reason="quoted id and sender phone point to DIFFERENT objects — contradiction, do not silent-bind",
+                    is_contradiction=True,
                 )
             return Resolution(
                 "silent",
