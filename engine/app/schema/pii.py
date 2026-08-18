@@ -17,6 +17,7 @@ an LLM assessment folded into the mint naming call; this module is the reliable 
 from __future__ import annotations
 
 import re
+from collections.abc import Sequence
 
 # Structured-PII patterns in VALUES — high-precision, always applied.
 _SSN = re.compile(r"\b\d{3}-\d{2}-\d{4}\b")
@@ -27,17 +28,58 @@ _CARD = re.compile(r"\b(?:\d[ -]?){13,19}\b")
 # so a minted/promoted `condition`, `status`, `amount`, `person`, `document` is never mis-flagged.
 _NAME_KEYWORDS: dict[str, frozenset[str]] = {
     "government_id": frozenset(
-        {"ssn", "social_security", "passport", "passport_number", "drivers_license",
-         "driver_license", "national_id", "tax_id", "ein", "state_id", "green_card", "visa_number"}
+        {
+            "ssn",
+            "social_security",
+            "passport",
+            "passport_number",
+            "drivers_license",
+            "driver_license",
+            "national_id",
+            "tax_id",
+            "ein",
+            "state_id",
+            "green_card",
+            "visa_number",
+        }
     ),
     "payment_card": frozenset(
-        {"card_number", "cardnumber", "cvv", "cvc", "ccv", "credit_card_number", "debit_card_number",
-         "pan", "card_num", "expiry", "expiration_date", "security_code"}
+        {
+            "card_number",
+            "cardnumber",
+            "cvv",
+            "cvc",
+            "ccv",
+            "credit_card_number",
+            "debit_card_number",
+            "pan",
+            "card_num",
+            "expiry",
+            "expiration_date",
+            "security_code",
+        }
     ),
     "health": frozenset(
-        {"diagnosis", "disease", "medical", "medical_record", "prescription", "medication",
-         "disability", "pregnancy", "mental_health", "therapy", "hiv", "cancer", "illness",
-         "patient", "blood_type", "allergy", "immunization", "vaccination"}
+        {
+            "diagnosis",
+            "disease",
+            "medical",
+            "medical_record",
+            "prescription",
+            "medication",
+            "disability",
+            "pregnancy",
+            "mental_health",
+            "therapy",
+            "hiv",
+            "cancer",
+            "illness",
+            "patient",
+            "blood_type",
+            "allergy",
+            "immunization",
+            "vaccination",
+        }
     ),
     "biometric": frozenset(
         {"fingerprint", "biometric", "retina", "iris", "dna", "faceprint", "voiceprint"}
@@ -54,7 +96,8 @@ NONE = "none"
 
 def _luhn_ok(digits: str) -> bool:
     """Luhn checksum — reduces false positives on arbitrary long digit runs (only real card numbers
-    pass). A non-card long number (e.g. a case ref) usually fails, so it is NOT flagged as a card."""
+    pass). A non-card long number (e.g. a case ref) usually fails, so it is NOT flagged as a card.
+    """
     ds = [int(c) for c in digits if c.isdigit()]
     if not 13 <= len(ds) <= 19:
         return False
@@ -68,7 +111,7 @@ def _luhn_ok(digits: str) -> bool:
     return checksum % 10 == 0
 
 
-def classify_sensitivity(name: str, values: object = ()) -> str:
+def classify_sensitivity(name: str, values: Sequence[object] = ()) -> str:
     """Classify a concept's sensitivity from its NAME (+ optional example values). Returns a category
     (``government_id`` | ``payment_card`` | ``health`` | ``biometric`` | ``credentials``) or ``none``.
     A non-``none`` result BARS the concept from the governed schema (promotion/minting)."""
@@ -76,7 +119,9 @@ def classify_sensitivity(name: str, values: object = ()) -> str:
     full = name.lower()
     for category, kws in _NAME_KEYWORDS.items():
         # match a keyword as a whole token, or as a contiguous substring for multi-word keywords
-        if tokens & kws or any("_" in k and k.replace("_", "") in full.replace("_", "") for k in kws):
+        if tokens & kws or any(
+            "_" in k and k.replace("_", "") in full.replace("_", "") for k in kws
+        ):
             return category
 
     for v in values or ():

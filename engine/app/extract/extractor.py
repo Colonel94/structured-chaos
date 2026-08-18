@@ -14,11 +14,10 @@ from __future__ import annotations
 
 import json
 import re
+from collections.abc import Sequence
 
 from ..backends.interfaces import LLMBackend
 from ..obs.logging import get_logger
-from collections.abc import Sequence
-
 from .head_nouns import HEAD_NOUNS, normalise_token
 from .models import EmergentAttribute, ExtractionResult
 from .profile import profile_value
