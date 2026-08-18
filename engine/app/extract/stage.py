@@ -70,7 +70,9 @@ async def extract_case(
         # column) rather than being skipped as "already done". No minted heads → signature empty → key
         # unchanged (backward compatible with every pre-minting extraction).
         vocab_sig = (
-            "+h" + hashlib.sha256(",".join(sorted(minted)).encode()).hexdigest()[:8] if minted else ""
+            "+h" + hashlib.sha256(",".join(sorted(minted)).encode()).hexdigest()[:8]
+            if minted
+            else ""
         )
         key = api.compute_idempotency_key(
             source_sha256=hashlib.sha256(case_text.encode("utf-8")).hexdigest(),
@@ -150,6 +152,16 @@ async def extract_case(
             case_id=case_id,
         )
         api.complete_stage(session, idempotency_key=key)
+        # Chain (Phase 5): elicitation runs off the SAME transaction that completes extraction, so a
+        # committed extract durably enqueues its elicit (mirroring intake→normalise→extract). The
+        # elicit stage is idempotent on the case's governed state, so a redundant re-extract that
+        # produces the same fields re-elicits to the same decision without re-asking. Lazy import to
+        # avoid a queue↔extract import cycle.
+        from ..queue import defer_in_transaction, elicit_case_task
+
+        defer_in_transaction(
+            session, elicit_case_task, tenant_id=str(tenant_id), case_id=str(case_id)
+        )
         log.info(
             "extract.done",
             case_id=str(case_id),

@@ -91,6 +91,22 @@ def extract_case_task(*, tenant_id: str, case_id: str) -> str:
     return case_id
 
 
+@app.task(name="pipeline.elicit", queue=DEFAULT_QUEUE)
+def elicit_case_task(*, tenant_id: str, case_id: str) -> str:
+    """Phase-5 stage body: decide the next elicitation move (the anchor + two-drill budget, enforced in
+    code) for one case. Enqueued transactionally by the extract stage the moment a case's governed core
+    is (re-)extracted, so each customer reply → re-extraction → the drill advances with no manual
+    trigger. Sync task → ``asyncio.run`` drives the async stage. Imported lazily to keep ``queue``
+    import-light. Returns the case id handled."""
+    import asyncio
+    from uuid import UUID
+
+    from .elicit.stage import elicit_case
+
+    asyncio.run(elicit_case(tenant_id, UUID(case_id)))
+    return case_id
+
+
 @app.task(name="pipeline.backfill", queue=BACKFILL_QUEUE)
 def backfill(
     *,

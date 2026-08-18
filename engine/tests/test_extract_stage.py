@@ -110,6 +110,18 @@ async def test_extract_stage_persists_governed_and_grounded_emergent(
     # Replay is a no-op (idempotency ledger).
     assert await extract_case(tenant, case_id, llm=llm, factory=app_factory) is False
 
+    # The extract stage transactionally enqueues elicitation — the anchor+2 drill runs off extraction
+    # with no manual trigger (Phase 5 chain, mirroring intake→normalise→extract).
+    with tenant_session(tenant, factory=app_factory) as s:
+        elicit_jobs = s.execute(
+            text(
+                "SELECT count(*) FROM procrastinate_jobs "
+                "WHERE task_name='pipeline.elicit' AND args->>'case_id' = :c"
+            ),
+            {"c": str(case_id)},
+        ).scalar_one()
+    assert elicit_jobs == 1
+
 
 async def test_null_desired_outcome_is_not_recorded(
     admin_session: Session, app_factory: sessionmaker[Session]

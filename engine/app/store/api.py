@@ -1241,3 +1241,57 @@ def count_objects(session: Session, *, object_type: str | None = None) -> int:
         {"otype": object_type},
     ).scalar_one()
     return int(row)
+
+
+# ---------------------------------------------------------------------- elicitation (Phase 5, §5)
+
+
+def get_case_elicit_state(
+    session: Session, case_id: UUID
+) -> tuple[str, int, bool, str | None] | None:
+    """``(case_state, question_count, anchor_asked, contact_ref)`` for the elicitation policy, or None
+    if the case is absent. ``anchor_asked`` (from ``external_mappings.elicit``) keeps the anchor from
+    being re-asked or counted as a drill; ``contact_ref`` is the sender phone (a free anchor)."""
+    row = session.execute(
+        text("""
+            SELECT case_state, question_count,
+                   COALESCE((external_mappings #>> '{elicit,anchor_asked}')::boolean, false),
+                   contact_ref
+            FROM case_record WHERE id = :cid
+            """),
+        {"cid": case_id},
+    ).first()
+    if row is None:
+        return None
+    return str(row[0]), int(row[1]), bool(row[2]), (None if row[3] is None else str(row[3]))
+
+
+def get_field_values(session: Session, case_id: UUID, field_paths: Sequence[str]) -> dict[str, str]:
+    """The present (non-null) ``field_current`` values for the given paths — used to find which
+    governed fields are STILL GAPS (an absent key = a gap the elicitation policy may ask about)."""
+    rows = session.execute(
+        text("""
+            SELECT field_path, value FROM field_current
+            WHERE case_id = :cid AND field_path = ANY(:paths)
+            """),
+        {"cid": case_id, "paths": list(field_paths)},
+    ).all()
+    return {str(r[0]): str(r[1]) for r in rows if r[1] not in (None, "")}
+
+
+def apply_elicitation(
+    session: Session, case_id: UUID, *, state: str, asked: bool, meta: Mapping[str, JsonValue]
+) -> None:
+    """Persist an elicitation decision: set ``case_state``, increment ``question_count`` by one iff a
+    question was ``asked`` (the budget is spent HERE, in code), and store the plan under
+    ``external_mappings.elicit`` for the channel/review to read. RLS-scoped."""
+    session.execute(
+        text("""
+            UPDATE case_record
+            SET case_state = :state,
+                question_count = question_count + :delta,
+                external_mappings = jsonb_set(external_mappings, '{elicit}', CAST(:meta AS jsonb), true)
+            WHERE id = :cid
+            """),
+        {"cid": case_id, "state": state, "delta": 1 if asked else 0, "meta": _json(dict(meta))},
+    )
