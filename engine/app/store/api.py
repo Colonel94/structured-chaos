@@ -210,7 +210,8 @@ def nearest_canonical_field(
     ``head`` (Path A qualifier-space dedup, remediation R1): when given, the comparison universe is
     restricted to canonicals UNDER THE SAME HEAD — the closed head vocabulary is the ANCHOR, so a
     qualifier under ``amount`` never merges with one under ``date`` (``6 weeks`` under ``duration`` must
-    not collapse into a ``date``). Without it the lookup is global (legacy pre-Path-A name dedup)."""
+    not collapse into a ``date``). Without it the lookup is global (legacy pre-Path-A name dedup).
+    """
     where_head = "AND head = :head" if head is not None else ""
     row = session.execute(
         text(f"""
@@ -345,8 +346,7 @@ def list_promotable_qualifier_variants(
     excluded). ``effective_support`` = POOLED canonical support (distinct cases attesting the canonical
     OR any merged alias) once deduped, else the raw ``support_count`` (un-deduped variants behave as
     before dedup ran — backward compatible). RLS-scoped."""
-    rows = session.execute(
-        text("""
+    rows = session.execute(text("""
             SELECT ef.field_name_hash, ef.field_name, ef.head, ef.promoted,
               CASE WHEN ef.canonical_hash IS NULL THEN ef.support_count
                    ELSE (SELECT count(DISTINCT fe.case_id)
@@ -358,8 +358,7 @@ def list_promotable_qualifier_variants(
             WHERE ef.head IS NOT NULL AND ef.field_name <> ef.head
               AND (ef.canonical_hash IS NULL OR ef.canonical_hash = ef.field_name_hash)
             ORDER BY ef.head, ef.field_name
-            """)
-    ).all()
+            """)).all()
     return [(str(r[0]), str(r[1]), str(r[2]), int(r[4]), bool(r[3])) for r in rows]
 
 
@@ -412,7 +411,13 @@ def register_minted_head(
                     sensitivity = EXCLUDED.sensitivity,
                     updated_at = now()
             """),
-        {"head": head, "support": support, "gloss": gloss, "source": source, "sensitivity": sensitivity},
+        {
+            "head": head,
+            "support": support,
+            "gloss": gloss,
+            "source": source,
+            "sensitivity": sensitivity,
+        },
     )
 
 
@@ -1085,3 +1090,154 @@ def fail_stage(session: Session, *, idempotency_key: str) -> None:
         text("UPDATE stage_execution SET status = 'failed' WHERE idempotency_key = :key"),
         {"key": idempotency_key},
     )
+
+
+# ------------------------------------------------------------------- object store (Phase 5, §16.1)
+
+
+@dataclass(frozen=True)
+class ObjectHit:
+    """One object an anchor resolves to. ``key_field`` is which identifier matched (None for a
+    fuzzy/embedding hit)."""
+
+    object_id: UUID
+    object_type: str
+    external_id: str | None
+    key_field: str | None = None
+
+
+def upsert_object_record(
+    session: Session,
+    *,
+    object_type: str,
+    external_id: str | None,
+    content_hash: str,
+    attributes: Mapping[str, JsonValue],
+    key_fields: Sequence[str],
+) -> tuple[UUID, bool]:
+    """Insert an object for the current tenant, idempotent on ``(tenant, content_hash)``. Returns
+    ``(object_id, created)`` — ``created`` is False when the identical object already existed (a
+    replayed ingest batch is a no-op, never a duplicate). ``key_fields`` records which attributes the
+    profiler chose as identifiers (transparency; the resolvable keys live in ``object_key``)."""
+    row = session.execute(
+        text(f"""
+            INSERT INTO object_record
+                (tenant_id, object_type, external_id, content_hash, attributes, key_fields)
+            VALUES ({_GUC_TENANT}, :otype, :ext, :chash, CAST(:attrs AS jsonb), CAST(:kf AS jsonb))
+            ON CONFLICT (tenant_id, content_hash) DO NOTHING
+            RETURNING id
+            """),
+        {
+            "otype": object_type,
+            "ext": external_id,
+            "chash": content_hash,
+            "attrs": _json(dict(attributes)),
+            "kf": _json(list(key_fields)),
+        },
+    ).first()
+    if row is not None:
+        return UUID(str(row[0])), True
+    existing = session.execute(
+        text("SELECT id FROM object_record WHERE content_hash = :chash"),
+        {"chash": content_hash},
+    ).one()
+    return UUID(str(existing[0])), False
+
+
+def add_object_key(
+    session: Session, *, object_id: UUID, key_field: str, key_value_hash: str, key_value: str
+) -> None:
+    """Index one identifier of an object for exact-match lookup. Upsert on
+    ``(tenant, object, key_field)`` so re-ingest refreshes rather than duplicates. ``key_value_hash``
+    is the sha256 of the caller-NORMALISED value (see ``app.resolve`` — normalisation lives with the
+    resolver so ingest and lookup hash a value identically)."""
+    session.execute(
+        text(f"""
+            INSERT INTO object_key (tenant_id, object_id, key_field, key_value_hash, key_value)
+            VALUES ({_GUC_TENANT}, :oid, :field, :vhash, :val)
+            ON CONFLICT (tenant_id, object_id, key_field) DO UPDATE
+                SET key_value_hash = EXCLUDED.key_value_hash, key_value = EXCLUDED.key_value
+            """),
+        {"oid": object_id, "field": key_field, "vhash": key_value_hash, "val": key_value},
+    )
+
+
+def resolve_object_by_key(
+    session: Session, *, key_value_hash: str, key_field: str | None = None
+) -> list[ObjectHit]:
+    """Every object whose ``key_field`` value hashes to ``key_value_hash`` (RLS-scoped to the current
+    tenant). ``key_field=None`` searches all identifier fields. Exactly one hit → a silent-match
+    candidate; more than one → ambiguous, must confirm; zero → fall back to fuzzy/elicit. The resolver
+    (``app.resolve``) applies that policy; this only returns the matches."""
+    where_field = "AND ok.key_field = :field" if key_field is not None else ""
+    rows = session.execute(
+        text(f"""
+            SELECT r.id, r.object_type, r.external_id, ok.key_field
+            FROM object_key ok
+            JOIN object_record r ON r.tenant_id = ok.tenant_id AND r.id = ok.object_id
+            WHERE ok.key_value_hash = :vhash
+              {where_field}
+            ORDER BY r.object_type, r.external_id
+            """),
+        {"vhash": key_value_hash, "field": key_field},
+    ).all()
+    return [
+        ObjectHit(UUID(str(r[0])), str(r[1]), (None if r[2] is None else str(r[2])), str(r[3]))
+        for r in rows
+    ]
+
+
+def nearest_objects(
+    session: Session, *, embedding: Sequence[float], k: int = 2, object_type: str | None = None
+) -> list[tuple[UUID, str, float]]:
+    """The ``k`` nearest embedded objects to ``embedding`` (cosine desc), for the fuzzy fallback when
+    no exact key was quoted. Returns ``[(object_id, external_id, cosine), ...]``. RLS-scoped. The
+    resolver silent-binds a fuzzy hit only above a high τ AND with a clear margin over the runner-up
+    (hence k≥2) — a name alone is weak evidence, and acting on the wrong order is worse than asking.
+    """
+    where_type = "AND object_type = :otype" if object_type is not None else ""
+    rows = session.execute(
+        text(f"""
+            SELECT id, external_id, 1 - (embedding <=> CAST(:emb AS vector)) AS sim
+            FROM object_record
+            WHERE embedding IS NOT NULL
+              {where_type}
+            ORDER BY embedding <=> CAST(:emb AS vector)
+            LIMIT :k
+            """),
+        {"emb": _vec_literal(embedding), "otype": object_type, "k": k},
+    ).all()
+    return [(UUID(str(r[0])), ("" if r[1] is None else str(r[1])), float(r[2])) for r in rows]
+
+
+def set_object_embedding(session: Session, *, object_id: UUID, embedding: Sequence[float]) -> None:
+    """Store an object's BGE-M3 embedding (the fuzzy-match vector). Kept off the ingest hot path so a
+    large upload isn't blocked on the GPU; the resolver's exact-key path never needs it."""
+    session.execute(
+        text("UPDATE object_record SET embedding = CAST(:emb AS vector) WHERE id = :oid"),
+        {"emb": _vec_literal(embedding), "oid": object_id},
+    )
+
+
+def get_object(
+    session: Session, object_id: UUID
+) -> tuple[str, str | None, dict[str, JsonValue]] | None:
+    """One object's ``(object_type, external_id, attributes)`` — for the confirmation prompt and for
+    the ``object_snapshot`` source document written when a case binds to it. RLS-scoped."""
+    row = session.execute(
+        text("SELECT object_type, external_id, attributes FROM object_record WHERE id = :oid"),
+        {"oid": object_id},
+    ).first()
+    if row is None:
+        return None
+    return str(row[0]), (None if row[1] is None else str(row[1])), dict(row[2])
+
+
+def count_objects(session: Session, *, object_type: str | None = None) -> int:
+    """How many objects the current tenant has (optionally of one type). For ingest reporting/tests."""
+    where_type = "WHERE object_type = :otype" if object_type is not None else ""
+    row = session.execute(
+        text(f"SELECT count(*) FROM object_record {where_type}"),
+        {"otype": object_type},
+    ).scalar_one()
+    return int(row)
