@@ -332,6 +332,26 @@ observations with zero errors. Report "no failures at n=X (≤~Y% err)", never "
 the gate before claiming it; a scaled run on a realistic distribution — not a handful of planted cases —
 is the real test (it caught a wrong-bind defect n=10 planted cases missed).
 
+**A gate can be unreachable because of an UPSTREAM ceiling, not the mechanism you're building — measure
+the ceiling first, and don't pile machinery on a capped input.** (Learned 2026-08-19, the Phase-6
+confidence spike.) The ≥98%-auto-route gate (EDD §10) could not be met by ANY confidence signal because
+the *extractor's* per-class accuracy caps at ~89% (category ~81%) — the confidence layer can only rank
+what the extractor produces, it cannot manufacture accuracy the extractor never had. Three signals were
+falsified FIRST, in ~15 minutes, before any pipeline was built: (a) an LLM's own confidence is degenerate
+on a *decisive* model — self-consistency gives identical answers (the enum decision never varies even
+when wrong), P(True)/verbalized self-report ~0.95 on wrong labels (commitment≠correctness, exactly as the
+spec cites); (b) a same-question re-ask agrees ~always (no signal), a differently-framed cross-check
+disagrees ~always (an incompetent second classifier) — the sweet spot rarely exists once the main prompt
+already encodes the best discrimination; (c) the honest signal was CALIBRATION on the human gold (measured
+reliability per predicted class), which is *useful* (differentiates a 92%-reliable prediction from a
+25%-reliable one → review-prioritisation) but CANNOT lift accepted accuracy above the extractor's ceiling.
+**Rule: when a downstream gate fails, first ask whether the ceiling is UPSTREAM. If so, report it plainly
+(gate_met=False, knob NOT forced — §10 "never move the goalposts"), make the system behave safely on the
+failing side (here: refuse to auto-route → everything to review + the commit gate), and name the real
+lever (a more accurate extractor), rather than building ever-fancier confidence machinery on a capped
+input.** Same shape as the Phase-4 convergence retraction; the two are the standing examples of an
+aspirational number that needs an upstream fix, not a cleverer measurement.
+
 **Feedback compounds into rules; the winning condition is the standing motto.** (Owner directive,
 2026-08-15.) Every owner review comment is a *durable rule*, not a one-off fix: extract the
 generalizable lesson, log it (build-law → this §10; working style → memory
