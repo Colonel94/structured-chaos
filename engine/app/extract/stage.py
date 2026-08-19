@@ -35,6 +35,7 @@ from ..store.db import SessionFactory, tenant_session
 from .extractor import extract
 from .head_nouns import HEAD_NOUNS
 from .prompt import PROMPT_VERSION
+from .provenance import build_field_citations
 
 log = get_logger(__name__)
 
@@ -97,10 +98,12 @@ async def extract_case(
             case_text, llm=llm, heads=effective_heads, minted_glosses=minted_glosses
         )
 
-        # Every extracted value cites the case's source documents (its provenance). Locator is null
-        # (whole-source) — per-field span attribution is a Phase-7 review refinement.
+        # Every extracted value cites its source with a PRECISE span (Phase 7): the value is located
+        # deterministically in the case's normalised content, so a citation carries the exact sentence
+        # char-range / audio segment / image region — the click-to-trace trust gate (§3). A value that
+        # is not a verbatim quote (an inferred enum) falls back to a whole-document citation.
         docs = api.list_case_source_documents(session, case_id)
-        citations = [api.Citation(source_document_id=d, role="primary") for d in docs]
+        doc_spans = api.list_case_normalised_spans(session, case_id)
         run_id = uuid4()
 
         n_gov = 0
@@ -117,7 +120,7 @@ async def extract_case(
                 prompt_version=result.prompt_version,
                 run_id=run_id,
                 confidence=_CALIBRATION.confidence(field_path, value),
-                citations=citations,
+                citations=build_field_citations(value, doc_spans, fallback_docs=docs),
                 layer="governed_core",
             )
             n_gov += 1
@@ -137,7 +140,7 @@ async def extract_case(
                 confidence=_CALIBRATION.confidence(
                     attr.name, attr.value, grounding=result.field_validity
                 ),
-                citations=citations,
+                citations=build_field_citations(attr.value, doc_spans, fallback_docs=docs),
                 layer="emergent",
             )
             # Path A: register the composite (qualifier_head) AND roll its support up to the head —

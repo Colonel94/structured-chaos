@@ -33,12 +33,32 @@ export interface SourceDocument {
   received_at: string;
 }
 
+// The deterministic priority/SLA/routing decision (Phase 6 rules engine) — explainable in one sentence.
+export interface Decision {
+  priority: string;
+  routing: string;
+  sla_target_hours: number;
+  sla_response_due_at: string | null;
+  matched_rule_id: string;
+  rationale: string;
+  policy_version: string;
+}
+
+// The human-approval stamp (Phase 7 commit gate). Present ⇒ approved; a report may then be issued.
+export interface Commit {
+  committed_at: string;
+  committed_by: string;
+}
+
 export interface CaseReview {
   case_id: string;
   channel: string;
   case_state: string;
   first_contact_at: string;
   fields: ReviewField[];
+  decision: Decision | null;
+  commit: Commit | null;
+  min_governed_confidence: number | null;
   normalised_text: string;
   source_documents: SourceDocument[];
 }
@@ -51,6 +71,11 @@ export interface CaseSummary {
   category: string | null;
   fault: string | null;
   field_count: number;
+  min_governed_confidence: number | null;
+  priority: string | null;
+  routing: string | null;
+  sla_response_due_at: string | null;
+  committed_at: string | null;
 }
 
 // The governed core in review order — the small, stable, human-controlled layer (CLAUDE.md §4).

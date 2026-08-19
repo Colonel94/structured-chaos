@@ -872,6 +872,33 @@ def get_case_normalised_text(session: Session, case_id: UUID) -> str:
     return "\n".join(str(r[0]) for r in rows)
 
 
+def list_case_normalised_spans(session: Session, case_id: UUID) -> list[dict[str, JsonValue]]:
+    """Per source document: its mime, normalised text, and provenance spans — in the SAME order and
+    with the SAME ``text <> ''`` filter as :func:`get_case_normalised_text`, so char offsets computed
+    against this list line up with the concatenated text the review UI renders. Drives per-field span
+    attribution (Phase 7): a value is located here → its exact sentence / audio segment / image region.
+    RLS-scoped."""
+    rows = session.execute(
+        text("""
+            SELECT nc.source_document_id, sd.mime, nc.text, nc.spans
+            FROM normalised_content nc
+            JOIN source_document sd ON sd.id = nc.source_document_id
+            WHERE nc.case_id = :cid AND nc.text <> ''
+            ORDER BY nc.created_at, nc.id
+            """),
+        {"cid": case_id},
+    ).all()
+    return [
+        {
+            "source_document_id": str(r[0]),
+            "mime": str(r[1]),
+            "text": str(r[2]),
+            "spans": r[3] or [],
+        }
+        for r in rows
+    ]
+
+
 # ----------------------------------------------------------------- review read model (Phase 4.7)
 #
 # The review view (the engine's first client) reads the assembled case: the governed core + the
@@ -881,8 +908,10 @@ def get_case_normalised_text(session: Session, case_id: UUID) -> str:
 
 
 def list_cases(session: Session, *, limit: int = 100) -> list[dict[str, JsonValue]]:
-    """Recent cases for the current tenant, newest first, with a light summary (category + fault from
-    the ``field_current`` projection) so the register can render without a per-row round-trip."""
+    """Recent cases for the current tenant, newest first, with the manager-register summary: category +
+    fault (from the ``field_current`` projection), the deterministic priority/SLA (from ``case_decision``),
+    the lowest governed confidence (the low-confidence-first review hint), and the approval stamp — so the
+    register can render, sort, and triage without a per-row round-trip. All RLS-scoped."""
     rows = session.execute(
         text("""
             SELECT c.id, c.channel, c.case_state, c.first_contact_at,
@@ -890,7 +919,16 @@ def list_cases(session: Session, *, limit: int = 100) -> list[dict[str, JsonValu
                     WHERE case_id = c.id AND field_path = 'category') AS category,
                    (SELECT value FROM field_current
                     WHERE case_id = c.id AND field_path = 'fault') AS fault,
-                   (SELECT count(*) FROM field_current WHERE case_id = c.id) AS field_count
+                   (SELECT count(*) FROM field_current WHERE case_id = c.id) AS field_count,
+                   (SELECT min(confidence) FROM field_current
+                    WHERE case_id = c.id AND confidence IS NOT NULL
+                      AND field_path IN ('category','fault','desired_outcome',
+                                         'severity_signal','emotion_signal','anchor_value')
+                   ) AS min_gov_conf,
+                   (SELECT priority FROM case_decision WHERE case_id = c.id) AS priority,
+                   (SELECT routing FROM case_decision WHERE case_id = c.id) AS routing,
+                   (SELECT sla_response_due_at FROM case_decision WHERE case_id = c.id) AS sla_due,
+                   c.committed_at
             FROM case_record c
             ORDER BY c.first_contact_at DESC, c.id
             LIMIT :limit
@@ -906,6 +944,11 @@ def list_cases(session: Session, *, limit: int = 100) -> list[dict[str, JsonValu
             "category": r[4],
             "fault": r[5],
             "field_count": int(r[6]),
+            "min_governed_confidence": float(r[7]) if r[7] is not None else None,
+            "priority": r[8],
+            "routing": r[9],
+            "sla_response_due_at": r[10].isoformat() if r[10] is not None else None,
+            "committed_at": r[11].isoformat() if r[11] is not None else None,
         }
         for r in rows
     ]
@@ -1032,6 +1075,8 @@ def get_case_review(session: Session, case_id: UUID) -> dict[str, JsonValue] | N
         "fields": fields,
         # The deterministic priority/SLA/routing decision (Phase 6 rules engine), if computed.
         "decision": get_case_decision(session, case_id),
+        # The human-approval stamp (Phase 7). Non-null ⇒ approved; the report gate + UI read it.
+        "commit": commit_status(session, case_id),
         "min_governed_confidence": min(gov_conf) if gov_conf else None,
         "normalised_text": get_case_normalised_text(session, case_id),
         "source_documents": [
@@ -1493,3 +1538,60 @@ def get_case_decision(session: Session, case_id: UUID) -> dict[str, JsonValue] |
         "inputs": row[7],
         "computed_at": row[8].isoformat() if row[8] is not None else None,
     }
+
+
+# ---------------------------------------------- the commit gate (Phase 7, §3 trust gate + §16.4)
+
+
+def commit_status(session: Session, case_id: UUID) -> dict[str, JsonValue] | None:
+    """The human-approval stamp on a case — ``{committed_at, committed_by}`` — or None if the case is
+    not yet approved (or absent for this tenant). This is what the report generator checks: no stamp,
+    no external artifact (CLAUDE.md §3). RLS-scoped."""
+    row = session.execute(
+        text("SELECT committed_at, committed_by FROM case_record WHERE id = :cid"),
+        {"cid": case_id},
+    ).first()
+    if row is None or row[0] is None:
+        return None
+    return {"committed_at": row[0].isoformat(), "committed_by": str(row[1])}
+
+
+def commit_case(
+    session: Session, case_id: UUID, *, reviewer_id: str
+) -> dict[str, JsonValue] | None:
+    """Approve a case: stamp ``committed_at``/``committed_by`` and move it to ``committed``. This is the
+    human-approval act the trust gate turns on — only after it may a report be issued or an external
+    record written (CLAUDE.md §3).
+
+    ONE-WAY and first-writer-wins: the ``COALESCE`` guards mean a re-commit never overwrites the original
+    stamp (the approval can't be silently re-attributed or re-timed), so the call is idempotent — a
+    replay returns the existing stamp unchanged. Returns the commit status, or None if the case is
+    absent for this tenant (RLS fail-closed). The clock stamp is the DB's ``now()`` (server-side, not a
+    client clock)."""
+    exists = session.execute(
+        text("SELECT 1 FROM case_record WHERE id = :cid"), {"cid": case_id}
+    ).first()
+    if exists is None:
+        return None
+    session.execute(
+        text("""
+            UPDATE case_record
+            SET committed_at = COALESCE(committed_at, now()),
+                committed_by = COALESCE(committed_by, :reviewer),
+                case_state   = 'committed'
+            WHERE id = :cid AND committed_at IS NULL
+            """),
+        {"cid": case_id, "reviewer": reviewer_id},
+    )
+    return commit_status(session, case_id)
+
+
+def get_source_blob_ref(session: Session, source_document_id: UUID) -> tuple[str, str] | None:
+    """The ``(blob_key, mime)`` for a source document, so the provenance route can stream the original
+    (audio/image) a reviewer clicks through to. RLS-scoped: a document outside the tenant reads as None
+    (fail-closed), never a cross-tenant blob leak."""
+    row = session.execute(
+        text("SELECT blob_key, mime FROM source_document WHERE id = :did"),
+        {"did": source_document_id},
+    ).first()
+    return None if row is None else (str(row[0]), str(row[1]))
