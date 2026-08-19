@@ -12,7 +12,7 @@ from typing import cast
 
 from ..config import Backend, Settings, settings
 from . import fake
-from .interfaces import ASRBackend, BlobStore, EmbeddingBackend, LLMBackend
+from .interfaces import ASRBackend, BlobStore, Channel, EmbeddingBackend, LLMBackend
 
 
 def get_asr(cfg: Settings = settings) -> ASRBackend:
@@ -68,3 +68,17 @@ def get_blob(cfg: Settings = settings) -> BlobStore:
             from .cloud.blob_minio import MinioBlob
 
             return cast(BlobStore, MinioBlob(cfg))
+
+
+def get_channel(cfg: Settings = settings) -> Channel:
+    match cfg.channel_backend:
+        case Backend.fake:
+            return fake.FakeChannel()
+        case Backend.local:
+            from .local.channel_local import LocalChannel
+
+            return cast(Channel, LocalChannel(cfg))
+        case Backend.cloud:
+            from .cloud.channel_whatsapp import WhatsAppChannel  # deferred cloud path
+
+            return cast(Channel, WhatsAppChannel(cfg))

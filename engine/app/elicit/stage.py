@@ -157,7 +157,10 @@ async def elicit_case(
                 obj = api.get_object(session, resolution.object_id)
                 if obj is not None:
                     confirmation = _confirmation(obj)
-        has_anchor = bool(anchor_value or contact_ref or resolved)
+        # A stated anchor, or an object that actually resolved, counts. The sender's phone (contact_ref)
+        # does NOT on its own — it may not be the number used to order, so if it didn't resolve we still
+        # ask the anchor ("order number, or the phone you used to order").
+        has_anchor = bool(anchor_value) or resolved
 
         plan = decide(
             set(governed),
@@ -189,6 +192,15 @@ async def elicit_case(
         }
         api.apply_elicitation(session, case_id, state=plan.state, asked=asked, meta=meta)
         api.complete_stage(session, idempotency_key=key)
+        # Chain (Phase 5): when a question was issued, transmit it off the SAME transaction that
+        # recorded it (mirroring extract→elicit) — the drill's question is sent with no manual trigger,
+        # and the customer's reply re-enters intake to advance the loop. Lazy import avoids a cycle.
+        if asked:
+            from ..queue import defer_in_transaction, dispatch_case_task
+
+            defer_in_transaction(
+                session, dispatch_case_task, tenant_id=str(tenant_id), case_id=str(case_id)
+            )
         log.info(
             "elicit.done",
             case_id=str(case_id),

@@ -109,6 +109,22 @@ def elicit_case_task(*, tenant_id: str, case_id: str) -> str:
     return case_id
 
 
+@app.task(name="pipeline.dispatch", queue=DEFAULT_QUEUE)
+def dispatch_case_task(*, tenant_id: str, case_id: str) -> str:
+    """Phase-5 egress: transmit a case's pending elicitation question over its channel, once. Enqueued
+    transactionally by the elicit stage whenever it issues a question, so the drill's question is sent
+    with no manual trigger; the customer's reply re-enters intake and advances the loop. Idempotent (the
+    outbound ledger's UNIQUE key). Sync task → ``asyncio.run``. Returns the case id handled."""
+    import asyncio
+    from uuid import UUID
+
+    from .backends.registry import get_channel
+    from .channel.dispatch import dispatch_case_question
+
+    asyncio.run(dispatch_case_question(tenant_id, UUID(case_id), channel=get_channel()))
+    return case_id
+
+
 @app.task(name="pipeline.backfill", queue=BACKFILL_QUEUE)
 def backfill(
     *,

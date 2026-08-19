@@ -46,6 +46,9 @@ class Settings(BaseSettings):
     llm_backend: Backend = Backend.local
     embedding_backend: Backend = Backend.local
     blob_backend: Backend = Backend.local
+    # Egress channel — default LOCAL ($0 record-and-relay PoC sink); `cloud` = WhatsApp Cloud API,
+    # the deferred path (needs the Meta test number), so it raises loudly if selected before setup.
+    channel_backend: Backend = Backend.local
 
     # --- cloud credentials (empty until Gate A; smoke scripts assert 200) ---
     anthropic_api_key: str = ""

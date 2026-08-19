@@ -54,3 +54,14 @@ class FakeBlob:
 
     async def get(self, key: str) -> bytes:
         return self._store[key]
+
+
+class FakeChannel:
+    """Records every outbound so tests can assert what the system said. Returns a deterministic ref."""
+
+    def __init__(self) -> None:
+        self.sent: list[tuple[str, str]] = []  # (recipient, text)
+
+    async def send(self, *, recipient: str, text: str) -> str:
+        self.sent.append((recipient, text))
+        return f"fake:{len(self.sent)}"

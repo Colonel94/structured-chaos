@@ -1319,3 +1319,64 @@ def apply_elicitation(
             """),
         {"cid": case_id, "state": state, "delta": 1 if asked else 0, "meta": _json(dict(meta))},
     )
+
+
+# ----------------------------------------------------------------- outbound channel (Phase 5, §5)
+
+
+def get_pending_question(session: Session, case_id: UUID) -> str | None:
+    """The elicitation question awaiting dispatch — the ``next_question`` the elicit stage recorded
+    while the case is still ``incomplete``. None when the case is actionable/handed-off or nothing is
+    pending. RLS-scoped."""
+    row = session.execute(
+        text("""
+            SELECT external_mappings->'elicit'->>'next_question'
+            FROM case_record
+            WHERE id = :cid AND case_state = 'incomplete'
+              AND external_mappings->'elicit'->>'next_question' IS NOT NULL
+            """),
+        {"cid": case_id},
+    ).first()
+    return None if row is None or row[0] is None else str(row[0])
+
+
+def claim_outbound(
+    session: Session,
+    *,
+    case_id: UUID,
+    channel: str,
+    recipient: str,
+    body: str,
+    question_hash: str,
+) -> UUID | None:
+    """Claim a question for sending — insert an ``outbound_message`` row, idempotent on
+    ``(tenant, case, question_hash)``. Returns the new row id if the caller should transmit, or None
+    if this exact question was already sent (never send twice). Call :func:`mark_outbound_sent` after a
+    successful transmit."""
+    row = session.execute(
+        text(f"""
+            INSERT INTO outbound_message
+                (tenant_id, case_id, channel, recipient, body, question_hash, status)
+            VALUES ({_GUC_TENANT}, :cid, :channel, :recipient, :body, :qhash, 'sending')
+            ON CONFLICT (tenant_id, case_id, question_hash) DO NOTHING
+            RETURNING id
+            """),
+        {
+            "cid": case_id,
+            "channel": channel,
+            "recipient": recipient,
+            "body": body,
+            "qhash": question_hash,
+        },
+    ).first()
+    return None if row is None else UUID(str(row[0]))
+
+
+def mark_outbound_sent(session: Session, outbound_id: UUID, *, external_ref: str) -> None:
+    """Record the channel's message ref and flip a claimed outbound to ``sent`` (the audit trail)."""
+    session.execute(
+        text("""
+            UPDATE outbound_message SET external_ref = :ref, status = 'sent' WHERE id = :oid
+            """),
+        {"ref": external_ref, "oid": outbound_id},
+    )

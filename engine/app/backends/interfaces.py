@@ -55,3 +55,13 @@ class BlobStore(Protocol):
 
     async def put(self, key: str, data: bytes, *, content_type: str) -> str: ...
     async def get(self, key: str) -> bytes: ...
+
+
+@runtime_checkable
+class Channel(Protocol):
+    """Egress — send a message back to a customer, returning the channel's message ref. The local
+    PoC records-and-relays ($0, no live transport); the cloud impl (WhatsApp Cloud API) is the
+    deferred path, same interface. Only the elicitation drill (deterministic, budgeted) is sent this
+    way; resolutions/reports still gate on human approval (Phase 7)."""
+
+    async def send(self, *, recipient: str, text: str) -> str: ...
