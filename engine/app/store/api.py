@@ -1380,3 +1380,106 @@ def mark_outbound_sent(session: Session, outbound_id: UUID, *, external_ref: str
             """),
         {"ref": external_ref, "oid": outbound_id},
     )
+
+
+# ------------------------------------------------ deterministic priority/SLA/routing (Phase 6, §8)
+
+
+def get_case_decision_inputs(
+    session: Session, case_id: UUID
+) -> tuple[datetime, dict[str, str | None]] | None:
+    """``(first_contact_at, {category, severity_signal, emotion_signal})`` for the rules engine, or None
+    if the case is absent. ``first_contact_at`` is the SLA clock start (§3 — the clock starts at first
+    contact); the three signals are the governed inputs the deterministic policy reads. A missing
+    governed value is None (the policy's rules simply won't fire on it). RLS-scoped."""
+    row = session.execute(
+        text("SELECT first_contact_at FROM case_record WHERE id = :cid"), {"cid": case_id}
+    ).first()
+    if row is None:
+        return None
+    first_contact_at = row[0]
+    keys = ("category", "severity_signal", "emotion_signal")
+    values = get_field_values(session, case_id, keys)
+    return first_contact_at, {k: values.get(k) for k in keys}
+
+
+def get_tenant_policy_yaml(session: Session) -> str | None:
+    """The current tenant's optional policy override text (``tenant.policy_yaml``), or None → the case
+    runs on the universal default policy (zero-config). RLS scopes ``tenant`` to the caller's own row.
+    """
+    row = session.execute(text("SELECT policy_yaml FROM tenant WHERE id = " + _GUC_TENANT)).first()
+    return None if row is None or row[0] is None else str(row[0])
+
+
+def upsert_case_decision(
+    session: Session,
+    case_id: UUID,
+    *,
+    priority: str,
+    routing: str,
+    sla_target_hours: float,
+    sla_response_due_at: datetime,
+    matched_rule_id: str,
+    rationale: str,
+    policy_version: str,
+    inputs: Mapping[str, JsonValue],
+) -> None:
+    """Write (or rebuild) the deterministic decision for a case — the disposable projection derived from
+    (governed core × policy). Idempotent by primary key: re-running the rules stage on unchanged inputs
+    overwrites with the identical row. RLS-scoped (INSERT stamps the caller's tenant)."""
+    session.execute(
+        text(f"""
+            INSERT INTO case_decision
+                (tenant_id, case_id, priority, routing, sla_target_hours, sla_response_due_at,
+                 matched_rule_id, rationale, policy_version, inputs)
+            VALUES ({_GUC_TENANT}, :cid, :priority, :routing, :sla_hours, :due_at,
+                    :rule_id, :rationale, :policy_version, CAST(:inputs AS jsonb))
+            ON CONFLICT (tenant_id, case_id) DO UPDATE SET
+                priority = EXCLUDED.priority,
+                routing = EXCLUDED.routing,
+                sla_target_hours = EXCLUDED.sla_target_hours,
+                sla_response_due_at = EXCLUDED.sla_response_due_at,
+                matched_rule_id = EXCLUDED.matched_rule_id,
+                rationale = EXCLUDED.rationale,
+                policy_version = EXCLUDED.policy_version,
+                inputs = EXCLUDED.inputs,
+                computed_at = now()
+            """),
+        {
+            "cid": case_id,
+            "priority": priority,
+            "routing": routing,
+            "sla_hours": sla_target_hours,
+            "due_at": sla_response_due_at,
+            "rule_id": matched_rule_id,
+            "rationale": rationale,
+            "policy_version": policy_version,
+            "inputs": _json(dict(inputs)),
+        },
+    )
+
+
+def get_case_decision(session: Session, case_id: UUID) -> dict[str, JsonValue] | None:
+    """The case's current priority/SLA/routing decision (for the review read model + tests), or None if
+    none computed yet. RLS-scoped."""
+    row = session.execute(
+        text("""
+            SELECT priority, routing, sla_target_hours, sla_response_due_at, matched_rule_id,
+                   rationale, policy_version, inputs, computed_at
+            FROM case_decision WHERE case_id = :cid
+            """),
+        {"cid": case_id},
+    ).first()
+    if row is None:
+        return None
+    return {
+        "priority": str(row[0]),
+        "routing": str(row[1]),
+        "sla_target_hours": float(row[2]),
+        "sla_response_due_at": row[3].isoformat() if row[3] is not None else None,
+        "matched_rule_id": str(row[4]),
+        "rationale": str(row[5]),
+        "policy_version": str(row[6]),
+        "inputs": row[7],
+        "computed_at": row[8].isoformat() if row[8] is not None else None,
+    }

@@ -1,0 +1,84 @@
+# Universal default priority / SLA / routing policy (Phase 6, EDD §8 + §16.2).
+#
+# This ships with the product so a zero-config tenant gets a correct, deterministic SLA with NO input
+# (winning-condition §2 setup gate). A tenant's own `policy_yaml` (optional) REPLACES this wholesale —
+# it is refinement, never a setup gate. Service levels are this engine's output, never a model's.
+#
+# Evaluation is FIRST-MATCH-WINS over `rules`, top to bottom: the first rule whose `when` conditions ALL
+# hold decides the case, and that single rule is the one-sentence explanation. So order = precedence.
+# A `when` condition lists the allowed values for an input; an omitted input key is a wildcard. Inputs
+# come from the governed core: `severity` = severity_signal, `category` = category, `emotion` =
+# emotion_signal. The final rule MUST be a catch-all ({}) so evaluation is total (every case gets a
+# decision). `sla_hours` sets the response deadline, measured from first_contact_at (the clock starts at
+# first contact, not at completeness — CLAUDE.md §3).
+version: default-v1
+
+rules:
+  # --- Severity dominates: a checkable state (safety, a vulnerable party) beats arguable conduct. ---
+  - id: safety-critical
+    when: { severity: [safety_health] }
+    priority: P1
+    routing: safety_escalation
+    sla_hours: 1
+    rationale: "Safety or health risk flagged — urgent, routed to safety escalation."
+
+  - id: vulnerable-party
+    when: { severity: [vulnerable_party] }
+    priority: P1
+    routing: priority_support
+    sla_hours: 2
+    rationale: "A vulnerable party is involved — urgent, routed to priority support."
+
+  # --- Emotion escalates: an angry customer is a churn/reputation risk; get a human on it fast (§5). ---
+  - id: angry-financial-harm
+    when: { severity: [financial_harm], emotion: [angry] }
+    priority: P1
+    routing: priority_support
+    sla_hours: 2
+    rationale: "Financial harm reported by an angry customer — urgent, routed to priority support."
+
+  - id: financial-harm
+    when: { severity: [financial_harm] }
+    priority: P2
+    routing: finance_billing
+    sla_hours: 4
+    rationale: "Financial harm reported — high priority, routed to finance/billing."
+
+  - id: angry-any
+    when: { emotion: [angry] }
+    priority: P2
+    routing: human_review
+    sla_hours: 4
+    rationale: "An angry customer — high priority, routed to a human reviewer."
+
+  # --- A safety/health complaint that severity did not already flag still escalates on the category. ---
+  - id: safety-category
+    when: { category: [safety_health] }
+    priority: P1
+    routing: safety_escalation
+    sla_hours: 2
+    rationale: "A safety or health complaint — urgent, routed to safety escalation."
+
+  # --- Money/record disputes route to finance; conduct/product/delivery take the standard path. ---
+  - id: billing-or-record
+    when: { category: [billing_charge, record_accuracy] }
+    priority: P2
+    routing: finance_billing
+    sla_hours: 8
+    rationale: "A billing or record-accuracy dispute — high priority, routed to finance/billing."
+
+  # --- Not yet classifiable → triage for clarification rather than a wrong deadline (refuse to guess). ---
+  - id: unclear
+    when: { category: [UNCLEAR] }
+    priority: P3
+    routing: triage
+    sla_hours: 12
+    rationale: "The complaint is not yet clear — routed to triage for clarification."
+
+  # --- Catch-all: a standard complaint. MUST be last and unconditional so evaluation is total. ---
+  - id: default
+    when: {}
+    priority: P3
+    routing: general_queue
+    sla_hours: 24
+    rationale: "A standard complaint — normal priority, routed to the general queue."

@@ -157,10 +157,16 @@ async def extract_case(
         # elicit stage is idempotent on the case's governed state, so a redundant re-extract that
         # produces the same fields re-elicits to the same decision without re-asking. Lazy import to
         # avoid a queue↔extract import cycle.
-        from ..queue import defer_in_transaction, elicit_case_task
+        from ..queue import defer_in_transaction, elicit_case_task, rules_case_task
 
         defer_in_transaction(
             session, elicit_case_task, tenant_id=str(tenant_id), case_id=str(case_id)
+        )
+        # Phase 6: the deterministic priority/SLA/routing decision runs off the SAME transaction too
+        # (parallel to elicit) — a committed extract durably enqueues the rules stage, so the SLA clock
+        # and routing are set with no manual trigger and recompute whenever a governed signal changes.
+        defer_in_transaction(
+            session, rules_case_task, tenant_id=str(tenant_id), case_id=str(case_id)
         )
         log.info(
             "extract.done",

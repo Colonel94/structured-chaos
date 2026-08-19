@@ -125,6 +125,21 @@ def dispatch_case_task(*, tenant_id: str, case_id: str) -> str:
     return case_id
 
 
+@app.task(name="pipeline.rules", queue=DEFAULT_QUEUE)
+def rules_case_task(*, tenant_id: str, case_id: str) -> str:
+    """Phase-6 stage body: compute the deterministic priority/SLA/routing decision for one case.
+    Enqueued transactionally by the extract stage (parallel to elicit) the moment a case's governed core
+    is (re-)extracted, so the SLA clock + routing are set with no manual trigger and recompute whenever a
+    signal changes. Sync stage (no model call) → called directly, no ``asyncio.run``. Imported lazily to
+    keep ``queue`` import-light. Returns the case id handled."""
+    from uuid import UUID
+
+    from .rules.stage import decide_case
+
+    decide_case(tenant_id, UUID(case_id))
+    return case_id
+
+
 @app.task(name="pipeline.backfill", queue=BACKFILL_QUEUE)
 def backfill(
     *,
