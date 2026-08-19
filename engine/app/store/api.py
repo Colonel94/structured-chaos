@@ -1017,12 +1017,22 @@ def get_case_review(session: Session, case_id: UUID) -> dict[str, JsonValue] | N
             """),
         {"cid": case_id},
     ).all()
+    # The lowest governed-core confidence — the review-routing hint (low-confidence-first). A field the
+    # system is unsure of is what should pull a case into human review (Phase 6 "refuse to guess").
+    gov_conf = [
+        float(f["confidence"])  # type: ignore[arg-type]
+        for f in fields
+        if f["layer"] == "governed_core" and f["confidence"] is not None
+    ]
     return {
         "case_id": str(header[0]),
         "channel": header[1],
         "case_state": header[2],
         "first_contact_at": header[3].isoformat(),
         "fields": fields,
+        # The deterministic priority/SLA/routing decision (Phase 6 rules engine), if computed.
+        "decision": get_case_decision(session, case_id),
+        "min_governed_confidence": min(gov_conf) if gov_conf else None,
         "normalised_text": get_case_normalised_text(session, case_id),
         "source_documents": [
             {

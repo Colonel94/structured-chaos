@@ -17,7 +17,7 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.backends.fake import FakeBlob
-from app.extract.stage import extract_case
+from app.extract.stage import _CALIBRATION, extract_case
 from app.intake.ingest import ingest_messages
 from app.intake.models import InboundMessage
 from app.store import api, meter
@@ -97,7 +97,15 @@ async def test_extract_stage_persists_governed_and_grounded_emergent(
         fc = s.execute(
             text("SELECT count(*) FROM field_current WHERE case_id=:c"), {"c": case_id}
         ).scalar_one()
+        cat_conf = s.execute(
+            text("SELECT confidence FROM field_current WHERE case_id=:c AND field_path='category'"),
+            {"c": case_id},
+        ).scalar_one()
         cost = meter.case_cost(s, case_id)
+
+    # Phase 6: the stored confidence is the CALIBRATED value for this predicted category, not the old
+    # 0.5 placeholder and not the model's self-report — it is exactly what the calibration model returns.
+    assert cat_conf == _CALIBRATION.confidence("category", "product_fault")
 
     # 6 governed (category, fault, desired_outcome, emotion, severity, anchor) — all non-null here.
     assert gov == 6
@@ -167,6 +175,13 @@ async def test_null_desired_outcome_is_not_recorded(
             .scalars()
             .all()
         )
+        unclear_conf = s.execute(
+            text("SELECT confidence FROM field_current WHERE case_id=:c AND field_path='category'"),
+            {"c": case_id},
+        ).scalar_one()
     assert "desired_outcome" not in paths  # null → not recorded
     assert "anchor_value" not in paths  # null → not recorded
     assert "category" in paths  # present values still recorded
+    # Phase 6: an explicit abstention (category=UNCLEAR) is stored with confidence 0 → always routed to
+    # review, never treated as a confident answer.
+    assert unclear_conf == 0.0

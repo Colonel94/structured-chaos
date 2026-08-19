@@ -10,9 +10,11 @@ Design choices held here:
 - **Refuse to guess persists as absence.** A ``null`` governed value (e.g. ``desired_outcome`` the
   customer never stated) is NOT recorded — its absence is what routes to elicitation (Phase 5).
 - **Ungrounded emergent candidates are dropped**, never stored (closed-world grounding).
-- **Confidence is a placeholder (0.5) pre-calibration.** Real per-field confidence is Phase 6
-  (self-consistency + calibration); until then every value reads "uncertain" → flagged for human
-  review, which is the safe default (refuse to guess). Documented, not hidden.
+- **Confidence is CALIBRATED (Phase 6).** Each value's confidence is the gold-calibrated reliability of
+  that predicted value (governed core) or the grounding signal (emergent), NOT the model's degenerate
+  self-report (which the spike proved reads ~0.95 even when wrong). An abstention (UNCLEAR / a null the
+  model refused to guess) → confidence 0 → routed to review. A missing artifact fails safe (low
+  confidence → review), so the change can only ever be MORE cautious, never confidently-wrong.
 - The LLM call is metered against the case (GAP-1 consistency).
 """
 
@@ -25,6 +27,7 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from ..backends.interfaces import LLMBackend
 from ..backends.registry import get_llm
+from ..confidence import load_calibration
 from ..config import settings
 from ..obs.logging import get_logger
 from ..store import api, meter
@@ -36,8 +39,9 @@ from .prompt import PROMPT_VERSION
 log = get_logger(__name__)
 
 _STAGE = "extract"
-# Placeholder confidence until Phase 6 calibration. 0.5 = "uncertain" → flagged for review (safe).
-_PLACEHOLDER_CONFIDENCE = 0.5
+# The gold-calibrated confidence model (Phase 6). Loaded once; a missing artifact fails safe (every value
+# low-confidence → review). Reliability of a predicted value, not the model's self-reported number.
+_CALIBRATION = load_calibration()
 
 
 def _name_hash(field_name: str) -> str:
@@ -112,7 +116,7 @@ async def extract_case(
                 model_version=settings.ollama_model,
                 prompt_version=result.prompt_version,
                 run_id=run_id,
-                confidence=_PLACEHOLDER_CONFIDENCE,
+                confidence=_CALIBRATION.confidence(field_path, value),
                 citations=citations,
                 layer="governed_core",
             )
@@ -128,7 +132,11 @@ async def extract_case(
                 model_version=settings.ollama_model,
                 prompt_version=result.prompt_version,
                 run_id=run_id,
-                confidence=_PLACEHOLDER_CONFIDENCE,
+                # Emergent attrs are grounded (ungrounded were dropped); with no gold to calibrate them,
+                # the case's grounded fraction is the honest confidence signal we have.
+                confidence=_CALIBRATION.confidence(
+                    attr.name, attr.value, grounding=result.field_validity
+                ),
                 citations=citations,
                 layer="emergent",
             )

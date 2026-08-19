@@ -24,6 +24,7 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from ..backends.interfaces import LLMBackend
 from ..backends.registry import get_llm
+from ..confidence import load_calibration
 from ..config import settings
 from ..extract.concept_extract import CONCEPT_PROMPT_VERSION, extract_concept
 from ..obs.logging import get_logger
@@ -36,7 +37,10 @@ log = get_logger(__name__)
 # (case, concept) re-extraction always writes under the same run_id, so record_extraction's
 # UNIQUE(run_id, field_path) makes a crash-retry idempotent even before the attempt marker lands.
 _NS = UUID("b1f0a17e-0000-4a11-b000-0000c0ffee00")
-_PLACEHOLDER_CONFIDENCE = 0.5  # same pre-calibration placeholder as the forward stage (Phase 6)
+# Same calibrated confidence as the forward extract stage (Phase 6). A backfilled concept is an emergent
+# attribute that passed the grounding gate (extract_concept returns only grounded attrs), and emergent is
+# uncalibrated (no gold), so its honest confidence is the grounding signal — here grounded → 1.0.
+_CALIBRATION = load_calibration()
 
 
 def _name_hash(field_name: str) -> str:
@@ -109,7 +113,7 @@ async def backfill_concept_batch(
                     model_version=settings.ollama_model,
                     prompt_version=CONCEPT_PROMPT_VERSION,
                     run_id=run_id,
-                    confidence=_PLACEHOLDER_CONFIDENCE,
+                    confidence=_CALIBRATION.confidence(attr.name, attr.value, grounding=1.0),
                     citations=citations,
                     layer="emergent",
                 )
