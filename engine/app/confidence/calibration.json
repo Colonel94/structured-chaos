@@ -5,23 +5,29 @@
       "reliability": {
         "access_availability": 0.7142857142857143,
         "billing_charge": 0.8709677419354839,
-        "delivery_fulfilment": 0.6666666666666666,
-        "other": 0.1111111111111111,
         "product_fault": 0.8260869565217391,
         "record_accuracy": 0.8857142857142857,
         "safety_health": 0.8235294117647058,
-        "service_fault": 0.7868852459016393,
-        "staff_conduct": 0.3333333333333333
+        "service_fault": 0.7868852459016393
+      },
+      "support": {
+        "access_availability": 28,
+        "billing_charge": 31,
+        "product_fault": 23,
+        "record_accuracy": 35,
+        "safety_health": 17,
+        "service_fault": 61
       }
     },
     "desired_outcome": {
       "default": 0.451,
       "reliability": {
-        "escalation": 1.0,
-        "information": 1.0,
         "refund": 0.9166666666666666,
-        "repair_redo": 0.25,
-        "replacement": 1.0
+        "repair_redo": 0.25
+      },
+      "support": {
+        "refund": 12,
+        "repair_redo": 36
       }
     },
     "emotion_signal": {
@@ -30,19 +36,27 @@
         "angry": 0.48148148148148145,
         "calm": 0.5555555555555556,
         "frustrated": 0.8888888888888888
+      },
+      "support": {
+        "angry": 27,
+        "calm": 18,
+        "frustrated": 54
       }
     },
     "severity_signal": {
       "default": 0.86,
       "reliability": {
         "financial_harm": 0.855072463768116,
-        "none": 0.8666666666666667,
-        "safety_health": 1.0
+        "none": 0.8666666666666667
+      },
+      "support": {
+        "financial_harm": 69,
+        "none": 30
       }
     }
   },
   "fit_on": "gold: cfpb(n=120) + multidomain(n=96)",
   "gate_met": false,
   "tau_auto": 1.01,
-  "version": "calib-v1"
+  "version": "calib-v2"
 }

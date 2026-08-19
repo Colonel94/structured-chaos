@@ -53,13 +53,14 @@ def main() -> int:
         print("no spike_calibration_*.jsonl found — run eval/spike_calibration.py first")
         return 1
     fit_on = "gold: " + " + ".join(sources)
-    cal = fit(rows, version="calib-v1", fit_on=fit_on)
+    cal = fit(rows, version="calib-v2", fit_on=fit_on)
     save_calibration(cal)
     print(f"fitted calibration on {fit_on}")
     print(f"  tau_auto={cal.tau_auto:.3f}  gate_met={cal.gate_met}")
     for name, fc in sorted(cal.fields.items()):
-        n_classes = len(fc.reliability)
-        print(f"  [{name}] {n_classes} calibrated classes, default={fc.default}")
+        print(f"  [{name}] {len(fc.reliability)} trusted classes (n>=10), default={fc.default}")
+        for val, rel in sorted(fc.reliability.items()):
+            print(f"      {val:<22} {rel:.3f}  (n={fc.support.get(val, 0)})")
     print("wrote app/confidence/calibration.json")
     return 0
 

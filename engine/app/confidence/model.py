@@ -9,6 +9,13 @@ attenuated by grounding, and forced to zero on explicit abstention (UNCLEAR / a 
 guess). Clean classes the model predicts reliably earn high confidence; the low-precision residual and the
 confusable cluster earn low confidence → review.
 
+Two honesty caveats the artifact carries (owner review 2026-08-19c): (a) "correct" means "agrees with the
+HUMAN GOLD used to fit" — the gold I authored — so confidence measures agreement-with-the-labeller, not
+agreement-with-reality; the ceiling is label consistency, and the fix is an INDEPENDENT human-labelled
+held-out slice, not a bigger extractor. (b) This is a per-CLASS prior: two cases in the same predicted
+class score identically except for grounding, so it drives class-level review TRIAGE, never a per-case
+difficulty ranking. Thin cells (n < _MIN_CELL_N) emit no number — they fall to the field default.
+
 This module is the RUNTIME: it loads a calibration artifact (fit offline on the labeled dev set by
 :func:`fit`, persisted to ``calibration.json``) and scores a field value. If no artifact is present it
 fails SAFE — every value reads low-confidence and routes to review (refuse to guess), never the reverse.
@@ -31,13 +38,28 @@ _ABSTENTIONS = frozenset({"UNCLEAR"})
 # everything is low-confidence and routes to review. Safe direction (refuse to guess), never auto-route.
 _SAFE_DEFAULT_CONFIDENCE = 0.4
 
+# Minimum gold observations before a per-class reliability is TRUSTED as a number. Below this a cell is
+# noise wearing a decimal (owner review, 2026-08-19): a 1.00 from n=2, or a 0.33 from n=5, is not a
+# measurement. A thin cell is DROPPED from the reliability map so the value falls back to the field's
+# conservative default (its overall accuracy) — the artifact never reports precision it does not have.
+# Rule of three: at n<10 the 95% error bound is ≥~30%, so a small-n cell can't support a high-τ claim.
+_MIN_CELL_N = 10
+
 
 @dataclass(frozen=True)
 class FieldCalibration:
-    """Per-value reliability for one governed field, plus the fallback for a value unseen at fit time."""
+    """Per-value reliability for one governed field, plus the fallback for a value unseen at fit time.
+
+    Only cells with ``support[value] >= _MIN_CELL_N`` appear in ``reliability``; thinner cells are
+    omitted so :meth:`Calibration.confidence` uses ``default`` for them (no invented precision). The
+    surviving ``support`` counts are carried so the artifact shows exactly how much gold backs each number.
+    """
 
     reliability: dict[str, float]
-    default: float  # reliability of a value not seen during fit (a rare/novel class) — conservative
+    default: float  # reliability of a value not seen (or too thinly seen) at fit — conservative
+    support: dict[str, int] = field(
+        default_factory=dict
+    )  # gold n behind each surviving reliability
 
 
 @dataclass(frozen=True)
@@ -61,13 +83,17 @@ class Calibration:
         uncertain and routes to review — never spuriously certain."""
         if value is None or (isinstance(value, str) and value.strip() in _ABSTENTIONS):
             return 0.0
-        if not self.fields:  # unfitted: no gold to lean on → conservative for everything (fail safe)
+        if (
+            not self.fields
+        ):  # unfitted: no gold to lean on → conservative for everything (fail safe)
             return round(max(0.0, min(1.0, _SAFE_DEFAULT_CONFIDENCE * grounding)), 4)
         fc = self.fields.get(field_path)
         if fc is None:
             return round(
                 max(0.0, min(1.0, grounding)), 4
             )  # calibrated elsewhere; this field is uncalibrated (emergent) → grounding is all we have
+        # A value with a thin/absent cell falls to the field default — no per-class number is emitted
+        # unless ≥_MIN_CELL_N gold cases back it (thin cells were dropped at fit time).
         reliability = fc.reliability.get(str(value), fc.default)
         return round(max(0.0, min(1.0, reliability * grounding)), 4)
 
@@ -89,7 +115,11 @@ def load_calibration(path: Path = _ARTIFACT_PATH) -> Calibration:
     except (OSError, json.JSONDecodeError):
         return _blank()
     fields = {
-        name: FieldCalibration(reliability=dict(fc["reliability"]), default=float(fc["default"]))
+        name: FieldCalibration(
+            reliability=dict(fc["reliability"]),
+            default=float(fc["default"]),
+            support={k: int(v) for k, v in fc.get("support", {}).items()},
+        )
         for name, fc in doc.get("fields", {}).items()
     }
     return Calibration(
@@ -108,7 +138,7 @@ def save_calibration(cal: Calibration, path: Path = _ARTIFACT_PATH) -> None:
         "tau_auto": cal.tau_auto,
         "gate_met": cal.gate_met,
         "fields": {
-            name: {"reliability": fc.reliability, "default": fc.default}
+            name: {"reliability": fc.reliability, "default": fc.default, "support": fc.support}
             for name, fc in cal.fields.items()
         },
     }
@@ -144,14 +174,23 @@ def _fit_reliability(rows: Sequence[FitRow]) -> dict[str, FieldCalibration]:
     out: dict[str, FieldCalibration] = {}
     fields = {fp for fp, _ in total}
     for fp in fields:
-        rel = {val: correct[(f, val)] / total[(f, val)] for (f, val) in total if f == fp}
-        # A value unseen at fit time defaults to the field's overall accuracy — a conservative,
-        # non-zero prior so a genuinely novel-but-plausible class isn't auto-failed, yet still lands
-        # below a high τ (so it routes to review until it has its own track record).
+        # Only cells with enough gold behind them earn a per-class number; thinner cells are DROPPED
+        # (they fall back to the default) rather than emitting a decimal from 1-5 observations.
+        rel = {
+            val: correct[(f, val)] / total[(f, val)]
+            for (f, val) in total
+            if f == fp and total[(f, val)] >= _MIN_CELL_N
+        }
+        support = {
+            val: total[(f, val)] for (f, val) in total if f == fp and total[(f, val)] >= _MIN_CELL_N
+        }
+        # A value unseen (or too thinly seen) at fit time defaults to the field's overall accuracy — a
+        # conservative, non-zero prior so a genuinely novel-but-plausible class isn't auto-failed, yet
+        # still lands below a high τ (so it routes to review until it has its own track record).
         default = (
             field_correct[fp] / field_total[fp] if field_total[fp] else _SAFE_DEFAULT_CONFIDENCE
         )
-        out[fp] = FieldCalibration(reliability=rel, default=round(default, 4))
+        out[fp] = FieldCalibration(reliability=rel, default=round(default, 4), support=support)
     return out
 
 

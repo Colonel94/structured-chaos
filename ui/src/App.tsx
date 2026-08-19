@@ -278,7 +278,11 @@ function FieldDetail({
       <div className="detail__meta">
         {field.model_version && <>model {field.model_version} · </>}
         {field.prompt_version && <>prompt {field.prompt_version} · </>}
-        {field.confidence !== null && <>confidence {field.confidence.toFixed(2)}</>}
+        {field.confidence !== null && (
+          <span title="class-calibrated reliability × grounding (per-class, not per-case)">
+            confidence {field.confidence.toFixed(2)}
+          </span>
+        )}
       </div>
     </div>
   );
@@ -534,8 +538,13 @@ function CaseDetail({
 
 // ---- register + app shell ----
 
-/** Low-confidence-first: unapproved cases first, most-uncertain at the top (a null confidence sorts
- * last among unapproved), approved cases below. This is the review queue the reviewer works down. */
+/** Class-reliability-first: unapproved cases first, ordered by the case's lowest governed-field
+ * confidence (a null sorts last among unapproved), approved cases below.
+ *
+ * HONEST SCOPE (owner review 2026-08-19): today's confidence is a per-CLASS calibrated reliability ×
+ * grounding — two cases predicted the same class are indistinguishable except by grounding. So this is
+ * class-level triage (it front-loads the least-reliable categories), NOT a per-case difficulty ranking.
+ * A true per-instance "this case is hard" signal does not exist yet; do not present the queue as one. */
 function reviewOrder(cases: CaseSummary[]): CaseSummary[] {
   const rank = (c: CaseSummary) => (c.committed_at ? 1 : 0);
   const conf = (c: CaseSummary) =>
@@ -676,6 +685,11 @@ export default function App() {
               </button>
             </div>
           </div>
+          {ordered && ordered.length > 0 && (
+            <p className="register__basis">
+              ordered by class reliability — least-reliable predicted class first
+            </p>
+          )}
           {ordered === null ? (
             <p className="empty">Set a tenant id to load cases.</p>
           ) : ordered.length === 0 ? (
@@ -695,7 +709,12 @@ export default function App() {
                       {c.committed_at ? (
                         <span className="badge badge--ok badge--sm">approved</span>
                       ) : (
-                        <span className="register__conf">{pct(c.min_governed_confidence)}</span>
+                        <span
+                          className="register__conf"
+                          title="predicted-class reliability × grounding — a class-level signal, not a per-case difficulty score"
+                        >
+                          {pct(c.min_governed_confidence)}
+                        </span>
                       )}
                     </span>
                     <span className="register__fault">{c.fault ?? "(no summary yet)"}</span>

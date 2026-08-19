@@ -348,9 +348,31 @@ reliability per predicted class), which is *useful* (differentiates a 92%-reliab
 **Rule: when a downstream gate fails, first ask whether the ceiling is UPSTREAM. If so, report it plainly
 (gate_met=False, knob NOT forced — §10 "never move the goalposts"), make the system behave safely on the
 failing side (here: refuse to auto-route → everything to review + the commit gate), and name the real
-lever (a more accurate extractor), rather than building ever-fancier confidence machinery on a capped
-input.** Same shape as the Phase-4 convergence retraction; the two are the standing examples of an
-aspirational number that needs an upstream fix, not a cleverer measurement.
+lever (see the CORRECTION below — it is NOT simply "a better extractor"), rather than building ever-fancier
+confidence machinery on a capped input.** Same shape as the Phase-4 convergence retraction; the two are the
+standing examples of an aspirational number that needs an upstream fix, not a cleverer measurement.
+
+**CORRECTION (owner review, 2026-08-19c) — the ceiling is LABEL CONSISTENCY, not the extractor; and
+confidence is a per-CLASS prior, not a per-instance signal.** The rule above named "a more accurate
+extractor (Haiku / a bigger local model)" as the lever. That was half right and is corrected. (1) The
+calibration is fit on gold **I (Claude) authored**, so confidence currently means *"P(this prediction
+agrees with my labels)"*, not *"P(correct)"*. A more accurate extractor can only raise agreement with the
+LABELLER; it cannot raise agreement with REALITY past wherever my labelling was inconsistent — and
+service<->access is exactly where it was. Swapping in Haiku would move the number and **prove nothing** —
+you'd be measuring two Claude models converging. So the binding lever is an **independent human-labelled
+held-out slice** (60-80 cases, someone who is neither the owner nor me); that — not a bigger model —
+unblocks the confidence gate, the category score, AND the review-UI ordering. **Defer the cloud extractor
+until the independent labels exist; it is the wrong lever before then** (still owner-gated on $0 —
+[[zero-budget-never-steer-to-cost]]). (2) Calibrated confidence = P(correct | predicted class) x grounding
+is a **per-CLASS prior**: two cases in the same class are indistinguishable except by grounding. So
+"low-confidence-first" review ordering is **class-level triage, not per-case difficulty** — never build a
+UI affordance (or make a claim) that promises per-case hardness ranking on a class-level signal (the
+Phase-7 register was relabelled to "class reliability", not per-case). (3) **Floor thin calibration
+cells:** a reliability from n<10 (a 1.00 from n=2, a 0.33 from n=5) is noise wearing a decimal — drop it to
+the field's conservative default so the artifact never reports precision it lacks (`_MIN_CELL_N`, calib-v2).
+The meta-rule the owner named: reporting `gate_met=False` instead of tuning tau until it passed is the
+seventh time the cheap fudge was declined — **that pattern (honest-number-over-forced-pass) is the asset;
+keep declining it.**
 
 **Feedback compounds into rules; the winning condition is the standing motto.** (Owner directive,
 2026-08-15.) Every owner review comment is a *durable rule*, not a one-off fix: extract the

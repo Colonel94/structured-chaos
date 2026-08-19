@@ -10,13 +10,14 @@ from app.confidence.model import Calibration, FieldCalibration
 
 
 def _rows() -> list[FitRow]:
-    # product_fault: 5/5 right (reliable); service_fault: 2/5 right (unreliable residual).
+    # product_fault: 10/10 right (reliable); service_fault: 4/10 right (unreliable residual). Cells are
+    # n=10 so they clear _MIN_CELL_N and earn a per-class number; overall accuracy 14/20 = 0.7 (default).
     rows: list[FitRow] = []
-    for _ in range(5):
+    for _ in range(10):
         rows.append(FitRow("category", "product_fault", "product_fault"))
-    for i in range(5):
+    for i in range(10):
         rows.append(
-            FitRow("category", "service_fault", "service_fault" if i < 2 else "billing_charge")
+            FitRow("category", "service_fault", "service_fault" if i < 4 else "billing_charge")
         )
     return rows
 
@@ -55,6 +56,20 @@ def test_unseen_value_uses_the_conservative_field_default() -> None:
     cal = fit(_rows(), version="t", fit_on="unit")
     # A class never seen at fit → the field's overall accuracy (7/10 here), not 0 and not 1.
     assert cal.confidence("category", "safety_health") == cal.fields["category"].default == 0.7
+
+
+def test_thin_cell_is_floored_to_the_default() -> None:
+    # A class with < _MIN_CELL_N gold observations must NOT emit a per-class number (noise wearing a
+    # decimal — owner review): even 3/3 correct falls back to the field's conservative default, and only
+    # cells that clear the floor keep a recorded support count.
+    rows = [
+        FitRow("category", "product_fault", "product_fault" if i < 8 else "x") for i in range(10)
+    ]  # 8/10, n=10 → kept
+    rows += [FitRow("category", "rare", "rare") for _ in range(3)]  # 3/3 but n=3 → dropped
+    cal = fit(rows, version="t", fit_on="unit")
+    assert "rare" not in cal.fields["category"].reliability  # not reported as 1.0
+    assert cal.confidence("category", "rare") == cal.fields["category"].default
+    assert cal.fields["category"].support == {"product_fault": 10}  # only the surviving cell
 
 
 def test_route_uses_the_auto_threshold() -> None:
