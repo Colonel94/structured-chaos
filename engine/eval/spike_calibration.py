@@ -38,7 +38,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from _dataset import DATASET, LABELS, SAMPLE
 
-from app.backends.local.llm_ollama import OllamaLLM
+from app.backends.registry import get_llm
 from app.extract.extractor import extract
 
 _RAW = Path(__file__).resolve().parent / "fixtures" / f"spike_calibration_{DATASET}.jsonl"
@@ -69,7 +69,7 @@ async def _collect(limit: int | None) -> list[dict[str, Any]]:
     rows = [json.loads(x) for x in SAMPLE.read_text(encoding="utf-8").splitlines() if x]
     if limit:
         rows = rows[:limit]
-    llm = OllamaLLM()
+    llm = get_llm()  # config-selected: LLM_BACKEND=local (Ollama) or cloud (Claude Haiku)
     out: list[dict[str, Any]] = []
     t0 = time.perf_counter()
     for i, row in enumerate(rows):

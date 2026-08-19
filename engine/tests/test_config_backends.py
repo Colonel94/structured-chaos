@@ -45,19 +45,27 @@ def test_local_backends_are_wired() -> None:
     assert isinstance(registry.get_blob(cfg), MinioBlob)
 
 
-@pytest.mark.parametrize("getter", ["get_asr", "get_llm", "get_embedding"])
-def test_cloud_inference_backends_are_not_built_yet(getter: str) -> None:
-    """Selecting `cloud` for ASR/LLM/embed fails loudly — those impls are the deferred path and
+@pytest.mark.parametrize("getter", ["get_asr", "get_embedding"])
+def test_cloud_asr_and_embed_backends_are_not_built_yet(getter: str) -> None:
+    """Selecting `cloud` for ASR/embed fails loudly — those impls are still the deferred path and
     their modules don't exist. This guards against a half-built cloud module silently resolving.
-    (Blob's cloud path IS built — MinIO — so it's excluded.)"""
+    (Blob's cloud path is built — MinIO; the cloud LLM is now built too — Claude Haiku — see below.)"""
     cfg = Settings(
         asr_backend=Backend.cloud,
-        llm_backend=Backend.cloud,
         embedding_backend=Backend.cloud,
-        blob_backend=Backend.cloud,
     )
     with pytest.raises(ImportError):
         getattr(registry, getter)(cfg)
+
+
+def test_cloud_llm_backend_is_the_claude_path() -> None:
+    """The cloud LLM backend IS built (stood up to test the Phase-6 confidence ceiling): selecting
+    `cloud` resolves to the Anthropic/Claude-Haiku backend. Construction needs no API key — the SDK
+    resolves credentials at call time — so this asserts wiring, not connectivity."""
+    from app.backends.cloud.llm_claude import ClaudeLLM
+
+    cfg = Settings(llm_backend=Backend.cloud, anthropic_api_key="")
+    assert isinstance(registry.get_llm(cfg), ClaudeLLM)
 
 
 @pytest.mark.asyncio
