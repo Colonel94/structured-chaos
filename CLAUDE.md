@@ -321,6 +321,17 @@ be built cheaply or expensively and the cheap one looks equivalent, that resembl
 claim almost always requires the expensive one; verify against the source doc and default to it.**
 Backfill *re-extracts*; convergence is measured at the *field* level; proof runs on data I did not author.
 
+**Report metrics as a PAIR, and don't mistake small-n zero-error for a gate.** (Owner directive, learned
+2026-08-18 on the entity-resolution spike; see memory [[report-metric-pairs-and-n]].) A gain-metric alone
+is gameable by abstention — a resolver that refuses on any ambiguity scores 100% *accuracy* / 0% *rate*
+and "passes" while making the product worse. So report the **pair** (accuracy **and** coverage/rate,
+e.g. silent-match ≥99% *with* ≥60% matched-without-asking) and treat **accuracy-up + rate-down as a
+regression, not progress.** And **small-n zero-error is not a high-confidence gate**: rule of three puts
+the 95% upper bound on the error rate at ≈3/n (~60% at n=5), so a ≥99% claim needs ~300 clean
+observations with zero errors. Report "no failures at n=X (≤~Y% err)", never "100%"; size the test to
+the gate before claiming it; a scaled run on a realistic distribution — not a handful of planted cases —
+is the real test (it caught a wrong-bind defect n=10 planted cases missed).
+
 **Feedback compounds into rules; the winning condition is the standing motto.** (Owner directive,
 2026-08-15.) Every owner review comment is a *durable rule*, not a one-off fix: extract the
 generalizable lesson, log it (build-law → this §10; working style → memory
