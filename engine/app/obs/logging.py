@@ -16,8 +16,9 @@ from __future__ import annotations
 
 import logging
 import re
+import sys
 from collections.abc import MutableMapping
-from typing import Any
+from typing import IO, Any
 
 import structlog
 
@@ -88,17 +89,55 @@ def redact_pii(
     return event_dict
 
 
+class _SafeLogger:
+    """A logger whose emit can NEVER raise into the caller — a logging failure must never turn a
+    request into a 500 (owner directive). If the console can't encode a rendered line (e.g. a ``→`` on a
+    Windows cp1252 stdout), it retries with an ASCII-safe rendering, then gives up silently. Logs are
+    preserved (as ``\\uXXXX`` escapes) rather than lost, and the request path is untouched either way.
+    """
+
+    def __init__(self, file: IO[str] | None = None) -> None:
+        self._file = file  # None → resolve sys.stdout at emit time (respects later redirection)
+
+    def msg(self, *args: Any, **_kw: Any) -> None:
+        message = args[0] if args else ""
+        out = self._file if self._file is not None else sys.stdout
+        # The blind excepts + pass are DELIBERATE: this is the "logging never raises" guarantee — an
+        # emit failure (encoding, closed pipe, disk full) must be swallowed, not turned into a 500.
+        try:
+            print(message, file=out, flush=True)
+        except Exception:  # noqa: BLE001 — retry ASCII-safe, then give up (never propagate)
+            try:
+                safe = str(message).encode("ascii", "backslashreplace").decode("ascii")
+                print(safe, file=out, flush=True)
+            except Exception:  # noqa: BLE001, S110 — logging must never crash the caller
+                pass
+
+    # structlog's filtering bound logger calls the method named after the level.
+    log = debug = info = warning = warn = error = err = fatal = exception = critical = msg
+
+
+class _SafeLoggerFactory:
+    def __call__(self, *_args: Any) -> _SafeLogger:
+        return _SafeLogger()
+
+
 def configure_logging(level: str = "INFO") -> None:
-    """Install the JSON structlog pipeline with redaction as the final pre-render step."""
+    """Install the JSON structlog pipeline with redaction as the final pre-render step. Output goes
+    through a logger that cannot raise on emit, and the JSON is ASCII-escaped, so a non-encodable
+    character can never crash a request."""
     structlog.configure(
         processors=[
             structlog.contextvars.merge_contextvars,
             structlog.processors.add_log_level,
             structlog.processors.TimeStamper(fmt="iso"),
             redact_pii,  # last transform before rendering — nothing re-adds PII after this
-            structlog.processors.JSONRenderer(),
+            # ensure_ascii escapes non-ASCII to \uXXXX, so the rendered line is always encodable even on
+            # a legacy-codepage console; the safe logger below is the belt-and-braces guarantee.
+            structlog.processors.JSONRenderer(ensure_ascii=True),
         ],
         wrapper_class=structlog.make_filtering_bound_logger(getattr(logging, level, logging.INFO)),
+        logger_factory=_SafeLoggerFactory(),
         cache_logger_on_first_use=True,
     )
 

@@ -5,7 +5,35 @@ from __future__ import annotations
 
 import pytest
 
-from app.obs.logging import configure_logging, get_logger
+from app.obs.logging import _SafeLogger, configure_logging, get_logger
+
+
+def test_logging_never_raises_on_an_unencodable_char() -> None:
+    """A logging error must never turn a request into a 500 (owner directive). Even when the sink can't
+    encode the line (a Windows cp1252 console meeting a ``→``), emit swallows it — never propagates.
+    """
+
+    class _Cp1252Stream:
+        def write(self, s: str) -> int:
+            s.encode("cp1252")  # raises UnicodeEncodeError on → / em-dash, like a legacy console
+            return len(s)
+
+        def flush(self) -> None:
+            pass
+
+    log = _SafeLogger(file=_Cp1252Stream())
+    log.msg("routing → review, id and em—dash")  # must not raise
+    log.info("also via the level alias →")  # the aliased methods must be safe too
+
+
+def test_configured_pipeline_logs_non_ascii_without_raising(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    configure_logging("INFO")
+    # A non-ASCII value that previously 500'd the request on Windows now logs (ASCII-escaped) and returns.
+    get_logger("test").info("rules_done", routing="triage → finance")
+    out = capsys.readouterr().out
+    assert "rules_done" in out and "\\u2192" in out  # arrow escaped, line intact
 
 
 def test_pii_never_appears_in_logs(capsys: pytest.CaptureFixture[str]) -> None:
