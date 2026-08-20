@@ -139,6 +139,42 @@ async def ingest_case(
     return {"case_ids": [str(c) for c in res.case_ids]}
 
 
+@router.post("/objects")
+async def upload_objects(
+    x_tenant_id: TenantHeader,
+    factory: FactoryDep,
+    file: Annotated[UploadFile, File()],
+    object_type: Annotated[str, Form()] = "object",
+) -> dict[str, Any]:
+    """Self-serve object store: connect your orders/bookings/assets by dropping a CSV/JSON/JSONL export
+    (winning-condition §2 — self-serve, inside the 10 minutes, by file upload). The profiler discovers
+    the identifier columns itself; no schema is declared. Once loaded, the objects resolve the ANCHOR on
+    a case so the drill looks facts up instead of asking (Moment 3). Idempotent — re-uploading the same
+    export is a no-op (the object content-hash is unique per tenant)."""
+    from ..resolve import ingest_object_collection
+    from ..resolve.upload import ObjectFileError, parse_object_file
+
+    data = await file.read()
+    if not data:
+        raise HTTPException(status_code=400, detail="the uploaded file is empty")
+    try:
+        objects = parse_object_file(file.filename or "upload", data)
+    except ObjectFileError as exc:
+        raise HTTPException(status_code=400, detail=f"could not read the file: {exc}") from None
+    otype = object_type.strip() or "object"
+    with tenant_session(_tenant(x_tenant_id), factory=factory) as s:
+        result = await ingest_object_collection(s, object_type=otype, objects=objects)
+        total = api.count_objects(s, object_type=otype)
+    return {
+        "object_type": result.object_type,
+        "ingested": result.ingested,
+        "duplicates": result.duplicates,
+        "keys_indexed": result.keys_indexed,
+        "key_fields": result.key_fields,
+        "total": total,
+    }
+
+
 @router.get("/cases/{case_id}")
 def get_case(case_id: str, x_tenant_id: TenantHeader, factory: FactoryDep) -> dict[str, Any]:
     """One case's full review payload. 404 if the case is absent for this tenant (RLS fail-closed)."""

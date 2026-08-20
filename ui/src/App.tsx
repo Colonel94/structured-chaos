@@ -16,6 +16,8 @@ import {
   reportUrl,
   setReviewerId,
   setTenantId,
+  uploadObjects,
+  type ObjectUploadResult,
 } from "./api";
 import {
   GOVERNED_ORDER,
@@ -626,6 +628,82 @@ function NewCaseModal({
   );
 }
 
+/** Self-serve object store: connect orders/bookings/assets by file so a case's anchor resolves against
+ * them (looked up, not asked — winning-condition §2, Moment 3). No schema declared; the profiler finds
+ * the identifier columns. */
+function ObjectStoreModal({ onClose }: { onClose: () => void }) {
+  const [objectType, setObjectType] = useState("order");
+  const [file, setFile] = useState<File | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [result, setResult] = useState<ObjectUploadResult | null>(null);
+
+  async function submit() {
+    if (!file) {
+      setError("Choose a CSV or JSON file.");
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      setResult(await uploadObjects(objectType.trim() || "object", file));
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const kind = objectType.trim() || "object";
+  return (
+    <div className="modal" onClick={() => !busy && onClose()}>
+      <div className="modal__card" onClick={(e) => e.stopPropagation()}>
+        <h3>Connect your data</h3>
+        <p className="modal__hint">
+          Upload your orders, bookings, or assets — a CSV or JSON export, however your system produces
+          it. No schema to define; the system finds the identifiers itself. Once connected, a case that
+          quotes an order number resolves against it — the drill looks facts up instead of asking.
+        </p>
+        <label className="modal__label">
+          what are these?
+          <input
+            className="modal__type"
+            value={objectType}
+            onChange={(e) => setObjectType(e.target.value)}
+            disabled={busy}
+            placeholder="order"
+          />
+        </label>
+        <input
+          type="file"
+          accept=".csv,.json,.jsonl,.ndjson"
+          className="modal__file"
+          onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+          disabled={busy}
+        />
+        {error && <div className="banner banner--error">{error}</div>}
+        {result && (
+          <div className="obj-result">
+            Connected <b>{result.ingested}</b> new {kind}
+            {result.ingested === 1 ? "" : "s"}
+            {result.duplicates ? ` (${result.duplicates} already present)` : ""} — {result.total} total.
+            <br />
+            Identifiers found: <b>{result.key_fields.join(", ") || "—"}</b>.
+          </div>
+        )}
+        <div className="modal__actions">
+          <button type="button" className="primary" onClick={() => void submit()} disabled={busy}>
+            {busy ? "connecting…" : "connect"}
+          </button>
+          <button type="button" className="ghost" onClick={onClose} disabled={busy}>
+            {result ? "done" : "cancel"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 const params = new URLSearchParams(window.location.search);
 const INITIAL_TENANT = params.get("tenant") ?? getTenantId();
 const INITIAL_CASE = params.get("case");
@@ -639,6 +717,7 @@ export default function App() {
   const [error, setError] = useState<string | null>(null);
   const [showHelp, setShowHelp] = useState(false);
   const [showNew, setShowNew] = useState(false);
+  const [showObjects, setShowObjects] = useState(false);
 
   const ordered = useMemo(() => (cases ? reviewOrder(cases) : null), [cases]);
 
@@ -747,6 +826,15 @@ export default function App() {
           <button type="button" onClick={applyTenant}>
             load
           </button>
+          <button
+            type="button"
+            className="ghost"
+            onClick={() => setShowObjects(true)}
+            disabled={!getTenantId()}
+            title={getTenantId() ? "connect your orders/bookings" : "set a tenant id first"}
+          >
+            connect data
+          </button>
           <button type="button" className="ghost" onClick={() => setShowHelp((v) => !v)}>
             ? keys
           </button>
@@ -841,6 +929,7 @@ export default function App() {
       </div>
 
       {showNew && <NewCaseModal onClose={() => setShowNew(false)} onCreated={onCreated} />}
+      {showObjects && <ObjectStoreModal onClose={() => setShowObjects(false)} />}
 
       {showHelp && (
         <div className="help" onClick={() => setShowHelp(false)}>

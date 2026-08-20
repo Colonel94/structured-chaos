@@ -95,6 +95,33 @@ export function recordCorrection(
   });
 }
 
+export interface ObjectUploadResult {
+  object_type: string;
+  ingested: number;
+  duplicates: number;
+  keys_indexed: number;
+  key_fields: string[];
+  total: number;
+}
+
+/** Self-serve object store: upload an orders/bookings/assets export (CSV/JSON/JSONL). Returns what was
+ *  ingested + the identifier columns the profiler discovered. Browser sets the multipart boundary. */
+export async function uploadObjects(objectType: string, file: File): Promise<ObjectUploadResult> {
+  const form = new FormData();
+  form.append("object_type", objectType);
+  form.append("file", file);
+  const res = await fetch("/api/objects", {
+    method: "POST",
+    headers: { "X-Tenant-Id": tenantOrThrow() },
+    body: form,
+  });
+  if (!res.ok) {
+    const detail = await res.json().catch(() => ({}));
+    throw new Error(detail.detail ?? `Request failed (${res.status})`);
+  }
+  return (await res.json()) as ObjectUploadResult;
+}
+
 /** Approve a case (the commit gate). One-way; only after this may a report be issued. */
 export function commitCase(
   caseId: string,
