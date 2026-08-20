@@ -151,9 +151,7 @@ _NHTSA_VEHICLES = [
 ]
 
 
-def _fetch_nhtsa(
-    client: httpx.Client, seen_prints: set[str], total: int
-) -> list[dict[str, str]]:
+def _fetch_nhtsa(client: httpx.Client, seen_prints: set[str], total: int) -> list[dict[str, str]]:
     out: list[dict[str, str]] = []
     per_vehicle = max(2, total // len(_NHTSA_VEHICLES) + 1)
     for make, model, year in _NHTSA_VEHICLES:
@@ -261,7 +259,7 @@ def _write_instructions(n: int, by_source: dict[str, int]) -> None:
         f"**{n} real complaints**, held out from the cases the system was built on "
         f"(sources: {src_line}). Fill the `gold_*` columns for each row. Leave a cell EMPTY only to "
         "skip that one field for that row (it won't be scored); an empty `gold_desired_outcome` is a "
-        "REAL label meaning \"the customer did not state what they want\".\n\n"
+        'REAL label meaning "the customer did not state what they want".\n\n'
         "## Valid values (type the exact string)\n"
         f"- **gold_category** — the SINGLE best archetype: {' | '.join(TAXONOMY)}\n"
         "    - `product_fault` = a physical item is defective / poor quality (no safety hazard).\n"
@@ -324,7 +322,7 @@ def main() -> int:
         ):
             try:
                 got = fn()
-            except Exception as exc:  # a flaky source must not abort the whole sheet
+            except Exception as exc:  # noqa: BLE001 — a flaky source must not abort the whole sheet
                 print(f"  {name}: FAILED ({type(exc).__name__}: {exc}) — proceeding without it")
                 continue
             print(f"  {name}: {len(got)} held-out cases")
@@ -338,13 +336,17 @@ def main() -> int:
         w = csv.writer(f)
         w.writerow(["id", "product", "issue", "narrative", *_GOLD_COLS])
         for r in rows:
-            w.writerow([r["id"], r["product"], r.get("issue", ""), r["narrative"], "", "", "", "", ""])
+            w.writerow(
+                [r["id"], r["product"], r.get("issue", ""), r["narrative"], "", "", "", "", ""]
+            )
 
     _write_instructions(len(rows), by_source)
     print(f"\nwrote {len(rows)} blank held-out rows -> {_OUT}")
     print(f"instructions -> {_INSTRUCTIONS}")
     if len(rows) < target:
-        print(f"NOTE: {len(rows)}/{target} — a source shortfall; re-run to top up (merge-safe by fp).")
+        print(
+            f"NOTE: {len(rows)}/{target} — a source shortfall; re-run to top up (merge-safe by fp)."
+        )
     return 0
 
 
