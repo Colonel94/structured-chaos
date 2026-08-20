@@ -9,6 +9,7 @@ import {
   getCase,
   getReviewerId,
   getTenantId,
+  ingestCase,
   listCases,
   recordCorrection,
   registerCsvUrl,
@@ -552,6 +553,79 @@ function reviewOrder(cases: CaseSummary[]): CaseSummary[] {
   return [...cases].sort((a, b) => rank(a) - rank(b) || conf(a) - conf(b));
 }
 
+/** Self-serve intake: paste the messiest real case (or drop files) and get a structured case back — no
+ * form to fill, no developer in the room. This is the product surface the winning-condition opens with. */
+function NewCaseModal({
+  onClose,
+  onCreated,
+}: {
+  onClose: () => void;
+  onCreated: (caseId: string) => void;
+}) {
+  const [text, setText] = useState("");
+  const [files, setFiles] = useState<File[]>([]);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function submit() {
+    if (!text.trim() && files.length === 0) {
+      setError("Paste a case or add a file.");
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      const { case_ids } = await ingestCase(text.trim(), files);
+      if (case_ids.length) onCreated(case_ids[0]);
+      else onClose();
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="modal" onClick={() => !busy && onClose()}>
+      <div className="modal__card" onClick={(e) => e.stopPropagation()}>
+        <h3>New case</h3>
+        <p className="modal__hint">
+          Paste the messiest real case you have — a complaint, a chat thread, an email. Or drop a file
+          (voice note, photo, PDF). Nothing to fill in; the system structures it.
+        </p>
+        <textarea
+          className="modal__text"
+          placeholder="Paste the case here…"
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          disabled={busy}
+          rows={8}
+          autoFocus
+        />
+        <input
+          type="file"
+          multiple
+          className="modal__file"
+          onChange={(e) => setFiles(Array.from(e.target.files ?? []))}
+          disabled={busy}
+        />
+        {error && <div className="banner banner--error">{error}</div>}
+        <div className="modal__actions">
+          <button type="button" className="primary" onClick={() => void submit()} disabled={busy}>
+            {busy ? "structuring…" : "submit case"}
+          </button>
+          <button type="button" className="ghost" onClick={onClose} disabled={busy}>
+            cancel
+          </button>
+        </div>
+        {busy && (
+          <p className="modal__wait">Running extraction on your case — this takes a few seconds.</p>
+        )}
+      </div>
+    </div>
+  );
+}
+
 const params = new URLSearchParams(window.location.search);
 const INITIAL_TENANT = params.get("tenant") ?? getTenantId();
 const INITIAL_CASE = params.get("case");
@@ -564,8 +638,17 @@ export default function App() {
   const [selectedId, setSelectedId] = useState<string | null>(INITIAL_CASE);
   const [error, setError] = useState<string | null>(null);
   const [showHelp, setShowHelp] = useState(false);
+  const [showNew, setShowNew] = useState(false);
 
   const ordered = useMemo(() => (cases ? reviewOrder(cases) : null), [cases]);
+
+  const onCreated = useCallback((caseId: string) => {
+    setShowNew(false);
+    setSelectedId(caseId);
+    void listCases()
+      .then((d) => setCases(d.cases))
+      .catch(() => {});
+  }, []);
 
   const refresh = useCallback(async () => {
     setError(null);
@@ -677,6 +760,15 @@ export default function App() {
           <div className="register__head">
             <span>review queue</span>
             <div className="register__head-actions">
+              <button
+                type="button"
+                className="primary primary--sm"
+                onClick={() => setShowNew(true)}
+                disabled={!getTenantId()}
+                title={getTenantId() ? "" : "set a tenant id first"}
+              >
+                + new case
+              </button>
               <button type="button" className="ghost" onClick={() => void exportCsv()}>
                 CSV
               </button>
@@ -693,7 +785,12 @@ export default function App() {
           {ordered === null ? (
             <p className="empty">Set a tenant id to load cases.</p>
           ) : ordered.length === 0 ? (
-            <p className="empty">No cases yet.</p>
+            <div className="empty">
+              <p>No cases yet.</p>
+              <button type="button" className="primary" onClick={() => setShowNew(true)}>
+                + submit your first case
+              </button>
+            </div>
           ) : (
             <ul>
               {ordered.map((c) => (
@@ -742,6 +839,8 @@ export default function App() {
           )}
         </main>
       </div>
+
+      {showNew && <NewCaseModal onClose={() => setShowNew(false)} onCreated={onCreated} />}
 
       {showHelp && (
         <div className="help" onClick={() => setShowHelp(false)}>

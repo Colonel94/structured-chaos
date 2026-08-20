@@ -61,6 +61,24 @@ export function getCase(caseId: string): Promise<CaseReview> {
   return get<CaseReview>(`/api/cases/${caseId}`);
 }
 
+/** Self-serve intake: submit a messy case (pasted text and/or dropped files) and get back the ids of
+ *  the structured case(s). The browser sets the multipart boundary, so we must NOT set Content-Type. */
+export async function ingestCase(text: string, files: File[]): Promise<{ case_ids: string[] }> {
+  const form = new FormData();
+  form.append("text", text);
+  for (const f of files) form.append("files", f);
+  const res = await fetch("/api/ingest", {
+    method: "POST",
+    headers: { "X-Tenant-Id": tenantOrThrow() },
+    body: form,
+  });
+  if (!res.ok) {
+    const detail = await res.json().catch(() => ({}));
+    throw new Error(detail.detail ?? `Request failed (${res.status})`);
+  }
+  return (await res.json()) as { case_ids: string[] };
+}
+
 /** Record a reviewer's correction to one field; returns the refreshed review (projection + decision). */
 export function recordCorrection(
   caseId: string,

@@ -665,6 +665,65 @@ button {
   margin-top: 6px;
 }
 
+/* ---- new-case intake modal ---- */
+.primary--sm {
+  padding: 5px 10px;
+  font-size: 12.5px;
+}
+.empty button {
+  margin-top: 10px;
+}
+.modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(20, 24, 33, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 60;
+  padding: 20px;
+}
+.modal__card {
+  background: var(--panel);
+  border-radius: 12px;
+  padding: 22px 24px;
+  width: 560px;
+  max-width: 100%;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.25);
+}
+.modal__card h3 {
+  margin: 0 0 6px;
+  font-size: 16px;
+}
+.modal__hint {
+  margin: 0 0 12px;
+  color: var(--muted);
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+.modal__text {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  font: inherit;
+  resize: vertical;
+}
+.modal__file {
+  margin-top: 10px;
+  font-size: 12.5px;
+}
+.modal__actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 14px;
+}
+.modal__wait {
+  margin: 10px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+
 /* ---- keyboard help ---- */
 .help {
   position: fixed;
