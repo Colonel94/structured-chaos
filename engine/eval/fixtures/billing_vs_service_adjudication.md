@@ -1,3 +1,12 @@
+> **⚠️ SUPERSEDED / HISTORICAL (banner added 2026-08-21).** This fixture is the artifact that PRODUCED
+> the R6-C decision — it is NOT a live task. The "current gold" column below is the OLD two-way gold and
+> predates the fix. **Fold C was chosen and shipped:** a third governed category **`record_accuracy`**
+> exists (schema, since 2026-08-17) and the v20 prompt carries its discriminators. The gold is reconciled
+> (15/23 → `record_accuracy`, the 6 fold-independent model-right rows fixed, old two-way gold preserved as
+> `cfpb_labels_oldgold.csv`). Live category is now 82% cfpb / 71% md and the billing↔service confusion is
+> gone (residual moved to service↔access / service↔delivery). **Do not re-adjudicate or rebuild from this.**
+> Kept only as the audit trail of how the taxonomy got its third category. (owner re-confirmed fold C, 2026-08-21.)
+
 # billing_charge ↔ service_fault — adjudication list (23 rows, 57% of all category errors)
 These are the rows where gold and model disagree on exactly the billing↔service boundary you flagged wobbling on. For each, decide the TRUE category. Then we tune the prompt to the corrected boundary — not to the current labels.
 ## Proposed decision rule (edit it — this is the thing we'll encode)
