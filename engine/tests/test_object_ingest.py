@@ -88,6 +88,19 @@ def test_profile_picks_identifiers_not_free_text() -> None:
     assert keys[0] == "order_id"  # most-selective first
 
 
+def test_display_id_prefers_identifier_named_over_a_unique_timestamp() -> None:
+    """With few rows a timestamp can be as unique as the order number; the display id must still be the
+    id-NAMED column (else a confirmation reads "we've found your order 18:42"). Pure, no DB."""
+    from app.resolve.ingest import _pick_external_id
+    from app.resolve.profile import is_identifier_name
+
+    assert is_identifier_name("order_id") and is_identifier_name("booking_ref")
+    assert not is_identifier_name("delivered_at") and not is_identifier_name("slot")
+    attrs = {"order_id": "BK-1", "delivered_at": "18:42", "slot": "17:00"}
+    # key order puts the timestamp first (alphabetical tie-break) — the id name still wins the display id.
+    assert _pick_external_id(attrs, ["delivered_at", "order_id", "slot"]) == "BK-1"
+
+
 def test_ingest_indexes_keys_and_is_idempotent(
     admin_session: Session, app_factory: sessionmaker[Session]
 ) -> None:

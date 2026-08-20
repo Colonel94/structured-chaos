@@ -9,8 +9,33 @@ is always asked when absent.
 from __future__ import annotations
 
 from app.elicit.policy import decide
+from app.elicit.stage import _confirmation
 
 _ESSENTIALS = {"category", "fault", "desired_outcome"}
+
+
+def test_confirmation_states_record_facts_not_just_found() -> None:
+    """Moment 3's second half: the confirmation STATES what the record says (the slot, the items, the
+    delivery time), grounded in the object's own values — not a bare "we've found your order"."""
+    obj = (
+        "order",
+        "BK-1001",
+        {
+            "order_id": "BK-1001",  # the display id — already shown, skipped
+            "phone": "+971501234501",  # a contact identifier — never stated
+            "items": "chocolate cake",
+            "slot": "17:00",
+            "delivered_at": "18:42",
+        },
+    )
+    c = _confirmation(obj)
+    assert c.startswith("We've found your order BK-1001:")
+    assert "items chocolate cake" in c and "slot 17:00" in c and "delivered at 18:42" in c
+    assert (
+        "+971501234501" not in c and "BK-1001," not in c
+    )  # id + contact are not restated as facts
+    # A record with no descriptive facts degrades to the plain confirmation, never an empty ": .".
+    assert _confirmation(("order", "BK-9", {"order_id": "BK-9"})) == "We've found your order BK-9."
 
 
 def test_actionable_when_essentials_present_asks_nothing() -> None:

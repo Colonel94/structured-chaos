@@ -26,6 +26,7 @@ from ..extract.schema import GOVERNED_KEYS
 from ..obs.logging import get_logger
 from ..resolve import resolve_object
 from ..resolve.contradiction import detect_contradictions
+from ..resolve.profile import is_contact_field
 from ..resolve.resolver import Resolution
 from ..resolve.snapshot import snapshot_object
 from ..store import api
@@ -38,14 +39,41 @@ _STAGE = "elicit"
 POLICY_VERSION = "elicit-v1"  # in the idempotency key so a policy change re-elicits history
 
 
+# How many record facts to STATE in a confirmation, and the per-value length cap — enough to show the
+# system already knows the order (the delay, the items, the slot), short enough to stay a confirmation.
+_MAX_CONFIRM_FACTS = 4
+_MAX_FACT_LEN = 40
+
+
 def _confirmation(obj: tuple[str, str | None, dict[str, object]]) -> str:
-    """A short fact to STATE from the resolved object (turn a question into a confirmation, §5)."""
-    object_type, external_id, _attrs = obj
-    return (
-        f"We've found your {object_type} {external_id}."
+    """State what the RECORD says, so the drill confirms instead of asks (§5, winning-condition Moment 3:
+    "delivered 6:42pm against a 5:00pm slot" rather than "we've found your order").
+
+    Domain-agnostic and GROUNDED: it surfaces the resolved object's own descriptive attributes verbatim
+    — never generated, never inferred — because this text is customer-facing (§3: nothing confidently
+    wrong to a customer). Identifiers are skipped (the contact phone/email, and the display id already
+    shown); the first few remaining facts are stated in record order (an orders export usually leads with
+    the salient columns). A future refinement can pair promised-vs-actual fields ("6:42 against 5:00")
+    per-tenant; the general form states the facts plainly."""
+    object_type, external_id, attrs = obj
+    head = (
+        f"We've found your {object_type} {external_id}"
         if external_id
-        else f"We've found your {object_type}."
+        else f"We've found your {object_type}"
     )
+    facts: list[str] = []
+    for key, value in attrs.items():
+        if is_contact_field(key):
+            continue
+        text = "" if value is None else " ".join(str(value).split())
+        if not text or text == (external_id or ""):
+            continue
+        if len(text) > _MAX_FACT_LEN:
+            text = text[: _MAX_FACT_LEN - 1].rstrip() + "…"
+        facts.append(f"{key.replace('_', ' ')} {text}")
+        if len(facts) >= _MAX_CONFIRM_FACTS:
+            break
+    return f"{head}: {', '.join(facts)}." if facts else f"{head}."
 
 
 async def _record_provenance(

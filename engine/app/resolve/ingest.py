@@ -25,7 +25,7 @@ from sqlalchemy.orm import Session
 
 from ..store import api
 from .keys import normalised_hash
-from .profile import is_contact_field, profile_key_fields
+from .profile import is_contact_field, is_identifier_name, profile_key_fields
 
 
 class _Embedder(Protocol):
@@ -48,8 +48,17 @@ def _content_hash(attributes: Mapping[str, object]) -> str:
 
 
 def _pick_external_id(attributes: Mapping[str, object], key_fields: Sequence[str]) -> str | None:
-    """The object's own display id: the most-selective NON-contact key (an order_id, not the phone),
-    falling back to the first key present, else None."""
+    """The object's own display id. Prefer an identifier-NAMED non-contact key (``order_id`` over a
+    coincidentally-unique ``delivered_at`` — with few rows a timestamp can be as unique as the id, so
+    cardinality alone would pick the wrong display id); then any non-contact key; then any key; else None.
+    """
+    for field in key_fields:
+        if (
+            is_identifier_name(field)
+            and not is_contact_field(field)
+            and attributes.get(field) not in (None, "")
+        ):
+            return str(attributes[field]).strip()
     for field in key_fields:
         if not is_contact_field(field) and attributes.get(field) not in (None, ""):
             return str(attributes[field]).strip()
