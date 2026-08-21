@@ -17,15 +17,64 @@ contract (idempotent/retryable via the Phase-1 stage ledger) + a dedicated low-p
 from __future__ import annotations
 
 from typing import Any
+from uuid import UUID
 
 import psycopg
-from procrastinate import App, PsycopgConnector, SyncPsycopgConnector
+from procrastinate import App, JobContext, PsycopgConnector, RetryStrategy, SyncPsycopgConnector
 from sqlalchemy.orm import Session
 
 from .config import Settings, settings
+from .obs.logging import get_logger
+
+log = get_logger(__name__)
 
 DEFAULT_QUEUE = "default"
 BACKFILL_QUEUE = "backfill"  # promotion backfill runs here — low priority, never blocks intake
+
+# Every customer-facing pipeline stage is DURABLE and RETRYABLE (CLAUDE.md §3: the pipeline is
+# idempotent/retryable). A transient blow-up — an Ollama crash, an ASR hiccup, a worker restart that
+# dropped an in-flight job, a DB blip — must not silently strand a case. Procrastinate re-runs the
+# stage a few times with a short backoff; the Phase-1 idempotency ledger makes each re-run safe. Only
+# when the retries are EXHAUSTED is the case stamped ``processing_failed`` (see below) — so a case is
+# never quietly abandoned, and never dressed up as a finished-but-empty case.
+_PIPELINE_RETRY = RetryStrategy(max_attempts=4, wait=5, linear_wait=15)
+
+
+def _fail_case_if_terminal(
+    context: JobContext,
+    exc: BaseException,
+    *,
+    tenant_id: str,
+    case_id: str,
+    stage: str,
+    factory: Any = None,
+) -> None:
+    """On a pipeline-stage failure, stamp the case ``processing_failed`` — but ONLY once the retries are
+    truly exhausted, so a still-retryable blip leaves the case in flight (the customer keeps seeing
+    "still working", not a false failure that then recovers).
+
+    "Exhausted" is Procrastinate's OWN decision (``get_retry_exception(...) is None``), so it is exact —
+    no re-implementing the attempt count. The case must never render as a finished-looking empty case
+    (CLAUDE.md §2 Claim 2, §3); this reaches the portal's stalled/handoff copy and the review-UI error
+    state instead. Best-effort and self-contained: a failure to mark can never mask the original error
+    (we always re-raise after). ``factory`` is a test seam — production uses the global tenant session.
+    """
+    if context.task.get_retry_exception(exception=exc, job=context.job) is not None:
+        return  # a retry is still coming — do not cry failure while we're about to try again
+    from .store.api import fail_case_processing
+    from .store.db import SessionFactory, tenant_session
+
+    try:
+        with tenant_session(tenant_id, factory=factory or SessionFactory) as session:
+            if fail_case_processing(session, UUID(case_id)):
+                log.warning(
+                    "pipeline.case_processing_failed",
+                    tenant_id=tenant_id,
+                    case_id=case_id,
+                    stage=stage,
+                )
+    except Exception:
+        log.exception("pipeline.mark_failed_error", case_id=case_id, stage=stage)
 
 
 def _conninfo(cfg: Settings = settings, *, admin: bool = False) -> str:
@@ -60,56 +109,84 @@ def persist(*, tenant_id: str, case_id: str) -> str:
     return case_id
 
 
-@app.task(name="pipeline.normalise", queue=DEFAULT_QUEUE)
-def normalise_document(*, tenant_id: str, source_document_id: str) -> str:
+@app.task(name="pipeline.normalise", queue=DEFAULT_QUEUE, retry=_PIPELINE_RETRY, pass_context=True)
+def normalise_document(context: JobContext, *, tenant_id: str, source_document_id: str) -> str:
     """Real Phase-3 stage body: normalise one source document (transcript/OCR/text + provenance
     spans), guarded by the Phase-1 idempotency ledger. Sync task → runs in Procrastinate's worker
     thread; ``asyncio.run`` drives the async stage function (which awaits blob + ASR/OCR). Imported
-    lazily so ``queue`` stays import-light. Returns the document id handled."""
+    lazily so ``queue`` stays import-light. Durable: retries a transient ASR/blob failure; on terminal
+    failure stamps the document's case ``processing_failed`` (it must not render as done-but-empty).
+    Returns the document id handled."""
     import asyncio
-    from uuid import UUID
 
     from .pipeline import normalise_source_document
+    from .store.api import get_source_document
+    from .store.db import tenant_session
 
-    asyncio.run(normalise_source_document(tenant_id, UUID(source_document_id)))
+    try:
+        asyncio.run(normalise_source_document(tenant_id, UUID(source_document_id)))
+    except Exception as exc:
+        # Resolve the case behind this document so a terminal failure surfaces honestly on the case.
+        try:
+            with tenant_session(tenant_id) as session:
+                doc = get_source_document(session, UUID(source_document_id))
+            case_id = str(doc[0]) if doc is not None else None
+        except Exception:  # noqa: BLE001 — best-effort lookup; never mask the original error
+            case_id = None
+        if case_id is not None:
+            _fail_case_if_terminal(
+                context, exc, tenant_id=tenant_id, case_id=case_id, stage="normalise"
+            )
+        raise
     return source_document_id
 
 
-@app.task(name="pipeline.extract", queue=DEFAULT_QUEUE)
-def extract_case_task(*, tenant_id: str, case_id: str) -> str:
+@app.task(name="pipeline.extract", queue=DEFAULT_QUEUE, retry=_PIPELINE_RETRY, pass_context=True)
+def extract_case_task(context: JobContext, *, tenant_id: str, case_id: str) -> str:
     """Real Phase-4 stage body: extract the governed core + grounded emergent for one case from its
     normalised text, guarded by the Phase-1 idempotency ledger. Enqueued transactionally by the
     normalise stage the moment a document's normalisation completes, so extraction chains straight off
     intake with no manual trigger (4.7). Sync task → ``asyncio.run`` drives the async stage. Imported
-    lazily to keep ``queue`` import-light. Returns the case id handled."""
+    lazily to keep ``queue`` import-light. Durable: retries a transient Ollama/DB failure; on terminal
+    failure stamps the case ``processing_failed`` — the most likely swallowed-exception scenario, and the
+    one that would otherwise present as "we read it and found nothing." Returns the case id handled.
+    """
     import asyncio
-    from uuid import UUID
 
     from .extract.stage import extract_case
 
-    asyncio.run(extract_case(tenant_id, UUID(case_id)))
+    try:
+        asyncio.run(extract_case(tenant_id, UUID(case_id)))
+    except Exception as exc:
+        _fail_case_if_terminal(context, exc, tenant_id=tenant_id, case_id=case_id, stage="extract")
+        raise
     return case_id
 
 
-@app.task(name="pipeline.elicit", queue=DEFAULT_QUEUE)
-def elicit_case_task(*, tenant_id: str, case_id: str) -> str:
+@app.task(name="pipeline.elicit", queue=DEFAULT_QUEUE, retry=_PIPELINE_RETRY, pass_context=True)
+def elicit_case_task(context: JobContext, *, tenant_id: str, case_id: str) -> str:
     """Phase-5 stage body: decide the next elicitation move (the anchor + two-drill budget, enforced in
     code) for one case. Enqueued transactionally by the extract stage the moment a case's governed core
     is (re-)extracted, so each customer reply → re-extraction → the drill advances with no manual
     trigger. Sync task → ``asyncio.run`` drives the async stage. Imported lazily to keep ``queue``
-    import-light. Returns the case id handled."""
+    import-light. Durable: retries a transient failure; on terminal failure stamps the case
+    ``processing_failed`` so a case whose next move never got decided surfaces honestly rather than
+    silently. Returns the case id handled."""
     import asyncio
-    from uuid import UUID
 
     from .backends.registry import get_blob, get_llm
     from .elicit.stage import elicit_case
 
     # blob → object-snapshot-on-bind (provenance); llm → complaint-vs-record contradiction check.
-    asyncio.run(elicit_case(tenant_id, UUID(case_id), llm=get_llm(), blob=get_blob()))
+    try:
+        asyncio.run(elicit_case(tenant_id, UUID(case_id), llm=get_llm(), blob=get_blob()))
+    except Exception as exc:
+        _fail_case_if_terminal(context, exc, tenant_id=tenant_id, case_id=case_id, stage="elicit")
+        raise
     return case_id
 
 
-@app.task(name="pipeline.dispatch", queue=DEFAULT_QUEUE)
+@app.task(name="pipeline.dispatch", queue=DEFAULT_QUEUE, retry=_PIPELINE_RETRY)
 def dispatch_case_task(*, tenant_id: str, case_id: str) -> str:
     """Phase-5 egress: transmit a case's pending elicitation question over its channel, once. Enqueued
     transactionally by the elicit stage whenever it issues a question, so the drill's question is sent
@@ -125,7 +202,7 @@ def dispatch_case_task(*, tenant_id: str, case_id: str) -> str:
     return case_id
 
 
-@app.task(name="pipeline.rules", queue=DEFAULT_QUEUE)
+@app.task(name="pipeline.rules", queue=DEFAULT_QUEUE, retry=_PIPELINE_RETRY)
 def rules_case_task(*, tenant_id: str, case_id: str) -> str:
     """Phase-6 stage body: compute the deterministic priority/SLA/routing decision for one case.
     Enqueued transactionally by the extract stage (parallel to elicit) the moment a case's governed core

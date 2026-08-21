@@ -47,14 +47,16 @@ def test_local_backends_are_wired() -> None:
 
 @pytest.mark.parametrize("getter", ["get_asr", "get_embedding"])
 def test_cloud_asr_and_embed_backends_are_not_built_yet(getter: str) -> None:
-    """Selecting `cloud` for ASR/embed fails loudly — those impls are still the deferred path and
-    their modules don't exist. This guards against a half-built cloud module silently resolving.
-    (Blob's cloud path is built — MinIO; the cloud LLM is now built too — Claude Haiku — see below.)"""
+    """Selecting `cloud` for ASR/embed fails loudly — those impls are still the deferred path. The
+    modules now exist as honest stubs that raise ``NotImplementedError`` on construction (the earlier
+    bare ``ImportError`` was cleaned up), so this guards against a half-built cloud module silently
+    resolving either way. (Blob's cloud path is built — MinIO; the cloud LLM is built too — Claude Haiku.)
+    """
     cfg = Settings(
         asr_backend=Backend.cloud,
         embedding_backend=Backend.cloud,
     )
-    with pytest.raises(ImportError):
+    with pytest.raises((ImportError, NotImplementedError)):
         getattr(registry, getter)(cfg)
 
 

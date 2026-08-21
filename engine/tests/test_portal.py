@@ -3,8 +3,9 @@
 The two named guarantees: a client-supplied tenant header is IGNORED (tenant comes only from the embed
 key / signed token), and a case token cannot read another tenant's case. Plus: no internal state leaks in
 the status projection, edge file limits, and the shared-policy option render. The heavy pipeline uses a
-scripted LLM + fake blob (deterministic, host/CI-safe); TestClient runs the BackgroundTask synchronously,
-so a submit is fully processed by the time we poll.
+scripted LLM + fake blob (deterministic, host/CI-safe). Processing is now DURABLE (the worker runs the
+normalise→extract→elicit chain that ingest enqueues); there is no worker in a unit test, so ``_process``
+drives the same stages synchronously — standing in for the worker — before we poll the status.
 """
 
 from __future__ import annotations
@@ -20,7 +21,7 @@ from app.api.routes import get_factory
 from app.backends.fake import FakeBlob
 from app.main import app
 from app.portal.router import router as portal_router
-from app.portal.tokens import sign_case_token
+from app.portal.tokens import sign_case_token, verify_case_token
 from app.store import api
 
 pytestmark = pytest.mark.usefixtures("pg")
@@ -83,6 +84,37 @@ def _wire(
     monkeypatch.setattr("app.backends.registry.get_blob", lambda *a, **k: blob)
     app.dependency_overrides[get_factory] = lambda: app_factory
     return TestClient(app)
+
+
+def _process(app_factory: sessionmaker[Session], token: str) -> None:
+    """Stand in for the worker: run the durable normalise→extract→decide→elicit chain for the case behind
+    a signed token, synchronously, so a poll sees the processed state. Uses the same registry-overridden
+    scripted LLM + shared FakeBlob, and the test factory (the stages' default global factory is not
+    repointed at the test DB — the caller must pass it, exactly as the worker/portal did)."""
+    import asyncio
+
+    from app.backends.registry import get_blob, get_llm
+    from app.elicit.stage import elicit_case
+    from app.extract.stage import extract_case
+    from app.pipeline import normalise_source_document
+    from app.rules.stage import decide_case
+
+    resolved = verify_case_token(token)
+    assert resolved is not None
+    tenant_id, case_id = resolved
+    with app_factory() as s:
+        s.execute(text("SELECT set_config('app.tenant_id', :t, true)"), {"t": str(tenant_id)})
+        sdids = api.list_case_source_documents(s, case_id)
+    blob, llm = get_blob(), get_llm()
+
+    async def _go() -> None:
+        for sdid in sdids:
+            await normalise_source_document(str(tenant_id), sdid, blob=blob, factory=app_factory)
+        await extract_case(str(tenant_id), case_id, llm=llm, factory=app_factory)
+        decide_case(str(tenant_id), case_id, factory=app_factory)
+        await elicit_case(str(tenant_id), case_id, llm=llm, blob=blob, factory=app_factory)
+
+    asyncio.run(_go())
 
 
 # ---------------------------------------------------------------- the two named security guarantees
@@ -153,6 +185,7 @@ def test_status_leaks_no_internal_state(
         token = client.post("/p/submit", data={"key": "EK_leak", "text": "late parcel"}).json()[
             "token"
         ]
+        _process(app_factory, token)
         body = client.get(f"/p/case/{token}").json()
         blob = json.dumps(body).lower()
         for leak in (
@@ -222,12 +255,164 @@ def test_status_surfaces_shared_options_when_policy_asks_outcome(
         token = client.post(
             "/p/submit", data={"key": "EK_opt", "text": "late parcel, order ORD-99"}
         ).json()["token"]
+        _process(app_factory, token)
         body = client.get(f"/p/case/{token}").json()
         assert body["question"] and "put this right" in body["question"].lower()
         # the options come from the SHARED policy (OUTCOME_OPTIONS), rendered, not invented by the widget.
         assert body["options"] == ["Refund", "Replacement", "Fix it", "An answer", "Escalate"]
     finally:
         app.dependency_overrides.clear()
+
+
+def test_status_shows_honest_failure_not_empty_case(
+    admin_session: Session, app_factory: sessionmaker[Session], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A case whose processing died (retries exhausted → ``processing_failed``) must NOT render as a
+    finished-but-empty case. The status shows the honest stalled/handoff copy, and still leaks nothing.
+    """
+    tenant = _mint_tenant(admin_session, "Fail-Co", "EK_fail")
+    client = _wire(monkeypatch, app_factory, _ScriptedLLM())
+    try:
+        token = client.post("/p/submit", data={"key": "EK_fail", "text": "late parcel"}).json()[
+            "token"
+        ]
+        # Simulate the worker stamping the case failed after its retries were exhausted.
+        resolved = verify_case_token(token)
+        assert resolved is not None
+        _, case_id = resolved
+        with app_factory() as s:
+            s.execute(text("SELECT set_config('app.tenant_id', :t, true)"), {"t": tenant})
+            assert api.fail_case_processing(s, case_id) is True
+            s.commit()
+        body = client.get(f"/p/case/{token}").json()
+        # Honest handoff, not a completed-looking empty case.
+        assert body["stalled"] is True and body["processing"] is True
+        assert "snag" in body["headline"].lower()
+        assert "resend" in body["detail"].lower()
+        # Still no internal state leak in the failure projection.
+        blob = json.dumps(body).lower()
+        for leak in ("processing_failed", "case_state", "confidence", "priority", "routing"):
+            assert leak not in blob, f"failure status leaked {leak!r}: {body}"
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_fail_case_processing_only_marks_inflight_cases(
+    admin_session: Session, app_factory: sessionmaker[Session]
+) -> None:
+    """``fail_case_processing`` can only ever RECORD a failure — never un-finish a done case. It
+    transitions from created/incomplete, is idempotent, and never clobbers actionable/committed."""
+    from datetime import UTC, datetime
+
+    tenant = _mint_tenant(admin_session, "Guard-Co", "EK_guard")
+    with app_factory() as s:
+        s.execute(text("SELECT set_config('app.tenant_id', :t, true)"), {"t": tenant})
+        case_id = api.create_case(s, channel="web", first_contact_at=datetime.now(UTC))
+        s.commit()
+
+    def _state() -> str:
+        with app_factory() as s:
+            s.execute(text("SELECT set_config('app.tenant_id', :t, true)"), {"t": tenant})
+            return str(
+                s.execute(
+                    text("SELECT case_state FROM case_record WHERE id = :c"), {"c": case_id}
+                ).scalar()
+            )
+
+    def _set(state: str) -> None:
+        with app_factory() as s:
+            s.execute(text("SELECT set_config('app.tenant_id', :t, true)"), {"t": tenant})
+            s.execute(
+                text("UPDATE case_record SET case_state = :st WHERE id = :c"),
+                {"st": state, "c": case_id},
+            )
+            s.commit()
+
+    # created → marks failed (returns True).
+    with app_factory() as s:
+        s.execute(text("SELECT set_config('app.tenant_id', :t, true)"), {"t": tenant})
+        assert api.fail_case_processing(s, case_id) is True
+        s.commit()
+    assert _state() == "processing_failed"
+
+    # already failed → idempotent no-op (returns False).
+    with app_factory() as s:
+        s.execute(text("SELECT set_config('app.tenant_id', :t, true)"), {"t": tenant})
+        assert api.fail_case_processing(s, case_id) is False
+        s.commit()
+
+    # a finished case is NEVER un-finished by a late stage failure.
+    for done in ("actionable", "in_review", "committed"):
+        _set(done)
+        with app_factory() as s:
+            s.execute(text("SELECT set_config('app.tenant_id', :t, true)"), {"t": tenant})
+            assert api.fail_case_processing(s, case_id) is False
+            s.commit()
+        assert _state() == done
+
+
+def test_status_shows_processing_while_a_reply_is_in_flight(
+    admin_session: Session, app_factory: sessionmaker[Session]
+) -> None:
+    """A customer reply re-enters intake; until elicit re-runs on it, the case still carries the PRIOR
+    turn's question. The status must read as 'we're working on it', never serve the stale question as
+    ready (the chat would freeze). Reprocessing = the newest inbound message is newer than the last
+    elicit decision (processed_at)."""
+    from datetime import UTC, datetime, timedelta
+
+    from app.portal.store import public_status
+
+    tenant = _mint_tenant(admin_session, "Reproc-Co", "EK_reproc")
+    t0 = datetime.now(UTC) - timedelta(minutes=5)
+    with app_factory() as s:
+        s.execute(text("SELECT set_config('app.tenant_id', :t, true)"), {"t": tenant})
+        cid = api.create_case(s, channel="web", first_contact_at=t0)
+        # Turn 1 settled: a standing question + processed_at just after first contact.
+        s.execute(
+            text("""
+                UPDATE case_record SET case_state='incomplete',
+                  external_mappings = jsonb_build_object('elicit', jsonb_build_object(
+                    'next_question', 'What is your order number?',
+                    'processed_at', to_jsonb(CAST(:pa AS text))))
+                WHERE id = :c
+            """),
+            {"c": cid, "pa": (t0 + timedelta(seconds=1)).isoformat()},
+        )
+        # A reply arrives AFTER that decision — the pipeline hasn't re-run yet.
+        sha = (
+            secrets_hex() + secrets_hex() + secrets_hex() + secrets_hex()
+        )  # 64-char hex (== blob key)
+        api.add_source_document(
+            s,
+            case_id=cid,
+            sha256=sha,
+            blob_key=sha,
+            mime="text/plain",
+            channel="web",
+            byte_size=10,
+            received_at=t0 + timedelta(minutes=1),
+            doc_kind="message",
+        )
+        s.commit()
+
+    with app_factory() as s:
+        s.execute(text("SELECT set_config('app.tenant_id', :t, true)"), {"t": tenant})
+        st = public_status(s, cid, stall_seconds=3600)
+        assert st is not None and st["processing"] is True  # reply in flight → working on it
+        # The stale question is NOT served while reprocessing.
+        assert st.get("question") is None
+
+        # Elicit re-runs and stamps processed_at past the reply → the case is ready again. (Same
+        # transaction — no commit, which would reset the transaction-local tenant GUC and blind RLS.)
+        api.touch_elicit_processed(s, cid, at_iso=(t0 + timedelta(minutes=2)).isoformat())
+        st2 = public_status(s, cid, stall_seconds=3600)
+        assert st2 is not None and st2.get("processing") is False
+
+
+def secrets_hex() -> str:
+    import secrets
+
+    return secrets.token_hex(8)
 
 
 def test_rate_limiter_unit() -> None:

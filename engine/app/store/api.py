@@ -1409,6 +1409,45 @@ def apply_elicitation(
     )
 
 
+def touch_elicit_processed(session: Session, case_id: UUID, *, at_iso: str) -> None:
+    """Stamp ``external_mappings.elicit.processed_at`` without disturbing the standing decision — used on
+    an idempotent elicit skip (a reply that changed nothing extractable) so the portal status stops
+    reporting the reply as in-flight and re-shows the standing question, not a false stall. RLS-scoped.
+    """
+    session.execute(
+        text("""
+            UPDATE case_record
+            SET external_mappings =
+                jsonb_set(external_mappings, '{elicit,processed_at}', to_jsonb(CAST(:at AS text)), true)
+            WHERE id = :cid
+            """),
+        {"cid": case_id, "at": at_iso},
+    )
+
+
+def fail_case_processing(session: Session, case_id: UUID) -> bool:
+    """Stamp a case ``processing_failed`` — the honest terminal state when a durable pipeline stage
+    exhausts its retries (an Ollama crash, an ASR blow-up, a worker restart that dropped an in-flight
+    job). The case must never render as a *finished-looking empty case*; this reaches the portal's
+    stalled/handoff copy and the review UI's error state instead (CLAUDE.md §2 Claim 2, §3).
+
+    Guarded so a failure can only ever be recorded, never destructive: it transitions ONLY from a
+    still-in-flight state (``created``/``incomplete``) and never clobbers a case that already reached
+    ``actionable``/``in_review``/``committed`` (a late stage failing must not un-finish a done case).
+    Re-marking an already-failed case is a no-op. Returns True iff the state actually changed, so the
+    caller logs the transition exactly once. RLS-scoped."""
+    row = session.execute(
+        text("""
+            UPDATE case_record
+            SET case_state = 'processing_failed'
+            WHERE id = :cid AND case_state IN ('created', 'incomplete')
+            RETURNING id
+            """),
+        {"cid": case_id},
+    ).first()
+    return row is not None
+
+
 # ----------------------------------------------------------------- outbound channel (Phase 5, §5)
 
 

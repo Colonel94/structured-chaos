@@ -191,6 +191,19 @@ button {
   color: var(--alarm);
   border-bottom: 1px solid color-mix(in srgb, var(--alarm) 35%, var(--line));
 }
+/* Processing failed — the case must read as an error a human owns, never as a finished-but-empty case. */
+.banner--failed {
+  padding: var(--sp-3) var(--sp-5);
+  line-height: 1.5;
+  background: color-mix(in srgb, var(--alarm) 16%, var(--surface));
+  color: var(--alarm);
+  border: 1px solid color-mix(in srgb, var(--alarm) 40%, var(--line));
+  border-radius: var(--radius, 6px);
+  margin: var(--sp-3) var(--sp-5) 0;
+}
+.banner--failed strong {
+  color: var(--alarm);
+}
 
 /* ---- three-zone layout: register rail | case | field detail ---- */
 .layout {
@@ -260,6 +273,9 @@ button {
 .register__item--active {
   background: var(--surface-2);
   border-left-color: var(--ink-2);
+}
+.register__item--failed {
+  border-left-color: var(--alarm);
 }
 .register__top {
   display: flex;
@@ -332,6 +348,9 @@ button {
 }
 .case--committed {
   box-shadow: inset 3px 0 0 var(--committed);
+}
+.case--failed {
+  box-shadow: inset 3px 0 0 var(--alarm);
 }
 .case__header {
   display: flex;
@@ -1030,6 +1049,11 @@ button {
   border-radius: var(--r);
   background: color-mix(in srgb, var(--committed) 12%, var(--surface));
 }
+.seal--fail {
+  color: var(--alarm);
+  border-color: color-mix(in srgb, var(--alarm) 34%, transparent);
+  background: color-mix(in srgb, var(--alarm) 12%, var(--surface));
+}
 .seal__dot {
   width: 7px;
   height: 7px;
@@ -1042,6 +1066,14 @@ button {
   font-size: var(--t-micro);
   font-weight: 500;
   color: var(--committed);
+  margin-left: auto;
+  white-space: nowrap;
+}
+.badge--fail {
+  font-family: var(--font-mono);
+  font-size: var(--t-micro);
+  font-weight: 600;
+  color: var(--alarm);
   margin-left: auto;
   white-space: nowrap;
 }

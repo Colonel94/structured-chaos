@@ -59,6 +59,24 @@ def main() -> int:
     with _SHEET.open(encoding="utf-8", newline="") as f:
         gold_rows = list(csv.DictReader(f))
 
+    # A swallowed extraction FAILURE (a double-timeout recorded empty by run_extraction.py, or any
+    # empty-governed row) must NOT be silently scored as a wrong extraction — that inflates the error
+    # rate and hides an infra problem as a model problem (owner directive 2026-08-21). Detect and EXCLUDE
+    # them here, loudly, and report the count as its own line (§10 no-silent-caps). If this number is
+    # non-zero, the accuracy figures below are computed on the SURVIVING rows and the failures are a
+    # separate, infra-level problem to fix, not evidence the extractor is worse.
+    failed_ids = {
+        pid
+        for pid, p in preds.items()
+        if p.get("prompt_version") == "timeout" or not (p.get("governed") or {})
+    }
+    if failed_ids:
+        print(
+            f"\n!! {len(failed_ids)} case(s) FAILED to extract (timeout/empty) — EXCLUDED from scoring, "
+            f"NOT counted as wrong: {', '.join(sorted(failed_ids))}\n"
+            f"   (re-run those ids; an infra failure recorded empty must never score as a bad extraction)"
+        )
+
     labeled_any = 0
     correct: Counter[str] = Counter()
     total: Counter[str] = Counter()
@@ -77,8 +95,8 @@ def main() -> int:
 
     for row in gold_rows:
         pred = preds.get(str(row["id"]))
-        if pred is None:
-            continue
+        if pred is None or str(row["id"]) in failed_ids:
+            continue  # unscored: no prediction, or a swallowed extraction failure (excluded above)
         gov = pred.get("governed") or {}
         row_labeled = False
 

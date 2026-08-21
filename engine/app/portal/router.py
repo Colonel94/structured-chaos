@@ -1,9 +1,14 @@
 """The public portal router — a SEPARATE surface from ``/api`` (PORTAL.md §1–2, §6).
 
 Never accepts ``X-Tenant-Id``: the tenant comes only from the embed key (submit) or the signed case
-token (status/answer). Submit returns immediately and processes in a BackgroundTask (the proven WhatsApp
-pattern); the customer polls a status projection driven by real persisted state. The elicitation policy,
-the anchor+2 budget, windowing, and the deadline are all reused — the portal renders, it never decides.
+token (status/answer). Submit returns immediately; the case is created on first contact and processed by
+the DURABLE Procrastinate pipeline (``ingest`` enqueues ``normalise`` transactionally, which chains
+extract → elicit/rules on the worker), so a transient failure is retried automatically and an exhausted
+one is stamped ``processing_failed`` — never silently dropped, never rendered as a finished-but-empty
+case. The customer polls a status projection driven by real persisted state. The elicitation policy, the
+anchor+2 budget, windowing, and the deadline are all reused — the portal renders, it never decides.
+
+Requires a worker (``scripts/run_worker.py default``) — the same worker the rest of the pipeline uses.
 """
 
 from __future__ import annotations
@@ -16,9 +21,8 @@ from pathlib import Path
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, BackgroundTasks, File, Form, HTTPException, Request, UploadFile
+from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response
-from sqlalchemy.orm import Session, sessionmaker
 
 from ..api.routes import (
     FactoryDep,
@@ -125,34 +129,6 @@ def _cors(resp: Response, origin: str | None) -> Response:
 # ------------------------------------------------------------------------------------- the pipeline runner
 
 
-async def _run_pipeline(
-    tenant: str,
-    source_doc_ids: list[UUID],
-    case_ids: list[UUID],
-    factory: sessionmaker[Session],
-) -> None:
-    """normalise → extract → decide → elicit for freshly-ingested docs/cases. Shared by submit + answer.
-    No channel dispatch: a ``web`` case is read on poll, never 'sent'. Never raises (background task).
-    """
-    from ..backends.registry import get_blob, get_llm
-    from ..elicit.stage import elicit_case
-    from ..extract.stage import extract_case
-    from ..pipeline import normalise_source_document
-    from ..rules.stage import decide_case
-
-    try:
-        blob, llm = get_blob(), get_llm()
-        for sdid in source_doc_ids:
-            await normalise_source_document(tenant, sdid, blob=blob, factory=factory)
-        for cid in case_ids:
-            await extract_case(tenant, cid, llm=llm, factory=factory)
-            decide_case(tenant, cid, factory=factory)
-            await elicit_case(tenant, cid, llm=llm, blob=blob, factory=factory)
-        log.info("portal.processed", tenant=tenant, cases=len(case_ids))
-    except Exception:
-        log.exception("portal.process_failed", tenant=tenant)
-
-
 def _log_voice(attachments: list[tuple[str, str, int]]) -> None:
     """Instrument voice submissions (owner directive): container/codec/size — the first real recordings
     through the portal ARE the eval set. No transcript text (no customer data in logs)."""
@@ -170,15 +146,16 @@ def _log_voice(attachments: list[tuple[str, str, int]]) -> None:
 @router.post("/submit")
 async def submit(
     request: Request,
-    background: BackgroundTasks,
     factory: FactoryDep,
     key: Annotated[str, Form()] = "",
     text: Annotated[str, Form()] = "",
     files: Annotated[list[UploadFile], File()] = [],  # noqa: B006 (FastAPI marker)
 ) -> Response:
     """A stranger submits their mess. Resolves the tenant from the embed key (never a header), creates the
-    case IMMEDIATELY (it exists on first contact), returns a signed token, and processes in the background.
-    """
+    case IMMEDIATELY (it exists on first contact), returns a signed token. Processing is durable: the
+    ingest below enqueues the normalise→extract→elicit chain on the worker transactionally, so it retries
+    on a transient failure and stamps ``processing_failed`` on an exhausted one — no fragile in-process
+    task to lose on a restart."""
     resolved = store.resolve_embed_key(key, factory=factory)
     if resolved is None:
         raise HTTPException(status_code=404, detail="Unknown or missing site key.")
@@ -224,13 +201,13 @@ async def submit(
         text=body or None,
         attachments=tuple(attachments),
     )
+    # ingest_messages defers the durable normalise job transactionally (intake/ingest.py) — committing
+    # the case and enqueuing its pipeline atomically. The worker then chains extract → elicit/rules with
+    # retries; nothing to schedule here. If the transaction rolled back, no case and no orphan job exist.
     ing = await ingest_messages(tenant_id, [msg], blob=get_blob(), factory=factory)
     if not ing.case_ids:
         raise HTTPException(status_code=500, detail="Could not create the case.")
     case_id = ing.case_ids[0]
-    background.add_task(
-        _run_pipeline, str(tenant_id), list(ing.source_document_ids), list(ing.case_ids), factory
-    )
     token = sign_case_token(tenant_id, case_id)
     return _cors(JSONResponse({"ref": store._reference(case_id), "token": token}), origin)
 
@@ -257,13 +234,12 @@ def case_status(token: str, request: Request, factory: FactoryDep) -> Response:
 async def answer(
     token: str,
     request: Request,
-    background: BackgroundTasks,
     factory: FactoryDep,
     answer: Annotated[str, Form()] = "",
 ) -> Response:
     """The single pending drill answer. Re-ingested as a continuation of the SAME case (windowing on the
-    case's contact_ref), then re-extracted — the policy issues the next move. No portal question logic.
-    """
+    case's contact_ref), then re-extracted on the DURABLE worker chain — the policy issues the next move.
+    No portal question logic, no in-process task."""
     tenant_id, case_id = _token_or_404(token)
     _rate_limit(request, tenant_id)
     body = answer.strip()
@@ -288,10 +264,9 @@ async def answer(
         text=body,
         attachments=(),
     )
-    ing = await ingest_messages(tenant_id, [msg], blob=get_blob(), factory=factory)
-    background.add_task(
-        _run_pipeline, str(tenant_id), list(ing.source_document_ids), list(ing.case_ids), factory
-    )
+    # Durable again: the re-ingest enqueues normalise→extract→elicit transactionally; the worker advances
+    # the drill. The customer's poll picks up the next question (or completion) from persisted state.
+    await ingest_messages(tenant_id, [msg], blob=get_blob(), factory=factory)
     return _cors(JSONResponse({"ok": True}), request.headers.get("origin"))
 
 

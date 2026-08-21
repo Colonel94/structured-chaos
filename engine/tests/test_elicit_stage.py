@@ -210,6 +210,27 @@ def test_fault_grounding_distinguishes_stated_from_inferred() -> None:
     assert not _fault_grounded(None, "anything") and not _fault_grounded("a fault", "")
 
 
+def test_fault_that_narrates_the_customer_state_is_not_grounded() -> None:
+    """Pure emotion with no concrete problem makes the extractor NARRATE THE CUSTOMER'S STATE ("the
+    customer feels dismissed"). Even though "dismissed" lexically overlaps the message, that is not a
+    fault we can act on or read back — so it must NOT ground (the portal would otherwise assert a
+    fabricated category on pure emotion). A concrete problem describes the thing that went wrong."""
+    # Emotion restated as a "fault", lexically overlapping the customer's words — must NOT ground.
+    assert not _fault_grounded(
+        "the customer feels dismissed and does not know how to explain it",
+        "i am so upset, this whole experience has left me feeling completely dismissed",
+    )
+    assert not _fault_grounded(
+        "The customer is expressing frustration and disappointment.",
+        "i'm just really frustrated and disappointed by all of this",
+    )
+    # A concrete problem — describes the THING/EVENT, not the person — still grounds normally.
+    assert _fault_grounded(
+        "the wedding cake arrived three hours late and had collapsed",
+        "the wedding cake arrived three hours late and had collapsed on one side",
+    )
+
+
 def test_stage_asks_what_happened_when_the_fault_is_not_grounded(
     admin_session: Session, app_factory: sessionmaker[Session]
 ) -> None:

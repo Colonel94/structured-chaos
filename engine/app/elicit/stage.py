@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from datetime import UTC, datetime
 from uuid import UUID
 
 from sqlalchemy.orm import Session, sessionmaker
@@ -41,10 +42,12 @@ _FAULT_NARROW_Q = "What went wrong with it?"
 log = get_logger(__name__)
 
 _STAGE = "elicit"
-POLICY_VERSION = "elicit-v3"  # in the idempotency key so a policy change re-elicits history
+POLICY_VERSION = "elicit-v4"  # in the idempotency key so a policy change re-elicits history
 # ^ v2 (2026-08-21): closed-world fault-grounding gate + the "what happened" drill (§4/§5).
 # ^ v3 (2026-08-21b): the ANALYTICAL fault drill — when the anchor resolves, STATE the record and
 #   narrow (Moment 3) instead of the open question; confirmation stated once across drills.
+# ^ v4 (2026-08-21c): a fault that narrates the CUSTOMER'S STATE ("the customer feels dismissed") is not
+#   a grounded fault → don't assert a fabricated category on pure emotion; investigate/hand off instead.
 
 # Is the fault a real, actionable problem the CUSTOMER described — or one the extractor fabricated?
 # The grammar forces `fault` to be a non-null string (unlike `desired_outcome`), so on a contentless
@@ -82,13 +85,45 @@ def _content_words(text_value: str) -> set[str]:
     return {t for t in tokens if len(t) >= 3 and t not in _STOPWORDS}
 
 
+# When a message is pure emotion with no concrete problem ("i'm so upset, i feel dismissed"), the
+# extractor doesn't leave the fault empty — it NARRATES THE CUSTOMER'S STATE ("the customer feels
+# dismissed and doesn't know how to explain it"). That is not a fault we can act on or read back; it is
+# the tell that there is no described problem yet. A real fault describes the THING/EVENT that went wrong
+# ("the cake arrived smashed", "order BK-1004 was late"), not the person's feelings. We detect the
+# customer-state narration by its subject and treat it as ungrounded — so the portal never asserts a
+# category built on pure emotion, and the drill asks "what happened" (or, if angry, hands off) instead.
+_CUSTOMER_STATE_STARTS = (
+    "the customer",
+    "customer ",
+    "customer's",
+    "the user",
+    "the client",
+    "the complainant",
+    "they feel",
+    "they are feeling",
+    "they're feeling",
+    "user feels",
+    "user is",
+)
+
+
+def _is_customer_state_narration(fault_value: str) -> bool:
+    """True when the fault describes the customer's feelings/state rather than a concrete problem — the
+    extractor's fallback on a contentless/emotional message. These must not count as a grounded fault.
+    """
+    return fault_value.strip().lower().startswith(_CUSTOMER_STATE_STARTS)
+
+
 def _fault_grounded(fault_value: str | None, customer_text: str) -> bool:
-    """True iff the ``fault`` is attested in the customer's own words (§4). False when there is no fault,
-    or when too few of its content words appear in the customer's text — i.e. the extractor inferred it
-    from the record rather than hearing it from the customer, and we must ask "what happened" instead.
+    """True iff the ``fault`` is a concrete problem attested in the customer's own words (§4). False when
+    there is no fault, when the extractor merely narrated the customer's emotional state (no described
+    problem), or when too few of its content words appear in the customer's text — i.e. it was inferred
+    from the record, not heard from the customer. In every false case we ask "what happened" instead.
     """
     if not fault_value or not customer_text:
         return False
+    if _is_customer_state_narration(fault_value):
+        return False  # "the customer feels dismissed" — emotion restated, not a problem to act on
     fault_words = _content_words(fault_value)
     if not fault_words:
         return False
@@ -229,6 +264,11 @@ async def elicit_case(
             code_version=settings.code_version,
         )
         if not api.claim_stage(session, stage=_STAGE, idempotency_key=key, case_id=case_id):
+            # This exact extracted state was already elicited — the standing question/decision still
+            # holds. But a customer reply that changed nothing extractable (an unhelpful "idk") still
+            # arrived AFTER the last run, so stamp "processed just now": the portal status stops
+            # reporting the reply as in-flight and shows the standing question again (not a false stall).
+            api.touch_elicit_processed(session, case_id, at_iso=datetime.now(UTC).isoformat())
             return False
 
         # Resolve the anchor: a stated key and/or the sender phone. A silent match lets us CONFIRM.
@@ -304,6 +344,9 @@ async def elicit_case(
             # So the customer-facing read-back never asserts a category derived from an ungrounded fault
             # (portal store suppresses it): "we won't tell you your problem until you've told us" (§5).
             "fault_grounded": fault_grounded,
+            # When this move was decided — the portal status compares it to the newest inbound message
+            # to tell "we're processing your latest reply" from "here's the standing question" (chat UX).
+            "processed_at": datetime.now(UTC).isoformat(),
         }
         api.apply_elicitation(session, case_id, state=plan.state, asked=asked, meta=meta)
         api.complete_stage(session, idempotency_key=key)

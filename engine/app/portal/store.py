@@ -47,9 +47,12 @@ _OUTCOME_PHRASE = {
 # case_state (+ whether a question is pending) → customer-facing copy. No raw state ever leaves here.
 _STATE_COPY = {
     "actionable": ("We've got it — and we're on it", "Your case is with our team."),
+    # in_review = a human is stepping in (an angry/upset customer isn't interrogated, §5; or a flagged
+    # case). Warm + honest — a person is taking over and will reach out — never "we've got everything we
+    # need" (which reads as done, and isn't true when the case is still thin).
     "in_review": (
-        "Thanks — a person on our team is handling this",
-        "We've got everything we need for now.",
+        "We're getting a person on your team to help",
+        "This clearly matters, so someone will look at it personally and reach out to you directly.",
     ),
     "committed": ("This has been reviewed and actioned", "Thanks for letting us know."),
 }
@@ -128,6 +131,32 @@ def _processing_stage(session: Session, case_id: UUID, category: str | None) -> 
     return "transcribing" if has_audio else "received"
 
 
+def _reprocessing(
+    session: Session, case_id: UUID, first_contact_at: datetime
+) -> tuple[bool, datetime]:
+    """Is a customer reply still being processed, and since when? A reply re-enters intake as a new
+    inbound message; until the elicit stage re-runs on it, the case still carries the PRIOR turn's
+    question, which the status projection must not serve as "ready" (it would freeze the chat on a stale
+    question). True when the newest inbound message is newer than the last elicit decision. Returns
+    (reprocessing, processing_since) — the clock the stall timer runs from (the latest message, so a
+    turn-2 reply's stall isn't measured from the original first contact)."""
+    row = session.execute(
+        text("""
+            SELECT
+              (SELECT max(received_at) FROM source_document
+                 WHERE case_id = :c AND doc_kind IN ('message','file')) AS newest_in,
+              (external_mappings #>> '{elicit,processed_at}')::timestamptz AS processed_at
+            FROM case_record WHERE id = :c
+            """),
+        {"c": case_id},
+    ).first()
+    newest_in: datetime | None = row[0] if row else None
+    processed_at: datetime | None = row[1] if row else None
+    since = newest_in or first_contact_at
+    reproc = newest_in is not None and processed_at is not None and newest_in > processed_at
+    return reproc, since
+
+
 def public_status(session: Session, case_id: UUID, *, stall_seconds: int) -> dict[str, Any] | None:
     """The customer-safe status for one case, or None if absent for this tenant (RLS fail-closed)."""
     row = session.execute(
@@ -141,9 +170,27 @@ def public_status(session: Session, case_id: UUID, *, stall_seconds: int) -> dic
     gov = api.get_field_values(session, case_id, ["category", "anchor_value", "desired_outcome"])
     ref = _reference(case_id)
 
-    # STILL PROCESSING: the background pipeline hasn't reached elicitation yet (state == 'created').
-    if case_state == "created":
-        age = (datetime.now(UTC) - first_contact_at).total_seconds()
+    # PROCESSING FAILED: a durable pipeline stage exhausted its retries (an Ollama crash, a dropped job).
+    # The case must NOT render as a finished-but-empty case ("we read it and found nothing"). Show the
+    # honest stalled/handoff copy — the case exists, originals are safe, a person takes over — reusing the
+    # widget's stalled presentation (PORTAL.md §8; owner directive 2026-08-21). Never resend, never a lie.
+    if case_state == "processing_failed":
+        return {
+            "ref": ref,
+            "processing": True,
+            "stalled": True,
+            "stage": "delayed",
+            "headline": "We've hit a snag on our end — a person is taking over",
+            "detail": "We've got everything you sent and it's safe. Someone on our team will pick this "
+            "up personally — you don't need to resend it.",
+        }
+
+    # STILL PROCESSING: either the first pass hasn't reached elicitation yet (state == 'created'), or a
+    # customer reply is being re-processed (the case carries the prior turn's question until elicit
+    # re-runs). Both must read as "we're working on it", not a stale ready-state (the chat would freeze).
+    reproc, since = _reprocessing(session, case_id, first_contact_at)
+    if case_state == "created" or reproc:
+        age = (datetime.now(UTC) - since).total_seconds()
         if age > stall_seconds:
             # A restart may have dropped the in-flight background task — never hang the customer on a
             # spinner. The case exists regardless; say so honestly (PORTAL.md §8, the stall guarantee).

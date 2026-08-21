@@ -12,7 +12,13 @@ import pytest
 from sqlalchemy import text
 from sqlalchemy.orm import Session, sessionmaker
 
-from app.queue import BACKFILL_QUEUE, backfill, defer_in_transaction, persist
+from app.queue import (
+    BACKFILL_QUEUE,
+    _fail_case_if_terminal,
+    backfill,
+    defer_in_transaction,
+    persist,
+)
 from app.store import api
 from app.store.db import tenant_session
 
@@ -141,3 +147,73 @@ def test_job_args_carry_ids_only_never_content(
     for args in all_args:
         stray = set(args.keys()) - allowed
         assert not stray, f"job args carry non-id keys (leak risk): {stray}"
+
+
+# ------------------------------------------------------------ honest terminal-failure marking (Fix 1)
+
+
+class _FakeTask:
+    """Stands in for a Procrastinate Task: ``get_retry_exception`` returns None when no retry remains
+    (terminal), or a truthy sentinel while a retry is still pending — the exact signal the real strategy
+    emits, so the marking helper's decision is tested without a live worker."""
+
+    def __init__(self, *, terminal: bool) -> None:
+        self._terminal = terminal
+
+    def get_retry_exception(self, *, exception: BaseException, job: object) -> object | None:
+        return None if self._terminal else object()
+
+
+class _FakeCtx:
+    def __init__(self, *, terminal: bool) -> None:
+        self.task = _FakeTask(terminal=terminal)
+        self.job = object()
+
+
+def _case_state(app_factory: sessionmaker[Session], tenant: str, case_id: str) -> str:
+    with tenant_session(tenant, factory=app_factory) as s:
+        return str(
+            s.execute(
+                text("SELECT case_state FROM case_record WHERE id = :c"), {"c": case_id}
+            ).scalar()
+        )
+
+
+def test_terminal_failure_marks_case_processing_failed(
+    admin_session: Session, app_factory: sessionmaker[Session]
+) -> None:
+    """When a stage's retries are EXHAUSTED, the case is stamped ``processing_failed`` (it must surface
+    honestly, never as a done-but-empty case)."""
+    tenant = api.create_tenant(admin_session, "Terminal-Fail")
+    admin_session.commit()
+    with tenant_session(tenant, factory=app_factory) as s:
+        case = api.create_case(s, channel="web", first_contact_at=_now())
+    _fail_case_if_terminal(
+        _FakeCtx(terminal=True),  # type: ignore[arg-type]
+        RuntimeError("ollama crashed"),
+        tenant_id=str(tenant),
+        case_id=str(case),
+        stage="extract",
+        factory=app_factory,
+    )
+    assert _case_state(app_factory, str(tenant), str(case)) == "processing_failed"
+
+
+def test_retryable_failure_leaves_case_in_flight(
+    admin_session: Session, app_factory: sessionmaker[Session]
+) -> None:
+    """While a retry is still pending, the case is NOT marked failed — the customer keeps seeing
+    "still working", and a successful retry recovers it normally (no false failure flicker)."""
+    tenant = api.create_tenant(admin_session, "Retryable")
+    admin_session.commit()
+    with tenant_session(tenant, factory=app_factory) as s:
+        case = api.create_case(s, channel="web", first_contact_at=_now())
+    _fail_case_if_terminal(
+        _FakeCtx(terminal=False),  # type: ignore[arg-type]
+        RuntimeError("transient blip"),
+        tenant_id=str(tenant),
+        case_id=str(case),
+        stage="extract",
+        factory=app_factory,
+    )
+    assert _case_state(app_factory, str(tenant), str(case)) == "created"

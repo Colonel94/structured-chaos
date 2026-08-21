@@ -431,6 +431,10 @@ function CaseDetail({
   );
   const emergent = review.fields.filter((f) => f.layer === "emergent");
   const committed = review.commit !== null;
+  // Processing died mid-pipeline (retries exhausted). The case must NOT read as a finished-but-empty
+  // case — surface it as an error so a human picks it up; the source below is retained (originals are
+  // immutable, §3), so the reviewer can still act on what the customer sent.
+  const failed = review.case_state === "processing_failed";
 
   // The keyboard order: governed fields present (review order), then emergent — j/k walk it.
   const selectable = useMemo(() => {
@@ -486,7 +490,7 @@ function CaseDetail({
   // with DIFFERENT keys — `c` arms, `Enter` commits — so a reviewer hammering `c` at speed can never
   // irreversibly approve a half-read case by a double-tap (owner call, DESIGN.md §10). No window.confirm.
   const doCommit = useCallback(async () => {
-    if (committed || busy) return;
+    if (committed || busy || failed) return; // never approve a case that failed to process
     setArmed(false);
     setBusy(true);
     setNote(null);
@@ -498,14 +502,14 @@ function CaseDetail({
     } finally {
       setBusy(false);
     }
-  }, [committed, busy, review.case_id, reviewer, onCommitted]);
+  }, [committed, busy, failed, review.case_id, reviewer, onCommitted]);
 
   const arm = useCallback(() => {
-    if (committed || busy) return;
+    if (committed || busy || failed) return;
     setArmed(true);
     window.clearTimeout(armTimer.current);
     armTimer.current = window.setTimeout(() => setArmed(false), 3000);
-  }, [committed, busy]);
+  }, [committed, busy, failed]);
 
   useHotkeys("c", () => arm(), [arm]);
   useHotkeys("enter", () => armed && void doCommit(), { enabled: armed }, [armed, doCommit]);
@@ -526,17 +530,19 @@ function CaseDetail({
   ]);
 
   return (
-    <section className={`case${committed ? " case--committed" : ""}`}>
+    <section className={`case${committed ? " case--committed" : ""}${failed ? " case--failed" : ""}`}>
       <header className="case__header">
         <div>
           <span className="case__id">case {review.case_id.slice(0, 8)}</span>
           <span className="case__meta">
-            {review.channel} · {review.case_state} · first contact{" "}
+            {review.channel} · {failed ? "processing failed" : review.case_state} · first contact{" "}
             {new Date(review.first_contact_at).toLocaleString()}
           </span>
         </div>
         <div className="case__actions">
-          {committed ? (
+          {failed ? (
+            <span className="seal seal--fail">handle manually — nothing to approve</span>
+          ) : committed ? (
             <>
               <span className="seal">
                 <span className="seal__dot" />
@@ -567,8 +573,18 @@ function CaseDetail({
         </div>
       </header>
 
+      {failed && (
+        <div className="banner banner--failed" role="alert">
+          <strong>Processing didn&apos;t complete.</strong> Something broke while reading this case and
+          the automatic retries were exhausted — so nothing here is trustworthy or complete. The
+          customer&apos;s original message is retained below; handle this one by hand and re-run it if
+          the underlying issue is fixed. It has not been auto-routed or resolved.
+        </div>
+      )}
       <DecisionBar review={review} />
-      <AnalysisPanel review={review} />
+      {/* The synthesis assumes a processed case — suppress it when processing failed, so a generic
+          "A complaint / next step: action per the routed team" never contradicts the failure banner. */}
+      {!failed && <AnalysisPanel review={review} />}
       {note && <div className="banner banner--error">{note}</div>}
 
       <div className="case__body">
@@ -647,15 +663,17 @@ function CaseDetail({
 
 // ---- register + app shell ----
 
-/** Class-reliability-first: unapproved cases first, ordered by the case's lowest governed-field
- * confidence (a null sorts last among unapproved), approved cases below.
+/** Failed-first, then class-reliability: a case whose processing FAILED is surfaced at the top (it needs
+ * a human now — a silently bottom-sorted error is not "surfaced"), then unapproved cases ordered by the
+ * case's lowest governed-field confidence (a null sorts last among unapproved), then approved cases.
  *
  * HONEST SCOPE (owner review 2026-08-19): today's confidence is a per-CLASS calibrated reliability ×
  * grounding — two cases predicted the same class are indistinguishable except by grounding. So this is
  * class-level triage (it front-loads the least-reliable categories), NOT a per-case difficulty ranking.
  * A true per-instance "this case is hard" signal does not exist yet; do not present the queue as one. */
 function reviewOrder(cases: CaseSummary[]): CaseSummary[] {
-  const rank = (c: CaseSummary) => (c.committed_at ? 1 : 0);
+  const rank = (c: CaseSummary) =>
+    c.case_state === "processing_failed" ? 0 : c.committed_at ? 2 : 1;
   const conf = (c: CaseSummary) =>
     c.min_governed_confidence === null ? Number.POSITIVE_INFINITY : c.min_governed_confidence;
   return [...cases].sort((a, b) => rank(a) - rank(b) || conf(a) - conf(b));
@@ -1037,19 +1055,28 @@ export default function App() {
               {ordered.map((c) => {
                 const flagged =
                   c.min_governed_confidence !== null && c.min_governed_confidence <= 0.5;
+                const failedRow = c.case_state === "processing_failed";
                 return (
                   <li key={c.case_id}>
                     <button
                       type="button"
-                      className={`register__item${selectedId === c.case_id ? " register__item--active" : ""}`}
+                      className={`register__item${selectedId === c.case_id ? " register__item--active" : ""}${failedRow ? " register__item--failed" : ""}`}
                       onClick={() => setSelectedId(c.case_id)}
                     >
                       <span className="register__top">
-                        {c.priority && (
-                          <span className={`pri pri--${c.priority}`}>{c.priority}</span>
+                        {failedRow ? (
+                          <span className="pri pri--P1">needs a human</span>
+                        ) : (
+                          c.priority && <span className={`pri pri--${c.priority}`}>{c.priority}</span>
                         )}
-                        <span className="register__cat">{c.category ?? "—"}</span>
-                        {c.committed_at ? (
+                        <span className="register__cat">
+                          {failedRow ? "processing failed" : (c.category ?? "—")}
+                        </span>
+                        {failedRow ? (
+                          <span className="badge--fail" title="processing failed — handle manually">
+                            ⚠ error
+                          </span>
+                        ) : c.committed_at ? (
                           <span className="badge--sm">✓ approved</span>
                         ) : (
                           <span
@@ -1061,7 +1088,11 @@ export default function App() {
                           </span>
                         )}
                       </span>
-                      <span className="register__fault">{c.fault ?? "(no summary yet)"}</span>
+                      <span className="register__fault">
+                        {failedRow
+                          ? "We couldn't finish reading this — needs a person."
+                          : (c.fault ?? "(no summary yet)")}
+                      </span>
                       <span className="register__sub">
                         {c.channel} · {c.field_count} fields
                         {c.routing ? ` · ${c.routing}` : ""}
