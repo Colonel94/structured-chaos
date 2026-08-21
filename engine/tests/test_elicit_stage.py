@@ -12,7 +12,7 @@ import pytest
 from sqlalchemy import text
 from sqlalchemy.orm import Session, sessionmaker
 
-from app.elicit.stage import elicit_case
+from app.elicit.stage import _fault_grounded, elicit_case
 from app.resolve import ingest_object_collection
 from app.store import api
 from app.store.db import tenant_session
@@ -21,10 +21,18 @@ pytestmark = pytest.mark.usefixtures("pg")
 
 
 def _seed_case(
-    session: Session, *, governed: dict[str, str], contact_ref: str | None = None
+    session: Session,
+    *,
+    governed: dict[str, str],
+    contact_ref: str | None = None,
+    customer_text: str | None = None,
 ) -> UUID:
     """Create a case with the given governed fields already extracted (via the real append-only log
-    + field_current projection), mimicking a post-extraction state the elicit stage reads."""
+    + field_current projection), mimicking a post-extraction state the elicit stage reads.
+
+    Also persists the customer's normalised text (``customer_text``, defaulting to the seeded ``fault``)
+    so the closed-world fault-grounding check sees the words the fault was extracted from — matching
+    production, where a real fault echoes the customer's own message."""
     case_id = api.create_case(
         session,
         channel="whatsapp",
@@ -41,6 +49,17 @@ def _seed_case(
         channel="whatsapp",
         byte_size=10,
         received_at=datetime.now(UTC),
+    )
+    api.save_normalised_content(
+        session,
+        case_id=case_id,
+        source_document_id=doc,
+        content_text=customer_text if customer_text is not None else governed.get("fault", ""),
+        language="en",
+        spans=[],
+        stage="normalise",
+        model="t",
+        model_version="t",
     )
     run = uuid4()
     cites = [api.Citation(source_document_id=doc, role="primary")]
@@ -165,3 +184,85 @@ def test_stage_confirms_the_resolved_object_then_asks_the_outcome(
     assert qcount == 1 and meta["question_kind"] == "drill"
     q = str(meta["next_question"])
     assert "found your order BK-1" in q and "put this right" in q  # confirm, then ask
+
+
+# --- closed-world fault grounding (§4/§5) ---
+
+
+def test_fault_grounding_distinguishes_stated_from_inferred() -> None:
+    """The real cases from the portal: a customer-stated fault echoes their words and grounds; a fault
+    the extractor inferred from the order record shares only the object noun and does not."""
+    # Grounded: the fault repeats what the customer actually wrote.
+    assert _fault_grounded(
+        "the cake arrived completely melted and 2 hours late",
+        "my cake showed up completely melted and 2 hours late, order BK-1001, I want my money back",
+    )
+    # Ungrounded: "i feel sad" + an order number → the extractor invented a delivery fault.
+    assert not _fault_grounded(
+        "the order was not delivered or was incorrect", "i feel sad my order was BK-1001 refund"
+    )
+    # The extractor's honest "no issue described" note is itself ungrounded → we ask what happened.
+    assert not _fault_grounded(
+        "The customer provided an order reference but did not describe any issue.", "i feel sad"
+    )
+    # Degenerate inputs never ground.
+    assert not _fault_grounded(None, "anything") and not _fault_grounded("a fault", "")
+
+
+def test_stage_asks_what_happened_when_the_fault_is_not_grounded(
+    admin_session: Session, app_factory: sessionmaker[Session]
+) -> None:
+    """A case with an anchor and an extractor-inferred fault the customer never described: the stage
+    must ask 'what happened' (a drill), not present the invented fault as fact or ask the outcome.
+    """
+    tenant = api.create_tenant(admin_session, "Ungrounded-Co")
+    admin_session.commit()
+    with tenant_session(tenant, factory=app_factory) as s:
+        case = _seed_case(
+            s,
+            governed={
+                "category": "delivery_fulfilment",
+                "fault": "the order was not delivered or was incorrect",
+                "anchor_value": "BK-1",
+            },
+            customer_text="i feel sad",  # the customer never described the fault
+        )
+
+    asyncio.run(elicit_case(tenant, case, factory=app_factory))
+
+    with tenant_session(tenant, factory=app_factory) as s:
+        state, qcount, _a, _r = api.get_case_elicit_state(s, case)  # type: ignore[misc]
+        meta = _elicit_meta(s, case)
+    assert state == "incomplete" and qcount == 1 and meta["question_kind"] == "drill"
+    assert meta["fault_grounded"] is False
+    q = str(meta["next_question"])
+    assert "What happened" in q and "put this right" not in q
+
+
+def test_stage_asks_what_happened_for_emotional_venting_even_when_lexically_grounded(
+    admin_session: Session, app_factory: sessionmaker[Session]
+) -> None:
+    """The subtle case: the customer only vented ("i feel let down"), and the extractor echoed that into
+    a fault that IS lexically grounded ("feels let down…") but could not categorise it (category=other).
+    Lexical grounding alone would accept it; the concrete-category signal catches it → ask what happened.
+    """
+    tenant = api.create_tenant(admin_session, "Venting-Co")
+    admin_session.commit()
+    with tenant_session(tenant, factory=app_factory) as s:
+        case = _seed_case(
+            s,
+            governed={
+                "category": "other",  # the extractor saw no actionable complaint class
+                "fault": "the customer feels let down after an unspecified event",
+                "anchor_value": "BK-9",
+            },
+            customer_text="i feel really let down after everything today",  # grounds lexically
+        )
+
+    asyncio.run(elicit_case(tenant, case, factory=app_factory))
+
+    with tenant_session(tenant, factory=app_factory) as s:
+        state, _q, _a, _r = api.get_case_elicit_state(s, case)  # type: ignore[misc]
+        meta = _elicit_meta(s, case)
+    assert state == "incomplete" and meta["fault_grounded"] is False
+    assert "What happened" in str(meta["next_question"])

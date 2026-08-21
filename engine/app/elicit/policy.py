@@ -9,10 +9,17 @@ Given a case's current extracted state, decide the single next move:
                       anchor+2 budget is spent.
 
 The order encodes the design (§5): the ANCHOR first — it is a key, and resolving it lets everything
-downstream be looked up and CONFIRMED rather than asked. Then the desired OUTCOME — the one fact that
-can never be inferred. Then, only if the case is still too sparse to categorise, one clarifying drill.
-We never ask for something already stated (a present field is never re-asked) or derivable from the
-anchor (the stage confirms looked-up facts instead of asking).
+downstream be looked up and CONFIRMED rather than asked. Then, if the customer hasn't actually said
+what went wrong, WHAT HAPPENED — the fault in their own words (never one invented from the record).
+Then the desired OUTCOME — the one fact that can never be inferred. We never ask for something already
+stated (a present field is never re-asked) or derivable from the anchor (the stage confirms looked-up
+facts instead of asking).
+
+Closed-world grounding is a GATE here (§4): a ``fault`` the customer never described — absent, or one
+the extractor INFERRED from the resolved order record — is not allowed to pass as fact. The stage
+measures whether the fault is attested in the customer's own words and passes ``fault_grounded``; an
+ungrounded fault (and the category derived from it) is treated as a gap, so the system asks "what
+happened" instead of confidently telling the customer what their problem is (§5, Claim 2).
 """
 
 from __future__ import annotations
@@ -25,8 +32,14 @@ TOTAL_CAP = 3  # anchor + 2 drills — a hard ceiling; the 4th question must nev
 _ANCHOR_Q = (
     "To pull up your case, what's your order number — or the phone number you used to order?"
 )
+# "What happened" — the fault, in the customer's own words. Plain and low-pressure on purpose: no
+# persona, no scripted "so sorry to hear that", no leading guess about the problem. It asks once, for a
+# sentence, and hands the answer to the person in the back to resolve — a drill, not a chatbot turn (§5).
+_FAULT_Q = (
+    "What happened? A sentence or two is all we need — it goes straight to the person handling it."
+)
 _OUTCOME_Q = "What would you like us to do to put this right?"
-_CLARIFY_Q = "Sorry to hear that — can you tell me briefly what went wrong?"
+_CLARIFY_Q = "Just so we route this right — can you tell us briefly what the issue is?"
 
 
 # Tappable options for the outcome drill — plain labels for the DESIRED_OUTCOMES vocab (concept §4.3:
@@ -56,6 +69,7 @@ def decide(
     anchor_asked: bool,
     question_count: int,
     confirmation: str | None = None,
+    fault_grounded: bool = True,
 ) -> ElicitationPlan:
     """Decide the next elicitation move for one case.
 
@@ -65,10 +79,22 @@ def decide(
     anchor has already been requested (so it isn't re-asked and doesn't consume a drill slot).
     ``question_count`` — total questions asked so far (durable across turns). ``confirmation`` — a fact
     looked up from the resolved object to STATE before the drill (turn a question into a confirmation).
+    ``fault_grounded`` — whether the ``fault`` value is attested in the customer's OWN words (the stage
+    measures this). ``False`` means the fault is absent or was inferred from the record; we then treat
+    the fault (and the category derived from it) as a gap and ask "what happened" rather than presenting
+    an invented problem as fact (§4 closed-world grounding, §5 never confidently wrong). Defaults to
+    ``True`` so a caller that doesn't measure grounding keeps the pre-grounding behaviour.
     """
+    # A fault the customer never actually described must not count as known. Drop it (and the category
+    # inferred from it) from the fields we treat as satisfied, so the gate below asks instead of asserts.
+    effective_fields = set(present_fields)
+    if not fault_grounded:
+        effective_fields.discard("fault")
+        effective_fields.discard("category")
+
     # Enough to route and act → ask nothing, regardless of budget.
     essentials = {"category", "fault", "desired_outcome"}
-    if essentials <= present_fields:
+    if essentials <= effective_fields:
         return ElicitationPlan("actionable", None, None, "has category + fault + desired_outcome")
 
     # Emotion is data: an angry, incomplete case goes to a human — never interrogated (§5).
@@ -92,7 +118,18 @@ def decide(
             "in_review", None, None, "anchor + 2 budget spent → hand off to a human"
         )
 
-    # 2. The desired outcome — the one fact that can never be inferred. Confirm the looked-up fact first.
+    # 2. What happened — the fault, in the customer's OWN words, asked BEFORE the outcome (understand the
+    #    problem before asking what they'd like done). Only fires when the customer hasn't described it:
+    #    a present, grounded fault skips this; an absent or record-inferred one asks rather than invents.
+    if "fault" not in effective_fields:
+        return ElicitationPlan(
+            "incomplete",
+            _FAULT_Q,
+            "drill",
+            "fault not grounded in the customer's words → ask what happened",
+        )
+
+    # 3. The desired outcome — the one fact that can never be inferred. Confirm the looked-up fact first.
     #    Offer the outcome options (a hint, after narrowing — the caller keeps free text alongside them).
     if "desired_outcome" not in present_fields:
         q = f"{confirmation} {_OUTCOME_Q}" if confirmation else _OUTCOME_Q
@@ -104,8 +141,8 @@ def decide(
             options=OUTCOME_OPTIONS,
         )
 
-    # 3. Still too sparse to categorise even after the anchor → one clarifying drill.
-    if "category" not in present_fields or "fault" not in present_fields:
+    # 4. Fault known and outcome known, but still uncategorised → one clarifying drill.
+    if "category" not in effective_fields:
         return ElicitationPlan(
             "incomplete", _CLARIFY_Q, "drill", "too sparse to categorise → one clarifying question"
         )

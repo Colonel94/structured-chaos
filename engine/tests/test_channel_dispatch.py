@@ -41,6 +41,20 @@ def _seed_case(session: Session, *, governed: dict[str, str], contact_ref: str |
         byte_size=10,
         received_at=datetime.now(UTC),
     )
+    # Persist the customer's normalised text (the seeded fault) so the closed-world fault-grounding
+    # check sees the words the fault was extracted from — matching production, where a real fault
+    # echoes the customer's own message (else a seeded fault reads as ungrounded and re-asks).
+    api.save_normalised_content(
+        session,
+        case_id=case_id,
+        source_document_id=doc,
+        content_text=governed.get("fault", ""),
+        language="en",
+        spans=[],
+        stage="normalise",
+        model="t",
+        model_version="t",
+    )
     run = uuid4()
     cites = [api.Citation(source_document_id=doc, role="primary")]
     for k, v in governed.items():

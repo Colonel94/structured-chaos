@@ -171,6 +171,17 @@ def public_status(session: Session, case_id: UUID, *, stall_seconds: int) -> dic
         {"c": case_id},
     ).scalar()
     options = list(elicit) if isinstance(elicit, list) else None
+    # Never assert a category built on a fault the customer didn't describe: if the elicit stage flagged
+    # the fault as ungrounded, drop the category from the read-back so we don't tell the customer what
+    # their problem is before they've told us (§5). Only suppress on an explicit False (None = unknown).
+    fault_grounded = session.execute(
+        text(
+            "SELECT external_mappings #> '{elicit,fault_grounded}' FROM case_record WHERE id = :c"
+        ),
+        {"c": case_id},
+    ).scalar()
+    if fault_grounded is False:
+        gov = {k: v for k, v in gov.items() if k != "category"}
     if pending:
         headline, detail = _NEEDS_INPUT
     else:

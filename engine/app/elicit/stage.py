@@ -36,7 +36,58 @@ from .policy import decide
 log = get_logger(__name__)
 
 _STAGE = "elicit"
-POLICY_VERSION = "elicit-v1"  # in the idempotency key so a policy change re-elicits history
+POLICY_VERSION = "elicit-v2"  # in the idempotency key so a policy change re-elicits history
+# ^ v2 (2026-08-21): closed-world fault-grounding gate + the "what happened" drill (§4/§5).
+
+# Is the fault a real, actionable problem the CUSTOMER described — or one the extractor fabricated?
+# The grammar forces `fault` to be a non-null string (unlike `desired_outcome`), so on a contentless
+# message the model invents one two ways, and we need TWO deterministic signals to reject both (§4/§5):
+#
+#   1. Closed-world lexical grounding (`_fault_grounded`): is the fault ATTESTED in the customer's own
+#      words? A fault the extractor inferred from the resolved ORDER RECORD ("not delivered or incorrect"
+#      on an "i feel sad" case) shares nothing but the object noun with the customer's text and fails.
+#      A real complaint echoes their words ("melted", "late") and clears the bar.
+#   2. Concrete category: did the extractor place the complaint in a real class, or fall back to
+#      "other"/"UNCLEAR"? An EMOTIONAL message ("i feel let down") gets echoed into a grounded-but-empty
+#      fault ("feels let down after an unspecified event") that passes signal 1 — but the model couldn't
+#      categorise it, which is the tell that there is no actionable problem yet.
+#
+# A fault is trusted only if BOTH hold. Either failing → ask "what happened" instead of asserting an
+# invented problem to the customer. The bias is deliberately toward asking (refuse-to-guess >
+# confidently-wrong, Claim 2); over-asking a rare genuinely-"other" complaint is the safe direction.
+# Language-agnostic token overlap (works for Arabic/code-switched); the stopword list de-noises English.
+_UNCATEGORISED = frozenset({"other", "UNCLEAR"})  # the extractor saw no actionable complaint class
+_GROUNDING_RATIO = 0.4
+_STOPWORD_STR = (
+    "the a an and or but not was were is are be been being to of in on at for with from by "
+    "that this it its they them their you your we our us my me have has had do did does done "
+    "as so if then than there here about into out over under can could will would should may "
+    "no yes any some all one two get got"
+)
+_STOPWORDS = frozenset(_STOPWORD_STR.split())
+
+
+def _content_words(text_value: str) -> set[str]:
+    """Lowercased alphanumeric tokens of length ≥ 3, minus common English stopwords — the words that
+    carry a fault's meaning (the problem descriptors), so grounding compares substance, not filler.
+    """
+    tokens = "".join(c.lower() if c.isalnum() else " " for c in text_value).split()
+    return {t for t in tokens if len(t) >= 3 and t not in _STOPWORDS}
+
+
+def _fault_grounded(fault_value: str | None, customer_text: str) -> bool:
+    """True iff the ``fault`` is attested in the customer's own words (§4). False when there is no fault,
+    or when too few of its content words appear in the customer's text — i.e. the extractor inferred it
+    from the record rather than hearing it from the customer, and we must ask "what happened" instead.
+    """
+    if not fault_value or not customer_text:
+        return False
+    fault_words = _content_words(fault_value)
+    if not fault_words:
+        return False
+    text_words = _content_words(customer_text)
+    hits = sum(1 for w in fault_words if w in text_words)
+    return hits / len(fault_words) >= _GROUNDING_RATIO
 
 
 # How many record facts to STATE in a confirmation, and the per-value length cap — enough to show the
@@ -190,6 +241,15 @@ async def elicit_case(
         # ask the anchor ("order number, or the phone you used to order").
         has_anchor = bool(anchor_value) or resolved
 
+        # Is the fault a real, customer-described problem? Trust it only if it is attested in the
+        # customer's own words (not inferred from the record) AND the extractor could place it in a
+        # concrete class (not "other"/"UNCLEAR", the tell of pure emotion echoed into the fault). Either
+        # failing → the policy asks "what happened" rather than asserting an invented problem (§4/§5).
+        fault_grounded = (
+            _fault_grounded(governed.get("fault"), api.get_case_normalised_text(session, case_id))
+            and governed.get("category") not in _UNCATEGORISED
+        )
+
         plan = decide(
             set(governed),
             emotion=governed.get("emotion_signal"),
@@ -197,6 +257,7 @@ async def elicit_case(
             anchor_asked=anchor_asked,
             question_count=question_count,
             confirmation=confirmation,
+            fault_grounded=fault_grounded,
         )
 
         # Object-snapshot-on-bind + contradiction surfacing (§5). Runs when a bind/contradiction
@@ -220,6 +281,9 @@ async def elicit_case(
             "options": list(plan.options) if plan.options else None,
             "object_snapshot": str(snapshot_id) if snapshot_id is not None else None,
             "contradictions": n_contradictions,
+            # So the customer-facing read-back never asserts a category derived from an ungrounded fault
+            # (portal store suppresses it): "we won't tell you your problem until you've told us" (§5).
+            "fault_grounded": fault_grounded,
         }
         api.apply_elicitation(session, case_id, state=plan.state, asked=asked, meta=meta)
         api.complete_stage(session, idempotency_key=key)

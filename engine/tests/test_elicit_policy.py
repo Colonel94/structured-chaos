@@ -111,3 +111,62 @@ def test_anchor_not_reasked_once_asked_moves_to_drills() -> None:
         {"category", "fault"}, emotion=None, has_anchor=False, anchor_asked=True, question_count=1
     )
     assert p.question_kind == "drill"
+
+
+# --- closed-world fault grounding: ask "what happened", never assert an invented fault (§4/§5) ---
+
+
+def test_ungrounded_fault_asks_what_happened_not_the_outcome() -> None:
+    # The extractor filled `fault` from the order record, but the customer never described it
+    # (fault_grounded=False). We must ASK what happened — before the outcome — not present it as fact.
+    p = decide(
+        {"category", "fault"},
+        emotion="calm",
+        has_anchor=True,
+        anchor_asked=True,
+        question_count=1,
+        fault_grounded=False,
+    )
+    assert p.state == "incomplete" and p.question_kind == "drill"
+    assert "What happened" in (p.next_question or "")
+    assert "put this right" not in (p.next_question or "")  # not the outcome yet
+
+
+def test_ungrounded_fault_is_not_actionable_even_with_all_essentials() -> None:
+    # category + fault + desired_outcome all present, but the fault isn't grounded → NOT actionable;
+    # the phantom fault can't satisfy the gate (§5 — never confidently wrong to the customer).
+    p = decide(
+        _ESSENTIALS,
+        emotion="calm",
+        has_anchor=True,
+        anchor_asked=True,
+        question_count=1,
+        fault_grounded=False,
+    )
+    assert p.state == "incomplete" and "What happened" in (p.next_question or "")
+
+
+def test_grounded_fault_present_goes_straight_to_the_outcome() -> None:
+    # The customer DID describe the fault (grounded) → don't re-ask what happened; ask the outcome.
+    p = decide(
+        {"category", "fault"},
+        emotion="calm",
+        has_anchor=True,
+        anchor_asked=True,
+        question_count=1,
+        fault_grounded=True,
+    )
+    assert p.question_kind == "drill" and "put this right" in (p.next_question or "")
+
+
+def test_ungrounded_fault_still_respects_the_budget() -> None:
+    # An ungrounded fault does not buy extra questions: the anchor+2 cap still hands off (§3, §4).
+    p = decide(
+        _ESSENTIALS,
+        emotion="calm",
+        has_anchor=True,
+        anchor_asked=True,
+        question_count=3,
+        fault_grounded=False,
+    )
+    assert p.state == "in_review" and p.next_question is None
