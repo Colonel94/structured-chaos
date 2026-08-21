@@ -68,6 +68,21 @@ class Settings(BaseSettings):
     # configured tenant; a multi-number product would map phone_number_id → tenant instead.
     whatsapp_tenant_id: str = ""
 
+    # --- customer portal (PORTAL.md) — the public /p surface is a SEPARATE router, gated on `enabled` ---
+    portal_enabled: bool = False  # the public routes only mount when this is on (fail-closed)
+    portal_secret: str = (
+        ""  # HMAC key for signed case tokens; the router refuses to sign without it
+    )
+    portal_max_file_bytes: int = (
+        10 * 1024 * 1024
+    )  # 10 MB per file (edge limit, before any model call)
+    portal_max_request_bytes: int = 25 * 1024 * 1024  # 25 MB per submit
+    portal_rate_ip_per_10min: int = 5  # submit/answer cap per client IP
+    portal_rate_tenant_per_hour: int = 60  # submit/answer cap per tenant
+    portal_stall_seconds: int = (
+        90  # a still-processing case older than this shows "taking longer" copy
+    )
+
     # --- postgres ---
     # TWO roles, deliberately (EDD §7.1). The engine connects as the least-privilege
     # `app_rw` (NOSUPERUSER, NOBYPASSRLS) so RLS is actually enforced against it; migrations

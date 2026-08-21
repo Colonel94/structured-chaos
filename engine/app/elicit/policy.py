@@ -29,12 +29,23 @@ _OUTCOME_Q = "What would you like us to do to put this right?"
 _CLARIFY_Q = "Sorry to hear that — can you tell me briefly what went wrong?"
 
 
+# Tappable options for the outcome drill — plain labels for the DESIRED_OUTCOMES vocab (concept §4.3:
+# "offer tappable options rather than open questions" — but only AFTER narrowing, never an upfront
+# type-picker). Defined ONCE here so every channel (portal buttons, WhatsApp interactive) renders the
+# SAME set and they cannot diverge. A HINT, never a constraint: the caller must always keep free text
+# available alongside these, so a customer whose answer isn't listed is never forced to pick a wrong one.
+OUTCOME_OPTIONS: tuple[str, ...] = ("Refund", "Replacement", "Fix it", "An answer", "Escalate")
+
+
 @dataclass(frozen=True)
 class ElicitationPlan:
     state: str  # "actionable" | "incomplete" | "in_review"
     next_question: str | None  # the single question to ask, or None
     question_kind: str | None  # "anchor" | "drill" | None
     reason: str
+    options: tuple[str, ...] | None = (
+        None  # tappable choices for this question, or None → free text only
+    )
 
 
 def decide(
@@ -82,10 +93,15 @@ def decide(
         )
 
     # 2. The desired outcome — the one fact that can never be inferred. Confirm the looked-up fact first.
+    #    Offer the outcome options (a hint, after narrowing — the caller keeps free text alongside them).
     if "desired_outcome" not in present_fields:
         q = f"{confirmation} {_OUTCOME_Q}" if confirmation else _OUTCOME_Q
         return ElicitationPlan(
-            "incomplete", q, "drill", "missing desired_outcome (never inferable)"
+            "incomplete",
+            q,
+            "drill",
+            "missing desired_outcome (never inferable)",
+            options=OUTCOME_OPTIONS,
         )
 
     # 3. Still too sparse to categorise even after the anchor → one clarifying drill.

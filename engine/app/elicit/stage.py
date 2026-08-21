@@ -215,6 +215,9 @@ async def elicit_case(
             "question_kind": plan.question_kind,
             "reason": plan.reason,
             "state": plan.state,
+            # Tappable options for this question (outcome drill), so every channel renders the SAME set
+            # (portal buttons, WhatsApp interactive) — a hint the client shows alongside free text.
+            "options": list(plan.options) if plan.options else None,
             "object_snapshot": str(snapshot_id) if snapshot_id is not None else None,
             "contradictions": n_contradictions,
         }

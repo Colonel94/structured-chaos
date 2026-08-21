@@ -16,6 +16,13 @@ app = FastAPI(title="Adaptive Intake Engine", version="0.0.0")
 app.include_router(api_router)
 app.include_router(whatsapp_router)  # WhatsApp Cloud API webhook (verify + inbound)
 
+# The customer-facing portal is a SEPARATE public surface, mounted ONLY when explicitly enabled
+# (fail-closed) — so the unauthenticated /p routes never exist by accident on an agent-only deployment.
+if settings.portal_enabled:
+    from .portal.router import router as portal_router
+
+    app.include_router(portal_router)
+
 
 @app.get("/health")
 def health() -> dict[str, object]:
