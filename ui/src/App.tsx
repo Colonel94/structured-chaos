@@ -28,9 +28,10 @@ import {
   type SourceDocument,
 } from "./types";
 
-// The review screen: the engine's first client. A reviewer clears a case in under 30 seconds from the
-// keyboard, tracing every value to its exact source (sentence / audio segment / image region) and
+// The review screen — a verification INSTRUMENT (DESIGN.md). A reviewer clears a case in under 30s from
+// the keyboard, tracing every value to its exact source (sentence / audio segment / image region) and
 // approving it — the commit gate, after which (and only after which) a report may issue (CLAUDE.md §3).
+// Design law: uncertainty is the single loud signal; everything else recedes.
 
 function formatValue(value: unknown): string {
   if (value === null || value === undefined || value === "") return "";
@@ -42,9 +43,38 @@ function pct(conf: number | null): string {
   return conf === null ? "—" : `${Math.round(conf * 100)}%`;
 }
 
+/** The confidence spine is DISCRETE, not a smooth fade (DESIGN.md §6): confidence is a per-class
+ * calibrated reliability × grounding with only ~6 trusted values per field, so a continuous gradient
+ * would imply a precision that doesn't exist. Five bands + a neutral "no confidence". A per-FIELD signal
+ * only — never a per-case difficulty claim (the register's class-level ordering copy is untouched). */
+function confBand(conf: number | null): string | null {
+  if (conf === null) return null;
+  if (conf <= 0.5) return "flag";
+  if (conf <= 0.7) return "low";
+  if (conf <= 0.85) return "mid";
+  if (conf <= 0.95) return "high";
+  return "sure";
+}
+
 /** A citation's source document, resolved so provenance can pick the right viewer by its mime. */
 function docOf(cite: Citation, docs: Map<string, SourceDocument>): SourceDocument | undefined {
   return docs.get(cite.source_document_id);
+}
+
+/** Honour prefers-reduced-motion in JS-driven motion (the intake stage cycle). CSS handles the rest. */
+function usePrefersReducedMotion(): boolean {
+  const [reduced, setReduced] = useState(
+    () =>
+      typeof matchMedia !== "undefined" && matchMedia("(prefers-reduced-motion: reduce)").matches,
+  );
+  useEffect(() => {
+    if (typeof matchMedia === "undefined") return;
+    const m = matchMedia("(prefers-reduced-motion: reduce)");
+    const onChange = () => setReduced(m.matches);
+    m.addEventListener?.("change", onChange);
+    return () => m.removeEventListener?.("change", onChange);
+  }, []);
+  return reduced;
 }
 
 // ---- provenance: the "where did this come from?" answer, per source modality ----
@@ -134,7 +164,7 @@ function ProvenanceTrace({
   return any ? <div className="trace-panels">{panels}</div> : null;
 }
 
-// ---- governed field card ----
+// ---- governed field row ----
 
 function confidenceLabel(field: ReviewField): string | null {
   if (field.source_kind === "correction") return "corrected";
@@ -154,26 +184,38 @@ function GovernedField({
   active: boolean;
 }) {
   const label = path.replace(/_/g, " ");
+  // A governed field absent from the payload is a refuse-to-guess absence — a first-class, deliberate
+  // state, never an empty cell or an error (winning-condition §5; DESIGN.md §6).
   if (!field) {
     return (
       <div className="field field--absent">
         <div className="field__label">{label}</div>
         <div className="field__value field__value--absent">not stated</div>
+        <span />
       </div>
     );
   }
   const flag = confidenceLabel(field);
+  const band = confBand(field.confidence);
+  const flagged = field.confidence !== null && field.confidence <= 0.5;
   const wide = path === "fault" ? " field--wide" : "";
+  const bandClass = band ? ` field--conf-${band}` : "";
   return (
     <button
       type="button"
-      className={`field field--button${wide}${active ? " field--active" : ""}`}
+      className={`field field--button${wide}${bandClass}${active ? " field--active" : ""}`}
       onClick={onSelect}
     >
       <div className="field__label">{label}</div>
       <div className="field__value">{formatValue(field.value)}</div>
-      {field.confidence !== null && <span className="field__conf">{pct(field.confidence)}</span>}
-      {flag && <span className={`chip chip--${flag.replace(/\s/g, "-")}`}>{flag}</span>}
+      {field.confidence !== null ? (
+        <span className="field__conf" data-flagged={flagged}>
+          {pct(field.confidence)}
+        </span>
+      ) : (
+        <span className="field__conf">—</span>
+      )}
+      {flag && <span className={`field__flag chip chip--${flag.replace(/\s/g, "-")}`}>{flag}</span>}
     </button>
   );
 }
@@ -237,10 +279,10 @@ function FieldDetail({
             }}
           />
           <div className="edit__actions">
-            <button type="button" onClick={() => void save()} className="primary">
+            <button type="button" onClick={() => void save()} className="primary primary--sm">
               save correction
             </button>
-            <button type="button" className="ghost" onClick={() => setEditing(false)}>
+            <button type="button" className="ghost ghost--sm" onClick={() => setEditing(false)}>
               cancel
             </button>
           </div>
@@ -291,9 +333,11 @@ function FieldDetail({
   );
 }
 
-/** Highlight the selected field's text spans inside the normalised source text (sentence trace). */
+/** Highlight the selected field's text spans inside the normalised source text (sentence trace). The
+ * source panel is the ONE place the human's verbatim words appear — set in serif, as a document under
+ * examination (DESIGN.md §2). Never a field value or model output. */
 function SourceText({ text, spans }: { text: string; spans: [number, number][] }) {
-  if (!text) return <pre className="trace">— no normalised text —</pre>;
+  if (!text) return <pre className="trace trace--empty">— no normalised text —</pre>;
   if (spans.length === 0) return <pre className="trace">{text}</pre>;
   const ordered = [...spans].sort((a, b) => a[0] - b[0]);
   const parts: ReactNode[] = [];
@@ -309,13 +353,19 @@ function SourceText({ text, spans }: { text: string; spans: [number, number][] }
   return <pre className="trace">{parts}</pre>;
 }
 
-// ---- decision (priority/SLA/routing) ----
+// ---- decision (priority/SLA/routing) — the rules engine speaking, distinct + authoritative ----
 
 function DecisionBar({ review }: { review: CaseReview }) {
   const d = review.decision;
-  if (!d) return <div className="decision decision--none">no decision computed yet</div>;
+  if (!d)
+    return (
+      <div className="decision decision--none">
+        <span className="decision__tag">RULES</span> no decision computed yet
+      </div>
+    );
   return (
     <div className="decision">
+      <span className="decision__tag">RULES</span>
       <span className={`pri pri--${d.priority}`}>{d.priority}</span>
       <span className="decision__route">
         route <b>{d.routing}</b>
@@ -348,6 +398,8 @@ function CaseDetail({
   const [showJson, setShowJson] = useState(false);
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<string | null>(null);
+  const [armed, setArmed] = useState(false); // commit gate: c arms, Enter commits (DESIGN.md §6)
+  const armTimer = useRef<number | undefined>(undefined);
 
   const byPath = useMemo(() => new Map(review.fields.map((f) => [f.field_path, f])), [review]);
   const docs = useMemo(
@@ -363,7 +415,11 @@ function CaseDetail({
     return [...gov, ...emergent.map((f) => f.field_path)];
   }, [byPath, emergent]);
 
-  useEffect(() => setSelected(null), [review.case_id]);
+  useEffect(() => {
+    setSelected(null);
+    setArmed(false); // a new case is never pre-armed to commit
+  }, [review.case_id]);
+  useEffect(() => () => window.clearTimeout(armTimer.current), []);
 
   const move = useCallback(
     (delta: number) => {
@@ -403,10 +459,12 @@ function CaseDetail({
     }
   }
 
-  const commit = useCallback(async () => {
+  // The commit gate is a ONE-WAY stamp (first-writer-wins; corrections 409 after). So it is a two-step
+  // with DIFFERENT keys — `c` arms, `Enter` commits — so a reviewer hammering `c` at speed can never
+  // irreversibly approve a half-read case by a double-tap (owner call, DESIGN.md §10). No window.confirm.
+  const doCommit = useCallback(async () => {
     if (committed || busy) return;
-    if (!window.confirm("Approve this case? Nothing external is issued until you do — and this is final."))
-      return;
+    setArmed(false);
     setBusy(true);
     setNote(null);
     try {
@@ -418,7 +476,17 @@ function CaseDetail({
       setBusy(false);
     }
   }, [committed, busy, review.case_id, reviewer, onCommitted]);
-  useHotkeys("c", () => void commit(), [commit]);
+
+  const arm = useCallback(() => {
+    if (committed || busy) return;
+    setArmed(true);
+    window.clearTimeout(armTimer.current);
+    armTimer.current = window.setTimeout(() => setArmed(false), 3000);
+  }, [committed, busy]);
+
+  useHotkeys("c", () => arm(), [arm]);
+  useHotkeys("enter", () => armed && void doCommit(), { enabled: armed }, [armed, doCommit]);
+  useHotkeys("escape", () => setArmed(false), { enabled: armed }, [armed]);
 
   const downloadReport = useCallback(async () => {
     setNote(null);
@@ -435,7 +503,7 @@ function CaseDetail({
   ]);
 
   return (
-    <section className="case">
+    <section className={`case${committed ? " case--committed" : ""}`}>
       <header className="case__header">
         <div>
           <span className="case__id">case {review.case_id.slice(0, 8)}</span>
@@ -447,17 +515,28 @@ function CaseDetail({
         <div className="case__actions">
           {committed ? (
             <>
-              <span className="badge badge--ok">
-                approved · {review.commit?.committed_by}
+              <span className="seal">
+                <span className="seal__dot" />
+                APPROVED · {review.commit?.committed_by}
               </span>
               <button type="button" className="primary" onClick={() => void downloadReport()}>
                 report (r)
               </button>
             </>
           ) : (
-            <button type="button" className="primary" disabled={busy} onClick={() => void commit()}>
-              approve (c)
-            </button>
+            <>
+              {armed && (
+                <span className="approve__arm-hint">press Enter to approve · Esc to cancel</span>
+              )}
+              <button
+                type="button"
+                className={`approve${armed ? " approve--armed" : ""}`}
+                disabled={busy}
+                onClick={() => (armed ? void doCommit() : arm())}
+              >
+                {armed ? "confirm approve" : "approve (c)"}
+              </button>
+            </>
           )}
           <button type="button" className="ghost" onClick={() => setShowJson((v) => !v)}>
             {showJson ? "hide JSON" : "JSON"}
@@ -471,7 +550,7 @@ function CaseDetail({
       <div className="case__body">
         <div className="case__left">
           <h2 className="section-title">governed core</h2>
-          <div className="grid">
+          <div className="fields">
             {GOVERNED_ORDER.map((path) => (
               <GovernedField
                 key={path}
@@ -505,10 +584,10 @@ function CaseDetail({
                     className={selected === f.field_path ? "attrs__row--active" : ""}
                     onClick={() => setSelected(f.field_path)}
                   >
-                    <td>{f.head}</td>
+                    <td className="mono-cell">{f.head}</td>
                     <td className="muted">{f.qualifier ?? "—"}</td>
                     <td>{formatValue(f.value)}</td>
-                    <td className="muted">{f.provenance.length}</td>
+                    <td className="muted mono-cell">{f.provenance.length}</td>
                   </tr>
                 ))}
               </tbody>
@@ -516,7 +595,9 @@ function CaseDetail({
           )}
 
           <h2 className="section-title">source text</h2>
-          <SourceText text={review.normalised_text} spans={textSpans} />
+          <div className="source">
+            <SourceText text={review.normalised_text} spans={textSpans} />
+          </div>
         </div>
 
         <aside className="case__right">
@@ -529,7 +610,8 @@ function CaseDetail({
             />
           ) : (
             <div className="detail detail--hint">
-              Select a field (or press <kbd>j</kbd>) to trace its source.
+              Select a field (or press <kbd>j</kbd>) to trace its source — the exact sentence, audio
+              segment, or image region it was read from.
             </div>
           )}
           {showJson && <pre className="json">{JSON.stringify(review, null, 2)}</pre>}
@@ -553,6 +635,43 @@ function reviewOrder(cases: CaseSummary[]): CaseSummary[] {
   const conf = (c: CaseSummary) =>
     c.min_governed_confidence === null ? Number.POSITIVE_INFINITY : c.min_governed_confidence;
   return [...cases].sort((a, b) => rank(a) - rank(b) || conf(a) - conf(b));
+}
+
+const INTAKE_STAGES = ["normalising", "transcribing", "extracting", "deciding"] as const;
+
+/** The ~17s synchronous intake wait shows the PIPELINE working, not a generic spinner (DESIGN.md §6).
+ * Honest: these are the real pipeline stages in order, advanced on a timer (the request has no progress
+ * events) — stage labels, not telemetry. prefers-reduced-motion → shown statically, no cycle, no pulse. */
+function IntakePipeline() {
+  const reduced = usePrefersReducedMotion();
+  const [stage, setStage] = useState(0);
+  useEffect(() => {
+    if (reduced) return;
+    const t = window.setInterval(
+      () => setStage((s) => (s + 1 < INTAKE_STAGES.length ? s + 1 : s)),
+      3400,
+    );
+    return () => window.clearInterval(t);
+  }, [reduced]);
+  return (
+    <div className="pipeline" role="status" aria-live="polite">
+      {INTAKE_STAGES.map((label, i) => {
+        const state = reduced
+          ? "pipeline__row--active"
+          : i < stage
+            ? "pipeline__row--done"
+            : i === stage
+              ? "pipeline__row--active"
+              : "";
+        return (
+          <div key={label} className={`pipeline__row ${state}`}>
+            <span className="pipeline__dot" />
+            <span className="pipeline__label">{label}…</span>
+          </div>
+        );
+      })}
+    </div>
+  );
 }
 
 /** Self-serve intake: paste the messiest real case (or drop files) and get a structured case back — no
@@ -620,9 +739,7 @@ function NewCaseModal({
             cancel
           </button>
         </div>
-        {busy && (
-          <p className="modal__wait">Running extraction on your case — this takes a few seconds.</p>
-        )}
+        {busy && <IntakePipeline />}
       </div>
     </div>
   );
@@ -767,7 +884,7 @@ export default function App() {
     };
   }, [selectedId]);
 
-  // n/p walk the review queue (next/prev case, low-confidence-first).
+  // n/p walk the review queue (next/prev case, class-reliability-first).
   const moveCase = useCallback(
     (delta: number) => {
       if (!ordered || ordered.length === 0) return;
@@ -806,7 +923,12 @@ export default function App() {
   return (
     <div className="app">
       <header className="topbar">
-        <h1>Adaptive Intake — Review</h1>
+        <div className="topbar__brand">
+          <span className="topbar__mark mono" aria-hidden="true">
+            ▚
+          </span>
+          <h1>Adaptive Intake — Review</h1>
+        </div>
         <div className="tenant">
           <input
             aria-label="reviewer id"
@@ -823,7 +945,7 @@ export default function App() {
             onChange={(e) => setTenant(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && applyTenant()}
           />
-          <button type="button" onClick={applyTenant}>
+          <button type="button" className="load" onClick={applyTenant}>
             load
           </button>
           <button
@@ -857,10 +979,10 @@ export default function App() {
               >
                 + new case
               </button>
-              <button type="button" className="ghost" onClick={() => void exportCsv()}>
+              <button type="button" className="ghost ghost--sm" onClick={() => void exportCsv()}>
                 CSV
               </button>
-              <button type="button" className="ghost" onClick={() => void refresh()}>
+              <button type="button" className="ghost ghost--sm" onClick={() => void refresh()}>
                 refresh
               </button>
             </div>
@@ -871,45 +993,59 @@ export default function App() {
             </p>
           )}
           {ordered === null ? (
-            <p className="empty">Set a tenant id to load cases.</p>
+            <div className="register__empty">
+              <h4>No tenant loaded</h4>
+              <p>Set a tenant id to load cases.</p>
+            </div>
           ) : ordered.length === 0 ? (
-            <div className="empty">
-              <p>No cases yet.</p>
-              <button type="button" className="primary" onClick={() => setShowNew(true)}>
+            <div className="register__empty">
+              <h4>An empty queue</h4>
+              <p>
+                This is where cases land for review — least-reliable first, each traceable to its
+                source and approved by you. Nothing has come in yet.
+              </p>
+              <button type="button" className="primary primary--sm" onClick={() => setShowNew(true)}>
                 + submit your first case
               </button>
             </div>
           ) : (
             <ul>
-              {ordered.map((c) => (
-                <li key={c.case_id}>
-                  <button
-                    type="button"
-                    className={`register__item${selectedId === c.case_id ? " register__item--active" : ""}`}
-                    onClick={() => setSelectedId(c.case_id)}
-                  >
-                    <span className="register__top">
-                      {c.priority && <span className={`pri pri--${c.priority}`}>{c.priority}</span>}
-                      <span className="register__cat">{c.category ?? "—"}</span>
-                      {c.committed_at ? (
-                        <span className="badge badge--ok badge--sm">approved</span>
-                      ) : (
-                        <span
-                          className="register__conf"
-                          title="predicted-class reliability × grounding — a class-level signal, not a per-case difficulty score"
-                        >
-                          {pct(c.min_governed_confidence)}
-                        </span>
-                      )}
-                    </span>
-                    <span className="register__fault">{c.fault ?? "(no summary yet)"}</span>
-                    <span className="register__sub">
-                      {c.channel} · {c.field_count} fields
-                      {c.routing ? ` · ${c.routing}` : ""}
-                    </span>
-                  </button>
-                </li>
-              ))}
+              {ordered.map((c) => {
+                const flagged =
+                  c.min_governed_confidence !== null && c.min_governed_confidence <= 0.5;
+                return (
+                  <li key={c.case_id}>
+                    <button
+                      type="button"
+                      className={`register__item${selectedId === c.case_id ? " register__item--active" : ""}`}
+                      onClick={() => setSelectedId(c.case_id)}
+                    >
+                      <span className="register__top">
+                        {c.priority && (
+                          <span className={`pri pri--${c.priority}`}>{c.priority}</span>
+                        )}
+                        <span className="register__cat">{c.category ?? "—"}</span>
+                        {c.committed_at ? (
+                          <span className="badge--sm">✓ approved</span>
+                        ) : (
+                          <span
+                            className="register__conf"
+                            data-flagged={flagged}
+                            title="predicted-class reliability × grounding — a class-level signal, not a per-case difficulty score"
+                          >
+                            {pct(c.min_governed_confidence)}
+                          </span>
+                        )}
+                      </span>
+                      <span className="register__fault">{c.fault ?? "(no summary yet)"}</span>
+                      <span className="register__sub">
+                        {c.channel} · {c.field_count} fields
+                        {c.routing ? ` · ${c.routing}` : ""}
+                      </span>
+                    </button>
+                  </li>
+                );
+              })}
             </ul>
           )}
         </nav>
@@ -942,8 +1078,8 @@ export default function App() {
               <dd>next / previous case</dd>
               <dt>e</dt>
               <dd>edit (correct) the selected field</dd>
-              <dt>c</dt>
-              <dd>approve the case (commit gate)</dd>
+              <dt>c → ⏎</dt>
+              <dd>approve the case — c arms, Enter commits (the gate)</dd>
               <dt>r</dt>
               <dd>download the report (approved cases)</dd>
               <dt>?</dt>

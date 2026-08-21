@@ -91,42 +91,46 @@ export default function ImageProvenance({
 
   return (
     <figure className="img-prov">
-      {/* Wrapper shrinks to the rendered image box (inline-block), so the absolute overlay is anchored
-          to the image itself — not the figure's full content width. */}
-      <div className="img-prov__frame">
-        <img
-          ref={imgRef}
-          className="img-prov__img"
-          src={src}
-          alt=""
-          onLoad={measure}
-          draggable={false}
-        />
-        {ready && (
-          <div className="img-prov__overlay" style={{ width: size.width, height: size.height }}>
-            {boxes.map((box) => {
-              const active = box.id === activeId;
-              return (
-                <button
-                  key={box.id}
-                  ref={active ? activeRef : undefined}
-                  type="button"
-                  className={`img-prov__box${active ? " img-prov__box--active" : " img-prov__box--faint"}`}
-                  style={{
-                    left: `${(box.x / size.natW) * 100}%`,
-                    top: `${(box.y / size.natH) * 100}%`,
-                    width: `${(box.w / size.natW) * 100}%`,
-                    height: `${(box.h / size.natH) * 100}%`,
-                  }}
-                  title={box.label}
-                  aria-label={box.label ?? `region ${box.id}`}
-                  aria-pressed={active}
-                  onClick={() => onBoxClick?.(box.id)}
-                />
-              );
-            })}
-          </div>
-        )}
+      {/* A scanned invoice / photographed receipt is a large white rectangle; in a near-black instrument
+          it glares. So the document sits INSIDE a matte surround (`__mat`), never flush against the
+          canvas (DESIGN.md §6). The frame still shrinks to the rendered image box (inline-block) so the
+          absolute overlay stays anchored to the image itself — precision unchanged. */}
+      <div className="img-prov__mat">
+        <div className="img-prov__frame">
+          <img
+            ref={imgRef}
+            className="img-prov__img"
+            src={src}
+            alt=""
+            onLoad={measure}
+            draggable={false}
+          />
+          {ready && (
+            <div className="img-prov__overlay" style={{ width: size.width, height: size.height }}>
+              {boxes.map((box) => {
+                const active = box.id === activeId;
+                return (
+                  <button
+                    key={box.id}
+                    ref={active ? activeRef : undefined}
+                    type="button"
+                    className={`img-prov__box${active ? " img-prov__box--active" : " img-prov__box--faint"}`}
+                    style={{
+                      left: `${(box.x / size.natW) * 100}%`,
+                      top: `${(box.y / size.natH) * 100}%`,
+                      width: `${(box.w / size.natW) * 100}%`,
+                      height: `${(box.h / size.natH) * 100}%`,
+                    }}
+                    title={box.label}
+                    aria-label={box.label ?? `region ${box.id}`}
+                    aria-pressed={active}
+                    onClick={() => onBoxClick?.(box.id)}
+                  />
+                );
+              })}
+            </div>
+          )}
+        </div>
       </div>
       <figcaption className="img-prov__caption">
         {ready ? `${boxes.length} region${boxes.length === 1 ? "" : "s"}` : "loading image…"}

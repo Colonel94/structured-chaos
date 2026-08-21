@@ -20,8 +20,14 @@ export interface AudioProvenanceProps {
   onSegmentClick?: (id: string) => void; // clicking a region selects that segment
 }
 
-const REGION_IDLE = "rgba(47, 111, 235, 0.14)"; // accent, translucent — an inactive span
-const REGION_ACTIVE = "rgba(47, 111, 235, 0.36)"; // accent, stronger — the selected span
+// Colours come from the design tokens (styles.css :root) — wavesurfer draws to a canvas and needs plain
+// colour strings, so we read the CSS custom properties at runtime rather than hard-code hex here.
+function cssVar(name: string, fallback: string): string {
+  if (typeof getComputedStyle === "undefined") return fallback;
+  return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || fallback;
+}
+const REGION_IDLE = () => cssVar("--wave-region-idle", "rgba(245, 165, 36, 0.16)");
+const REGION_ACTIVE = () => cssVar("--wave-region-active", "rgba(245, 165, 36, 0.42)");
 
 function formatTime(seconds: number): string {
   if (!Number.isFinite(seconds) || seconds < 0) return "0:00";
@@ -61,9 +67,9 @@ export default function AudioProvenance({
       container,
       url: src,
       height: 64,
-      waveColor: "#c9d3e0",
-      progressColor: "#2f6feb",
-      cursorColor: "#1a1d21",
+      waveColor: cssVar("--wave-wave", "#6b7480"),
+      progressColor: cssVar("--wave-progress", "#9aa4b1"),
+      cursorColor: cssVar("--wave-cursor", "#e6e9ee"),
       barWidth: 2,
       barGap: 1,
       barRadius: 2,
@@ -112,7 +118,7 @@ export default function AudioProvenance({
         id: seg.id,
         start: seg.start,
         end: seg.end,
-        color: seg.id === activeIdRef.current ? REGION_ACTIVE : REGION_IDLE,
+        color: seg.id === activeIdRef.current ? REGION_ACTIVE() : REGION_IDLE(),
         content: seg.label,
         drag: false,
         resize: false,
@@ -133,7 +139,7 @@ export default function AudioProvenance({
     if (!ready || !ws) return;
 
     for (const [id, region] of regionMapRef.current) {
-      region.setOptions({ color: id === activeId ? REGION_ACTIVE : REGION_IDLE });
+      region.setOptions({ color: id === activeId ? REGION_ACTIVE() : REGION_IDLE() });
     }
 
     if (activeId === null) {
