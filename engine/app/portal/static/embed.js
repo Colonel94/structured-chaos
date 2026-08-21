@@ -116,7 +116,7 @@
 
   function renderLauncher() {
     mount.innerHTML = "";
-    if (standalone) { renderSubmit(); return; }
+    if (standalone) { token ? renderStatus() : renderSubmit(); return; }
     var b = el('<button class="launch" aria-haspopup="dialog">' + (token ? "Track your case" : "Contact us") + "</button>");
     b.onclick = function () { open = true; token ? renderStatus() : renderSubmit(); };
     mount.appendChild(b);

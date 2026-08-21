@@ -325,8 +325,22 @@ def embed_js() -> Response:
 def _standalone_page(mode: str, value: str) -> HTMLResponse:
     """A full-page host for businesses with no website to embed on — same widget, mounted standalone."""
     esc = value.replace('"', "").replace("<", "").replace(">", "")
+    # The outer page header reflects the mode: a "check on it" link must not read "Tell us what went wrong".
+    head_title, head_sub = (
+        ("Your case", "Here's where things stand.")
+        if mode == "status"
+        else (
+            "Tell us what went wrong",
+            "No account, no forms. We'll give you a link to check on it.",
+        )
+    )
     html = (_STATIC / "standalone.html").read_text(encoding="utf-8")
-    html = html.replace("__MODE__", mode).replace("__VALUE__", esc)
+    html = (
+        html.replace("__MODE__", mode)
+        .replace("__VALUE__", esc)
+        .replace("__HEAD_TITLE__", head_title)
+        .replace("__HEAD_SUB__", head_sub)
+    )
     return HTMLResponse(html)
 
 
