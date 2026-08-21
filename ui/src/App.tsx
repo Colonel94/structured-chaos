@@ -381,6 +381,29 @@ function DecisionBar({ review }: { review: CaseReview }) {
   );
 }
 
+// ---- the synthesised read: what this is / discrepancy / next step (analysis, not just logged fields) ----
+
+function AnalysisPanel({ review }: { review: CaseReview }) {
+  const a = review.analysis;
+  if (!a) return null;
+  return (
+    <div className="analysis">
+      <div className="analysis__headline">{a.headline}</div>
+      <p className="analysis__summary">{a.summary}</p>
+      {a.discrepancy && (
+        <div className="analysis__flag">
+          <span className="analysis__tag analysis__tag--flag">discrepancy</span>
+          {a.discrepancy}
+        </div>
+      )}
+      <div className="analysis__next">
+        <span className="analysis__tag">next step</span>
+        {a.next_step}
+      </div>
+    </div>
+  );
+}
+
 // ---- one case ----
 
 function CaseDetail({
@@ -545,6 +568,7 @@ function CaseDetail({
       </header>
 
       <DecisionBar review={review} />
+      <AnalysisPanel review={review} />
       {note && <div className="banner banner--error">{note}</div>}
 
       <div className="case__body">

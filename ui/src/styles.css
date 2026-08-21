@@ -400,6 +400,55 @@ button {
   color: var(--ink-3);
 }
 
+/* the synthesised read — the analysis a reviewer acts on, above the raw fields. Neutral by default; the
+   ONE sanctioned accent here is --alarm on a record discrepancy (DESIGN.md §3: alarm = contradicts). */
+.analysis {
+  padding: var(--sp-4) var(--sp-6);
+  background: var(--surface);
+  border-bottom: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+.analysis__headline {
+  font-weight: 600;
+  color: var(--ink);
+  font-size: var(--t-body);
+}
+.analysis__summary {
+  margin: 0;
+  color: var(--ink-2);
+  line-height: 1.5;
+  max-width: 68ch;
+}
+.analysis__flag,
+.analysis__next {
+  display: flex;
+  align-items: baseline;
+  gap: var(--sp-3);
+  font-size: var(--t-meta);
+  color: var(--ink-2);
+}
+.analysis__tag {
+  flex: none;
+  font-family: var(--font-mono);
+  font-size: var(--t-micro);
+  font-weight: 500;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-sm);
+  padding: 1px 6px;
+}
+.analysis__flag {
+  color: var(--ink);
+}
+.analysis__tag--flag {
+  color: var(--alarm);
+  border-color: color-mix(in srgb, var(--alarm) 55%, var(--line-strong));
+}
+
 /* priority — a NEUTRAL intensity ramp, never four colours (DESIGN.md §3) */
 .pri {
   display: inline-block;

@@ -104,7 +104,9 @@ def test_stage_is_idempotent_on_unchanged_inputs(
 
     with tenant_session(tenant, factory=app_factory) as s:
         d = api.get_case_decision(s, case)
-    assert d is not None and d["matched_rule_id"] == "default"
+    assert (
+        d is not None and d["matched_rule_id"] == "product"
+    )  # product_fault → the returns/quality team
 
 
 def test_stage_recomputes_when_a_signal_changes(
@@ -116,7 +118,7 @@ def test_stage_recomputes_when_a_signal_changes(
         case, fca = _seed_case(s, governed={"category": "service_fault", "emotion_signal": "calm"})
     assert decide_case(tenant, case, factory=app_factory) is True
     with tenant_session(tenant, factory=app_factory) as s:
-        assert api.get_case_decision(s, case)["matched_rule_id"] == "default"  # type: ignore[index]
+        assert api.get_case_decision(s, case)["matched_rule_id"] == "service"  # type: ignore[index]
 
     # A re-extraction flips emotion to angry → the projection changes → the decision recomputes.
     with tenant_session(tenant, factory=app_factory) as s:

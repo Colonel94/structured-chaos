@@ -81,6 +81,17 @@ def test_unclear_routes_to_triage_not_a_wrong_deadline() -> None:
     assert d.routing == "triage" and d.matched_rule_id == "unclear"
 
 
+def test_known_category_routes_to_its_owning_team_not_the_general_queue() -> None:
+    # A calm delivery complaint no longer falls to "general queue" — it routes to the team that owns it,
+    # with a reason that names the issue (the weak-analysis fix; priority stays standard).
+    d = _decide(category="delivery_fulfilment", severity_signal="none", emotion_signal="frustrated")
+    assert d.routing == "fulfilment" and d.matched_rule_id == "delivery"
+    assert "delivery" in d.rationale.lower() and d.priority == "P3"
+    # a product fault takes the returns/quality path; 'other' still falls to the general queue.
+    assert _decide(category="product_fault").routing == "returns_quality"
+    assert _decide(category="other").matched_rule_id == "default"
+
+
 # ------------------------------------------------------------------------ totality (catch-all) / None
 
 

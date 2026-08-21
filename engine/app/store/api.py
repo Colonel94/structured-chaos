@@ -1067,6 +1067,37 @@ def get_case_review(session: Session, case_id: UUID) -> dict[str, JsonValue] | N
         for f in fields
         if f["layer"] == "governed_core" and f["confidence"] is not None
     ]
+
+    # The agent-facing analysis — what this is / the discrepancy / why prioritised / the next step —
+    # synthesised (deterministically, grounded) from the governed core + decision + any contradiction,
+    # so the reviewer gets a near-decided case, not seven logged fields. Computed as a VIEW at read time.
+    from ..rules.synthesis import build_case_analysis
+
+    decision = get_case_decision(session, case_id)
+    governed_values = {
+        str(f["field_path"]): str(f["value"])
+        for f in fields
+        if f["layer"] == "governed_core" and f["value"] not in (None, "")
+    }
+    contradictions = [
+        c["locator"]  # {record_field, record_value, claim}
+        for f in fields
+        for c in f["provenance"]  # type: ignore[attr-defined]
+        if c.get("role") == "contradicts" and isinstance(c.get("locator"), dict)
+    ]
+    fg = session.execute(
+        text(
+            "SELECT external_mappings #> '{elicit,fault_grounded}' FROM case_record WHERE id = :c"
+        ),
+        {"c": case_id},
+    ).scalar()
+    analysis = build_case_analysis(
+        governed_values,
+        decision,
+        contradictions,
+        fault_grounded=fg if isinstance(fg, bool) else None,
+    )
+
     return {
         "case_id": str(header[0]),
         "channel": header[1],
@@ -1074,7 +1105,9 @@ def get_case_review(session: Session, case_id: UUID) -> dict[str, JsonValue] | N
         "first_contact_at": header[3].isoformat(),
         "fields": fields,
         # The deterministic priority/SLA/routing decision (Phase 6 rules engine), if computed.
-        "decision": get_case_decision(session, case_id),
+        "decision": decision,
+        # The synthesised agent-facing read (what it is / discrepancy / priority reason / next step).
+        "analysis": analysis,
         # The human-approval stamp (Phase 7). Non-null ⇒ approved; the report gate + UI read it.
         "commit": commit_status(session, case_id),
         "min_governed_confidence": min(gov_conf) if gov_conf else None,

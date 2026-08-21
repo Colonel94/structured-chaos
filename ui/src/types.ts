@@ -50,6 +50,17 @@ export interface Commit {
   committed_by: string;
 }
 
+// The synthesised agent-facing read — what this is / the discrepancy / why prioritised / the next
+// step — assembled deterministically from the governed core + decision + any contradiction. A view,
+// not a decision: the next_step is a pointer for the reviewer, never an action taken automatically.
+export interface CaseAnalysis {
+  headline: string;
+  summary: string;
+  discrepancy: string | null;
+  priority_reason: string;
+  next_step: string;
+}
+
 export interface CaseReview {
   case_id: string;
   channel: string;
@@ -57,6 +68,7 @@ export interface CaseReview {
   first_contact_at: string;
   fields: ReviewField[];
   decision: Decision | null;
+  analysis: CaseAnalysis | null;
   commit: Commit | null;
   min_governed_confidence: number | null;
   normalised_text: string;

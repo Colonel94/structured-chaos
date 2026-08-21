@@ -56,8 +56,14 @@ checkable contradictions — where the complaint asserts something a specific re
 
 Rules:
 - Report a contradiction ONLY when the complaint clearly states a fact and a specific record field \
-clearly says otherwise (e.g. complaint "never delivered" vs record delivered_at set; complaint \
+clearly says the OPPOSITE (e.g. complaint "never delivered" vs record status "delivered"; complaint \
 "charged twice" vs record showing one amount).
+- Weigh the WHOLE record, not one field. If ANY record field is CONSISTENT with the complaint, it is \
+NOT a contradiction — report nothing. (e.g. a "delivered late" status already agrees with a "late" \
+complaint.)
+- A PROMISED or TARGET value differing from what actually happened is NOT a contradiction — that gap is \
+usually the complaint itself. A promised slot of 17:00 does not contradict "2 hours late"; a due date \
+does not contradict "it was late". Only the ACTUAL-outcome fields (what happened) can refute a claim.
 - Do NOT report when the complaint is about something the record does not cover, when it is a \
 subjective judgement (quality, rudeness), or when you are unsure. Prefer an EMPTY list.
 - Never invent a record field. Use the exact field name from the record.
