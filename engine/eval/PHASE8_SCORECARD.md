@@ -45,12 +45,43 @@ data** and needs richer recurring data + the dedup/mint proof to bend the compos
   concentrate errors — `conf<0.8` catches **86%** of wrong cases vs **62%** correct-false-flagged;
   `conf<0.7` catches 61% vs 25%. Useful for triage, not for a per-case difficulty claim (per-class prior).
 
-## Not measurable from files — reported, never faked (§10 "no silent caps")
+## Measured via a live run (2026-08-21) — checkable against source data, not my gold
 
-Needs a **live run** (DB/Ollama/pipeline): complaint→object match rate + silent-match accuracy (report as
-a pair); questions-per-case + asked-already-stated + derivable-from-anchor + sparse→actionable
-(elicitation budget); end-to-end latency (~8–17s observed inline, confirm under load); backfill
-correctness (re-extract vs retained originals).
+These don't depend on the gold I authored: the drill length, whether the anchor resolved the right
+order, whether it asked for something already stated — all checkable against the source data + the coded
+policy. Regenerate: `uv run python eval/measure_elicit.py` (pure) and `uv run python
+eval/measure_object_match.py` (live store, DB up).
+
+**Elicitation — the anchor+2 drill, over the real 216 extracted states** (`measure_elicit.py`):
+
+| Measure | Threshold | Measured | Status |
+|---|---|---|---|
+| Questions per case (median) — HEADLINE | ≤2 after anchor | **file-drop median 2** (0q×99, 2q×114), **WhatsApp median 1**; drills-after-anchor median **1**, max **1** | ✅ PASS (never even reaches 2 drills) |
+| Asked for something already stated | 0% | **0/216** | ✅ PASS (by construction, verified) |
+| Asked for something derivable from anchor | ≤5% | **0/216** | ✅ PASS |
+| Sparse complaints reaching actionable | ≥80% | **UNMEASURED** — 0/216 are too-sparse (the 216 are full narratives; §4's ≥20 sparse cases are a separate population). The 2nd drill never fires here for the same reason — category+fault are ~always extracted. | — |
+
+Terminal states: **192 actionable, 24 in_review** (angry/budget handoffs — correct, never interrogated).
+
+**Object-match — the PAIR, over the live resolver + store** (`measure_object_match.py`, 600 cases/orders,
+objective key ground truth):
+
+| Measure | Threshold | Measured | Status |
+|---|---|---|---|
+| WRONG silent binds (the trust gate) | 0 | **0 / 311 silent matches** | ✅ PASS |
+| Silent-match accuracy | ≥99% | **0/311 wrong → ≤1.0% error bound** (n≈311 just clears the ~300 rule-of-three floor; *bounds*, doesn't yet *claim*, ≥99%) | ✅ no defect |
+| Recall on resolvable (resolver quality) | — | **311/311 = 100%** (binds every safely-resolvable case) | ✅ |
+| Complaints matched w/o asking (RATE) | ≥60% | **52% on this mix** — but the mix **constructs 48% unresolvable** (typos/shared-phones/no-anchor). Rate is a property of the **input distribution**, not the resolver (recall=100% proves it's not the bottleneck); the real ≥60% needs a real anchored-complaint dataset (CFPB anchors are redacted `XXXX` — $0 gap). | ⚠️ mix-dependent |
+
+The pair reads correctly: recall 100% means the 52% rate is **input-bound, not abstention-gaming** — and 0
+wrong binds is the regression to fear, which holds. Moment-3 confirmation fires live ("We've found your
+order BK-…: items …, customer name …").
+
+## Not measurable from files or a live run yet — reported, never faked (§10 "no silent caps")
+
+Needs **new data or a longer run**: end-to-end latency (~8–17s observed inline, confirm under load);
+backfill correctness (re-extract vs retained originals); the real object-match RATE (a real
+anchored-complaint distribution).
 
 Needs **humans / new data**: median review time (human on the review UI); elicitation abandonment (real
 customers); discrepancies-surfaced (cases labelled with a known complaint-vs-record discrepancy); emergent
@@ -61,8 +92,13 @@ unbuilt and unmeasured (separate project).
 
 ## Bottom line
 
-**1 trivial PASS / 4 FAIL / 1 N/A measured, convergence FAIL, 13 rows unmeasured or blocked.** A sellable
-*surface* is not a passing *scorecard*. The two levers that move this:
+**Two very different pictures.** The **drill + trust** side is genuinely strong and — crucially — measured
+on numbers that *don't* inherit the gold ceiling: anchor+2 holds with a wide margin (median 1 drill), 0/216
+asked-already-stated, 0 wrong object binds across 311 silent matches, recall 100%. The **accuracy** side is
+under gate on every self-labelled row (category 77%, zero-edit 28%, outcome 56%, severity 83%) and
+convergence FAILs — and those are exactly the numbers that need the independent labels to become real.
+
+The two levers that move the accuracy side:
 
 1. **Independent held-out labels** (`eval/holdout_labels.csv`, ready) — breaks the self-labelled ceiling
    on category/confidence/review-ordering. Owner recruits an independent labeller. *Binding constraint.*
