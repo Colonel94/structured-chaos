@@ -225,6 +225,38 @@ portal *are* the eval set. So:
   denial (above) must be immediate and obvious. If the embedded path proves too flaky on iOS, the
   standalone `/p/s/{key}` page (top-level origin, not an iframe) is the reliable fallback link to share.
 
+## 12b. Real-iPhone test protocol (OWNER ACTION — cannot be automated)
+
+The denial-fallback + MediaRecorder LOGIC is verified in Chromium (Playwright: denial → "Mic access is
+off…" instant, text stays primary, record→stop captures a blob — 6/6). **iOS Safari behaves differently
+for mic permission and this is unrunnable in a simulator**, so one physical-iPhone pass is required before
+a stranger sees it. ~15 minutes.
+
+**Prereq (calendar item — do first):** the phone needs an **HTTPS** URL to the portal — `getUserMedia`
+refuses on non-secure origins, and `localhost:8000` isn't reachable from the phone. $0 option: a free
+`cloudflared tunnel --url http://localhost:8000` (or deploy). LAN IP over http will NOT work.
+
+**Run each block on the STANDALONE page first (`/p/s/<key>`, top-level origin — the reliable path), then
+repeat on the EMBEDDED widget (a test host page with the `<script data-key>` tag — the flaky path):**
+
+1. **Grant path:** open the page → tap **Record** → Safari shows the mic prompt → **Allow** → confirm the
+   label counts up ("Recording 0:0X — tap to stop") → tap to stop → **"Recorded ✓"**. Add a word of text,
+   tap **Send it** → you land on the status page with a Ref.
+2. **Denial path (the one that matters):** fresh private tab (or Settings → clear the site's mic
+   permission) → tap **Record** → **Don't Allow** → confirm **"Mic access is off — just type it instead."**
+   appears *instantly* and the text box is still usable. (No dead button, no hang.)
+3. **Server confirms the capture:** on the machine, check the engine log for a `voice.submission` line —
+   record the **container/codec** (expect `audio/mp4`/aac on iOS), **duration**, **byte size**, and whether
+   transcription produced **non-empty text** (open the case in the review UI / check its normalised text).
+   This is the §12a data point: *does iOS Safari transcribe as well as Android Chrome?*
+4. **Log the result:** iOS version, which path (standalone/embedded) worked, the codec, and the transcription
+   quality — into `longterm_context.md` §0. If the embedded widget is flaky on iOS but standalone works,
+   **share the standalone link** and treat embedded-on-iOS as a known limitation.
+
+**Pass = both the grant and denial paths work on the standalone page on a real iPhone, and a voice note
+round-trips to a non-empty transcript.** Embedded-on-iOS is a bonus, not a blocker (standalone is the
+fallback by design).
+
 ## 13. Test plan (server first, with the two you named)
 
 - **`/p/*` rejects a client-supplied `X-Tenant-Id`** (it's ignored; tenant only from key/token). *(named)*

@@ -149,19 +149,43 @@
     go.onclick = submit;
   }
 
+  // Pick a container the browser can actually record: webm/opus (Chrome/Android) else mp4/aac (iOS
+  // Safari). isTypeSupported can be missing on old Safari — guard it. Empty string → let the UA choose
+  // (Safari then produces mp4), and we still tag the blob so the server picks the right extension.
+  function pickMime() {
+    var can = window.MediaRecorder && MediaRecorder.isTypeSupported;
+    if (can && MediaRecorder.isTypeSupported("audio/webm")) return "audio/webm";
+    if (can && MediaRecorder.isTypeSupported("audio/mp4")) return "audio/mp4";
+    return "";
+  }
+
+  function micDenied(btn) {
+    // Permission denied / unavailable — NEVER a dead button; text stays primary and we say so, the
+    // instant it happens, announced for a11y (PORTAL.md §12 — the iOS-Safari-iframe path is flakiest).
+    btn.outerHTML =
+      '<span class="file" role="status" aria-live="polite">Mic access is off — just type it instead.</span>';
+  }
+
   function wireVoice() {
     var btn = root.getElementById("rec"), lbl = root.getElementById("reclbl");
     btn.onclick = function () {
       if (recorder && recorder.state === "recording") { recorder.stop(); return; }
+      if (!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia)) { micDenied(btn); return; }
       navigator.mediaDevices.getUserMedia({ audio: true }).then(function (stream) {
-        var mime = MediaRecorder.isTypeSupported("audio/webm") ? "audio/webm" : "";
-        recorder = new MediaRecorder(stream, mime ? { mimeType: mime } : undefined);
+        var mime = pickMime();
+        try {
+          recorder = new MediaRecorder(stream, mime ? { mimeType: mime } : undefined);
+        } catch (e) {
+          // some iOS builds reject the options object outright — retry with the UA default, else degrade.
+          try { recorder = new MediaRecorder(stream); }
+          catch (e2) { stream.getTracks().forEach(function (t) { t.stop(); }); micDenied(btn); return; }
+        }
         chunks = [];
         recorder.ondataavailable = function (e) { if (e.data.size) chunks.push(e.data); };
         recorder.onstop = function () {
           stream.getTracks().forEach(function (t) { t.stop(); });
           clearInterval(recTimer);
-          recBlob = new Blob(chunks, { type: recorder.mimeType || "audio/webm" });
+          recBlob = new Blob(chunks, { type: recorder.mimeType || mime || "audio/mp4" });
           btn.classList.remove("on"); lbl.textContent = "Recorded ✓ (tap to redo)";
         };
         recorder.start();
@@ -170,10 +194,7 @@
           recSecs++; lbl.textContent = "Recording 0:" + (recSecs < 10 ? "0" : "") + recSecs + " — tap to stop";
           if (recSecs >= 120) recorder.stop();
         }, 1000);
-      }).catch(function () {
-        // permission denied / unavailable — never a dead button; text stays primary (PORTAL.md §12)
-        btn.outerHTML = '<span class="file">Mic access is off — just type it instead.</span>';
-      });
+      }).catch(function () { micDenied(btn); });
     };
   }
 
@@ -200,19 +221,43 @@
 
   // ---------------------------------------------------------------- screen 2: status + drill
 
-  var poll = null;
+  var poll = null, pollStart = 0;
+  var POLL_MAX_MS = 120000; // ~2 min, then STOP — a phone left open must not hammer an unauthenticated
+  //                           endpoint forever (battery + cost). We show the reference + a manual re-check.
   function renderStatus() {
     if (poll) clearInterval(poll);
+    pollStart = Date.now();
     fetchStatus();
     poll = setInterval(fetchStatus, 2500);
   }
 
+  function stopPoll() { if (poll) { clearInterval(poll); poll = null; } }
+
   function fetchStatus() {
     api("/case/" + token, {}).then(drawStatus).catch(function (e) {
-      if (poll) clearInterval(poll);
-      mount.innerHTML = shell("We couldn’t load your case", "", '<p class="sub">' + esc(e.message) + "</p>");
+      stopPoll();
+      mount.innerHTML = shell("We couldn’t load your case", "", '<p class="sub">' + esc(e.message) +
+        '</p><button class="send" id="again">Try again</button>');
       wireClose();
+      var a = root.getElementById("again"); if (a) a.onclick = renderStatus;
     });
+  }
+
+  // Auto-polling gave up (still processing after ~2 min). The case EXISTS regardless — say so honestly,
+  // stop hitting the endpoint, and let the customer re-check by hand or return later via their link.
+  function renderCapped(s) {
+    stopPoll();
+    var msg = (s && s.detail) ||
+      "This is taking longer than usual — we've got your case and we're on it. You don't need to resend it.";
+    mount.innerHTML = shell(
+      (s && s.stalled && s.headline) || "Still working on your case", "",
+      '<p class="sub">' + esc(msg) + "</p>" +
+      '<p class="ref">Ref ' + esc(s && s.ref) + "</p>" +
+      '<button class="send" id="again">Check again</button>' +
+      '<p class="hint">Or come back any time with your link — nothing is lost.</p>'
+    );
+    wireClose();
+    root.getElementById("again").onclick = renderStatus;
   }
 
   var STAGES = [
@@ -223,6 +268,8 @@
   function drawStatus(s) {
     var inner;
     if (s.processing) {
+      // Give up auto-polling after the cap so a phone left open stops hitting the endpoint (§ item 1).
+      if (Date.now() - pollStart > POLL_MAX_MS) { renderCapped(s); return; }
       if (s.stalled || s.stage === "delayed") {
         inner = '<p class="sub">' + esc(s.detail) + '</p><p class="ref">Ref ' + esc(s.ref) + "</p>";
       } else {
@@ -238,7 +285,7 @@
       wireClose();
       return;
     }
-    if (poll) clearInterval(poll);
+    stopPoll();
     var parts = "";
     if (s.understood) parts += '<div class="card">' + esc(s.understood) + "</div>";
     if (s.deadline) parts += '<div class="due">We’ll come back to you by <b>' + esc(fmtDate(s.deadline)) + "</b>.</div>";
