@@ -12,11 +12,13 @@ sets exhaust, and would draw the same shape on random noise. A gate that cannot 
 The REAL convergence signal is the composite (``qualifier_head``) curve — and it is FLAT: cfpb
 [46,38,54,45,51,41] / 275 composites / 89% hapax; multidomain [70,34,49,41,37] / 231 / 92% hapax —
 statistically the same as the pre-Path-A full-name curve [48,52,74,64,77,63] this was meant to fix. The
-sprawl did not disappear; it moved into the qualifier space, which is unmeasured here and undeduped
-(``dedup_field`` has ZERO callers in ``app/``). Convergence is therefore CURRENTLY UNPROVEN. The gate is
-the composite curve AFTER dedup runs live (remediation R1/R2); the head curve is a bounded-by-construction
-DIAGNOSTIC, not evidence of convergence. Do not re-promote it to the pass line (self-grading, CLAUDE.md
-§10 — this is the 2026-08-14 head-noun-altitude move, recommitted under the Path A name). ***
+sprawl did not disappear; it moved into the qualifier space. (STALE-NOTE FIX 2026-08-21: ``dedup_field``
+is now WIRED live — the ``dedup_scan`` worker task runs it on the 30-min scheduler; the old "ZERO callers"
+claim is obsolete.) Convergence is nonetheless still UNPROVEN — dedup runs, but the composite curve stays
+flat at ~90% hapax because ~93% of qualifiers are genuinely distinct DATA, not dedupable synonym sprawl;
+the honest unit is COLUMN-level (minted+promoted) and needs richer recurring data to bend. The head curve
+is a bounded-by-construction DIAGNOSTIC, not evidence of convergence — do not re-promote it to the pass
+line (self-grading, CLAUDE.md §10, the 2026-08-14 head-noun-altitude move under the Path A name). ***
 
 What this measures WITHOUT ground-truth labels (so it's honest, not self-graded):
 - **json_valid** — did grammar-constrained decoding hold on real messy text.

@@ -11,10 +11,11 @@ that carries the specificity (``charged``/``pension``/``refunded``), so ``charge
 *** CAVEAT (2026-08-17, owner + remediation R0). Because this list is CLOSED, "the schema converges at
 the head" is TRUE BY CONSTRUCTION and therefore NOT evidence of convergence — the head count is bounded
 whatever the data. Measured, the sprawl did not vanish; it MOVED into the open qualifier space, which is
-still ~90% hapax and undeduped (``dedup_field`` has no live callers). "losing no information" is also
-false as built: 34% of attestations carry a null qualifier and ``other`` fires at 0.7%, so novelty is
-force-fit into the seed. Convergence is UNPROVEN pending live qualifier dedup + an open escape valve
-(remediation R1/R3). Do not read the closed head vocab as a convergence proof. ***
+still ~90% hapax. (STALE-NOTE FIX 2026-08-21: ``dedup_field`` DOES have live callers now — the
+``dedup_scan`` worker task; the old "no live callers" claim is obsolete.) Convergence is nonetheless
+still UNPROVEN — dedup runs but the composite curve stays flat because ~93% of qualifiers are genuinely
+distinct DATA, so the honest unit is COLUMN-level (minted+promoted), which needs richer recurring data to
+bend. Do not read the closed head vocab as a convergence proof, and do not re-add a "no callers" claim. ***
 
 **Why a fixed seed does NOT violate §4 ("no industry-specific field is ever configured; specialisation
 is emergent, never seeded").** These are universal, domain-agnostic *data primitives* — the kinds of

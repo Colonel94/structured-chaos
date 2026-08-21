@@ -2,6 +2,14 @@
 # Gives parity with the Linux deploy target (PREREQUISITES §2).
 # Bring up:  docker compose -f deploy/docker-compose.yml up -d
 # Env comes from the repo-root .env (see .env.example).
+#
+# ⚠️ STALE-IMAGE GUARD (do NOT skip before shipping). Docker's COPY layer cache has bitten this repo:
+# `engine`/`migrate`/`worker` images can ship code OLDER than the working tree (a migrate container once
+# ran without migrations 0011/0012). Plain `up -d` reuses those cached layers. So on ANY code change,
+# rebuild WITHOUT cache before deploying:
+#     docker compose -f deploy/docker-compose.yml build --no-cache engine migrate worker worker-backfill
+#     docker compose -f deploy/docker-compose.yml up -d
+# Use scripts/deploy_rebuild.sh (which does exactly this) rather than a bare `up`.
 
 name: adaptive-intake
 

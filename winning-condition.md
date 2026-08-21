@@ -88,7 +88,7 @@ A code-switched Gulf Arabic voice note produces output of the same quality as th
 
 ## 4. Quantitative thresholds
 
-Measured against a hand-labelled ground-truth set of **at least 100 real or realistically messy cases**, at least 30 of them Arabic or code-switched, and at least 20 of them too sparse to act on without elicitation, before any claim of readiness.
+Measured against a hand-labelled ground-truth set of **at least 100 real or realistically messy cases**, ~~at least 30 of them Arabic or code-switched~~ *(suspended with Arabic — see the decision note under the table)*, and at least 20 of them too sparse to act on without elicitation, before any claim of readiness.
 
 | Measure | Ship threshold | Why this number |
 |---|---|---|
@@ -109,12 +109,22 @@ Measured against a hand-labelled ground-truth set of **at least 100 real or real
 | Desired outcome captured | ≥ 90% | The one fact that can never be inferred |
 | Median review time per case | ≤ 30 seconds | The fulfiller must feel faster, not busier |
 | Time from message received to case ready | ≤ 60 seconds | Slower and it stops feeling live |
-| Arabic **field-extraction** accuracy versus English | within 5 points (field-level, **not** transcript WER) | Measured on the structured case, not the transcript: a ~26% WER voice note can still yield ~95% correct fields because the anchor supplied most. Raw ASR WER is not a ship metric and must never appear in buyer material |
+| **Voice-vs-text extraction parity** | field accuracy within **5 points**, voice note vs typed | The claim a voice-first product actually makes — and the one a buyer will test: the **same case** submitted as a voice note vs typed must yield the **same structured fields**. Measured on the structured case, **not** transcript WER (a ~26% WER note can still yield ~95% correct fields because the anchor supplies most). Raw ASR WER is never a ship metric and never appears in buyer material. *(Replaces the retired Arabic-parity row — see the decision note below.)* |
 | Duplicate or synonym fields after 200 cases | **< 5%** of promoted fields | This is the convergence proof — the core claim of the design |
 | New-field creation rate, cases 1–50 versus 151–200 | clearly declining | If it is flat, the schema is sprawling, not converging |
 | Backfill correctness after promotion | 100% | No exceptions. Silent corruption of history is fatal |
 
 The two bolded convergence rows are the ones to be honest about. If the schema does not visibly settle, the central idea in the concept document is wrong, and you need to know that before you sell anything.
+
+> **Recorded decision — 2026-08-21 (owner): Arabic parity retired, voice-vs-text parity substituted.**
+> Arabic/code-switched support was **paused by owner decision** (voice kept as the behavioural wedge); the
+> Arabic field-extraction-parity row was written for a scope that is no longer in this milestone. Retiring
+> it **must be logged, not quietly deleted** — an unlogged pause is indistinguishable from dropping a gate
+> you failed. The substitute — **voice-vs-text extraction parity** — is the parity claim a voice-first
+> product genuinely makes and that a buyer will test (same case, spoken vs typed → same fields). The §4
+> requirement for "≥30 Arabic/code-switched cases" in the ground-truth set is **suspended with Arabic**;
+> when Arabic returns to scope, both the row and that composition requirement return with it. This is an
+> owner-authorised metric change (CLAUDE.md §10 — logged with its reason), not a relaxation to pass.
 
 ---
 
