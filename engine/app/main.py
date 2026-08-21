@@ -9,10 +9,12 @@ from __future__ import annotations
 from fastapi import FastAPI
 
 from .api.routes import router as api_router
+from .api.whatsapp import router as whatsapp_router
 from .config import settings
 
 app = FastAPI(title="Adaptive Intake Engine", version="0.0.0")
 app.include_router(api_router)
+app.include_router(whatsapp_router)  # WhatsApp Cloud API webhook (verify + inbound)
 
 
 @app.get("/health")

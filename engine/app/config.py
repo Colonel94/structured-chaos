@@ -60,6 +60,13 @@ class Settings(BaseSettings):
     whatsapp_phone_number_id: str = ""
     whatsapp_verify_token: str = ""
     whatsapp_app_secret: str = ""
+    # Graph API version the send call targets — configurable so a version deprecation is a .env change,
+    # not a code edit. Match whatever the Meta app dashboard shows (e.g. v21.0).
+    whatsapp_api_version: str = "v21.0"
+    # The tenant an inbound WhatsApp message is ingested into. The webhook carries no X-Tenant-Id (it is
+    # Meta calling, not the review UI), so a WhatsApp number maps to exactly one tenant here. PoC: one
+    # configured tenant; a multi-number product would map phone_number_id → tenant instead.
+    whatsapp_tenant_id: str = ""
 
     # --- postgres ---
     # TWO roles, deliberately (EDD §7.1). The engine connects as the least-privilege
