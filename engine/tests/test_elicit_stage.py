@@ -12,6 +12,7 @@ import pytest
 from sqlalchemy import text
 from sqlalchemy.orm import Session, sessionmaker
 
+from app.elicit.policy import FAULT_OPTIONS
 from app.elicit.stage import _fault_grounded, elicit_case
 from app.resolve import ingest_object_collection
 from app.store import api
@@ -237,6 +238,53 @@ def test_stage_asks_what_happened_when_the_fault_is_not_grounded(
     assert meta["fault_grounded"] is False
     q = str(meta["next_question"])
     assert "What happened" in q and "put this right" not in q
+
+
+def test_stage_analytical_drill_states_the_record_when_the_anchor_resolves(
+    admin_session: Session, app_factory: sessionmaker[Session]
+) -> None:
+    """Moment 3: a sparse case whose anchor RESOLVES to an order → the fault drill STATES what the
+    record shows and offers narrowed options, instead of the open "What happened?"."""
+    tenant = api.create_tenant(admin_session, "Moment3-Co")
+    admin_session.commit()
+    with tenant_session(tenant, factory=app_factory) as s:
+        asyncio.run(
+            ingest_object_collection(
+                s,
+                object_type="order",
+                objects=[
+                    {
+                        "order_id": "BK-1",
+                        "phone": "+441234",
+                        "items": "cake",
+                        "delivered_at": "18:42",
+                    },
+                    {
+                        "order_id": "BK-2",
+                        "phone": "+445678",
+                        "items": "cake",
+                        "delivered_at": "12:00",
+                    },
+                ],
+            )
+        )
+        # Anchor stated + resolvable, but the customer described no fault (category=other, ungrounded).
+        case = _seed_case(
+            s,
+            governed={"category": "other", "anchor_value": "BK-1"},
+            customer_text="i feel sad",
+        )
+
+    asyncio.run(elicit_case(tenant, case, factory=app_factory))
+
+    with tenant_session(tenant, factory=app_factory) as s:
+        _state, _q, _a, _r = api.get_case_elicit_state(s, case)  # type: ignore[misc]
+        meta = _elicit_meta(s, case)
+    assert meta["question_kind"] == "drill"
+    q = str(meta["next_question"])
+    assert "found your order BK-1" in q  # STATES the record (Moment 3)
+    assert "What happened" not in q
+    assert meta["options"] == list(FAULT_OPTIONS)  # narrowed, tappable
 
 
 def test_stage_asks_what_happened_for_emotional_venting_even_when_lexically_grounded(

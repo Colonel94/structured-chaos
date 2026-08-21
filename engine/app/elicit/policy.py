@@ -49,6 +49,18 @@ _CLARIFY_Q = "Just so we route this right — can you tell us briefly what the i
 # available alongside these, so a customer whose answer isn't listed is never forced to pick a wrong one.
 OUTCOME_OPTIONS: tuple[str, ...] = ("Refund", "Replacement", "Fix it", "An answer", "Escalate")
 
+# Narrowed fault dimensions for the ANALYTICAL drill (winning-condition Moment 3): once the anchor
+# resolves and the stage can STATE what the record shows, we don't ask an open "what happened" — we
+# offer the universal complaint SHAPES so the customer taps rather than types. Deliberately domain-
+# neutral (a cake, a parcel, a booking, a charge all fit): timing / correctness-or-quality / non-arrival
+# / other. A HINT alongside free text, like OUTCOME_OPTIONS — never a constraint.
+FAULT_OPTIONS: tuple[str, ...] = (
+    "It was late",
+    "It was wrong or faulty",
+    "It never arrived",
+    "Something else",
+)
+
 
 @dataclass(frozen=True)
 class ElicitationPlan:
@@ -70,6 +82,8 @@ def decide(
     question_count: int,
     confirmation: str | None = None,
     fault_grounded: bool = True,
+    fault_prompt: str | None = None,
+    fault_options: tuple[str, ...] | None = None,
 ) -> ElicitationPlan:
     """Decide the next elicitation move for one case.
 
@@ -84,6 +98,10 @@ def decide(
     the fault (and the category derived from it) as a gap and ask "what happened" rather than presenting
     an invented problem as fact (§4 closed-world grounding, §5 never confidently wrong). Defaults to
     ``True`` so a caller that doesn't measure grounding keeps the pre-grounding behaviour.
+    ``fault_prompt`` / ``fault_options`` — the ANALYTICAL fault drill (Moment 3): when the anchor
+    resolved and the stage can STATE what the record shows, it passes a record-grounded prompt (the
+    confirmation + a narrowing question) and tappable options, so the fault drill states-and-narrows
+    instead of asking the open ``_FAULT_Q``. ``None`` → the open question (no record to reason over).
     """
     # A fault the customer never actually described must not count as known. Drop it (and the category
     # inferred from it) from the fields we treat as satisfied, so the gate below asks instead of asserts.
@@ -118,15 +136,18 @@ def decide(
             "in_review", None, None, "anchor + 2 budget spent → hand off to a human"
         )
 
-    # 2. What happened — the fault, in the customer's OWN words, asked BEFORE the outcome (understand the
-    #    problem before asking what they'd like done). Only fires when the customer hasn't described it:
-    #    a present, grounded fault skips this; an absent or record-inferred one asks rather than invents.
+    # 2. What happened — the fault, asked BEFORE the outcome (understand the problem before asking what
+    #    they'd like done). Only fires when the customer hasn't described it: a present, grounded fault
+    #    skips this; an absent or record-inferred one asks rather than invents. When the anchor resolved,
+    #    STATE what the record shows and narrow (Moment 3); otherwise ask the open question.
     if "fault" not in effective_fields:
         return ElicitationPlan(
             "incomplete",
-            _FAULT_Q,
+            fault_prompt or _FAULT_Q,
             "drill",
-            "fault not grounded in the customer's words → ask what happened",
+            "fault not grounded in the customer's words → "
+            + ("state the record and narrow" if fault_prompt else "ask what happened"),
+            options=fault_options if fault_prompt else None,
         )
 
     # 3. The desired outcome — the one fact that can never be inferred. Confirm the looked-up fact first.

@@ -31,13 +31,20 @@ from ..resolve.resolver import Resolution
 from ..resolve.snapshot import snapshot_object
 from ..store import api
 from ..store.db import SessionFactory, tenant_session
-from .policy import decide
+from .policy import FAULT_OPTIONS, decide
+
+# The narrowing question appended to the record confirmation for the analytical fault drill (Moment 3):
+# after STATING what the record shows ("...delivered 18:42, slot 17:00"), narrow to the complaint shape
+# rather than asking an open question. Tappable FAULT_OPTIONS render alongside, free text always too.
+_FAULT_NARROW_Q = "What went wrong with it?"
 
 log = get_logger(__name__)
 
 _STAGE = "elicit"
-POLICY_VERSION = "elicit-v2"  # in the idempotency key so a policy change re-elicits history
+POLICY_VERSION = "elicit-v3"  # in the idempotency key so a policy change re-elicits history
 # ^ v2 (2026-08-21): closed-world fault-grounding gate + the "what happened" drill (§4/§5).
+# ^ v3 (2026-08-21b): the ANALYTICAL fault drill — when the anchor resolves, STATE the record and
+#   narrow (Moment 3) instead of the open question; confirmation stated once across drills.
 
 # Is the fault a real, actionable problem the CUSTOMER described — or one the extractor fabricated?
 # The grammar forces `fault` to be a non-null string (unlike `desired_outcome`), so on a contentless
@@ -250,14 +257,27 @@ async def elicit_case(
             and governed.get("category") not in _UNCATEGORISED
         )
 
+        # State the record confirmation exactly ONCE — on the first drill after the anchor, whichever it
+        # is (fault or outcome) — so the customer never sees "We've found your order BK-1001: …" twice
+        # across turns. A later drill narrows without restating the record.
+        first_drill = max(0, question_count - (1 if anchor_asked else 0)) == 0
+        state_conf = confirmation if first_drill else None
+
+        # The ANALYTICAL fault drill (Moment 3): when the anchor resolved, STATE what the record shows
+        # and narrow with tappable options — instead of an open "what happened". Only meaningful when we
+        # have a confirmation to state; otherwise the policy falls back to the open question.
+        fault_prompt = f"{state_conf} {_FAULT_NARROW_Q}" if state_conf else None
+
         plan = decide(
             set(governed),
             emotion=governed.get("emotion_signal"),
             has_anchor=has_anchor,
             anchor_asked=anchor_asked,
             question_count=question_count,
-            confirmation=confirmation,
+            confirmation=state_conf,
             fault_grounded=fault_grounded,
+            fault_prompt=fault_prompt,
+            fault_options=FAULT_OPTIONS if fault_prompt else None,
         )
 
         # Object-snapshot-on-bind + contradiction surfacing (§5). Runs when a bind/contradiction

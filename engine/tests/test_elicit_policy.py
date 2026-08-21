@@ -8,7 +8,7 @@ is always asked when absent.
 
 from __future__ import annotations
 
-from app.elicit.policy import decide
+from app.elicit.policy import FAULT_OPTIONS, decide
 from app.elicit.stage import _confirmation
 
 _ESSENTIALS = {"category", "fault", "desired_outcome"}
@@ -157,6 +157,38 @@ def test_grounded_fault_present_goes_straight_to_the_outcome() -> None:
         fault_grounded=True,
     )
     assert p.question_kind == "drill" and "put this right" in (p.next_question or "")
+
+
+def test_analytical_fault_drill_states_the_record_and_offers_options() -> None:
+    # Anchor resolved (fault_prompt supplied) + fault ungrounded → the drill STATES what the record
+    # shows and narrows with tappable options (Moment 3), instead of the open "What happened?".
+    p = decide(
+        {"anchor_value"},
+        emotion="calm",
+        has_anchor=True,
+        anchor_asked=True,
+        question_count=1,
+        fault_grounded=False,
+        fault_prompt="We've found your order BK-1: delivered 18:42, slot 17:00. What went wrong with it?",
+        fault_options=FAULT_OPTIONS,
+    )
+    assert p.question_kind == "drill"
+    assert "found your order BK-1" in (p.next_question or "")
+    assert "What happened" not in (p.next_question or "")  # not the open fallback
+    assert p.options == FAULT_OPTIONS
+
+
+def test_open_fault_drill_when_no_record_to_state() -> None:
+    # No fault_prompt (anchor didn't resolve) → fall back to the open question, no options.
+    p = decide(
+        {"anchor_value"},
+        emotion="calm",
+        has_anchor=True,
+        anchor_asked=True,
+        question_count=1,
+        fault_grounded=False,
+    )
+    assert "What happened" in (p.next_question or "") and p.options is None
 
 
 def test_ungrounded_fault_still_respects_the_budget() -> None:
