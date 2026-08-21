@@ -42,12 +42,14 @@ _FAULT_NARROW_Q = "What went wrong with it?"
 log = get_logger(__name__)
 
 _STAGE = "elicit"
-POLICY_VERSION = "elicit-v4"  # in the idempotency key so a policy change re-elicits history
+POLICY_VERSION = "elicit-v5"  # in the idempotency key so a policy change re-elicits history
 # ^ v2 (2026-08-21): closed-world fault-grounding gate + the "what happened" drill (§4/§5).
 # ^ v3 (2026-08-21b): the ANALYTICAL fault drill — when the anchor resolves, STATE the record and
 #   narrow (Moment 3) instead of the open question; confirmation stated once across drills.
 # ^ v4 (2026-08-21c): a fault that narrates the CUSTOMER'S STATE ("the customer feels dismissed") is not
 #   a grounded fault → don't assert a fabricated category on pure emotion; investigate/hand off instead.
+# ^ v5 (2026-08-21c): a CONTENTLESS opener ("something hurt me") is investigated ("what happened") BEFORE
+#   any angry→handoff — never build/close a case from three vague words with no conversation.
 
 # Is the fault a real, actionable problem the CUSTOMER described — or one the extractor fabricated?
 # The grammar forces `fault` to be a non-null string (unlike `desired_outcome`), so on a contentless
@@ -292,9 +294,10 @@ async def elicit_case(
         # customer's own words (not inferred from the record) AND the extractor could place it in a
         # concrete class (not "other"/"UNCLEAR", the tell of pure emotion echoed into the fault). Either
         # failing → the policy asks "what happened" rather than asserting an invented problem (§4/§5).
+        category_known = governed.get("category") not in _UNCATEGORISED
         fault_grounded = (
             _fault_grounded(governed.get("fault"), api.get_case_normalised_text(session, case_id))
-            and governed.get("category") not in _UNCATEGORISED
+            and category_known
         )
 
         # State the record confirmation exactly ONCE — on the first drill after the anchor, whichever it
@@ -316,6 +319,7 @@ async def elicit_case(
             question_count=question_count,
             confirmation=state_conf,
             fault_grounded=fault_grounded,
+            category_known=category_known,
             fault_prompt=fault_prompt,
             fault_options=FAULT_OPTIONS if fault_prompt else None,
         )

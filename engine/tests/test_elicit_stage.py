@@ -107,19 +107,56 @@ def test_stage_asks_anchor_first_and_spends_one_budget(
     assert meta["question_kind"] == "anchor"
 
 
-def test_stage_hands_off_angry_incomplete_without_asking(
+def test_stage_investigates_an_angry_contentless_opener_not_instant_handoff(
     admin_session: Session, app_factory: sessionmaker[Session]
 ) -> None:
-    tenant = api.create_tenant(admin_session, "Angry-Co")
+    """The owner's bug (2026-08-21c): a contentless angry opener ("something hurt me") was CLOSED into a
+    case with zero conversation. Now it is ASKED "what happened" first — a human can't act on three vague
+    words either. §5's angry→handoff protects a real grievance from being grilled, not an empty opener
+    from being heard."""
+    tenant = api.create_tenant(admin_session, "Angry-Empty-Co")
     admin_session.commit()
     with tenant_session(tenant, factory=app_factory) as s:
-        case = _seed_case(s, governed={"category": "service_fault", "emotion_signal": "angry"})
+        # angry, no grounded fault, no anchor — the extractor's "other"/emotion fallback on "something
+        # hurt me". customer_text carries no groundable problem.
+        case = _seed_case(
+            s,
+            governed={"category": "other", "emotion_signal": "angry", "fault": "something hurt me"},
+            customer_text="something hurt me",
+        )
 
     asyncio.run(elicit_case(tenant, case, factory=app_factory))
 
     with tenant_session(tenant, factory=app_factory) as s:
         state, qcount, _a, _r = api.get_case_elicit_state(s, case)  # type: ignore[misc]
-    assert state == "in_review" and qcount == 0  # never interrogated
+        q = api.get_pending_question(s, case)
+    assert state == "incomplete" and qcount == 1  # investigated, not instantly closed
+    assert q is not None and "what happened" in q.lower()
+
+
+def test_stage_hands_off_angry_case_with_a_real_grievance(
+    admin_session: Session, app_factory: sessionmaker[Session]
+) -> None:
+    """§5 preserved: once the customer HAS described a real problem (grounded fault) and is angry, the
+    case goes to a human — never interrogated further."""
+    tenant = api.create_tenant(admin_session, "Angry-Co")
+    admin_session.commit()
+    with tenant_session(tenant, factory=app_factory) as s:
+        case = _seed_case(
+            s,
+            governed={
+                "category": "service_fault",
+                "emotion_signal": "angry",
+                "fault": "a staff member shouted at me and refused to help",
+            },
+            customer_text="a staff member shouted at me and refused to help and i am furious",
+        )
+
+    asyncio.run(elicit_case(tenant, case, factory=app_factory))
+
+    with tenant_session(tenant, factory=app_factory) as s:
+        state, qcount, _a, _r = api.get_case_elicit_state(s, case)  # type: ignore[misc]
+    assert state == "in_review" and qcount == 0  # real grievance + angry → human, not interrogated
 
 
 def test_stage_is_idempotent_on_the_extracted_state(

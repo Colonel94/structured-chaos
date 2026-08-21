@@ -82,6 +82,7 @@ def decide(
     question_count: int,
     confirmation: str | None = None,
     fault_grounded: bool = True,
+    category_known: bool = False,
     fault_prompt: str | None = None,
     fault_options: tuple[str, ...] | None = None,
 ) -> ElicitationPlan:
@@ -98,6 +99,10 @@ def decide(
     the fault (and the category derived from it) as a gap and ask "what happened" rather than presenting
     an invented problem as fact (§4 closed-world grounding, §5 never confidently wrong). Defaults to
     ``True`` so a caller that doesn't measure grounding keeps the pre-grounding behaviour.
+    ``category_known`` — whether the extractor placed the complaint in a CONCRETE class (not
+    ``other``/``UNCLEAR``). Distinguishes a directional-but-thin case (e.g. a delivery complaint with no
+    order number → ask the anchor, we know the domain) from a truly contentless opener ("something hurt
+    me", category ``other`` → ask "what happened", we don't even know what kind of problem it is).
     ``fault_prompt`` / ``fault_options`` — the ANALYTICAL fault drill (Moment 3): when the anchor
     resolved and the stage can STATE what the record shows, it passes a record-grounded prompt (the
     confirmation + a narrowing question) and tappable options, so the fault drill states-and-narrows
@@ -115,13 +120,34 @@ def decide(
     if essentials <= effective_fields:
         return ElicitationPlan("actionable", None, None, "has category + fault + desired_outcome")
 
-    # Emotion is data: an angry, incomplete case goes to a human — never interrogated (§5).
+    drills_used = question_count - (1 if anchor_asked else 0)
+    budget_left = drills_used < DRILL_BUDGET and question_count < TOTAL_CAP
+
+    # INVESTIGATE BEFORE YOU HAND OFF (owner directive 2026-08-21c). A contentless / purely emotional
+    # opener ("something hurt me") — no problem described AND no order to look up — must never be closed
+    # into a case without a single question. Handing an empty case to a human gives them nothing to act
+    # on; asking for an order number may be irrelevant (it might not be an order issue at all). So ask
+    # "what happened" FIRST, even when the extractor flagged the mood as angry. One gentle question is
+    # investigation, not interrogation — §5's angry→handoff protects a customer with a REAL grievance
+    # from being grilled, NOT an empty opener from being heard. This is what stops the system building a
+    # case straight from three vague words with no conversation. A concrete category (a delivery/billing/
+    # etc. complaint) is directional even without a fault → that path asks the anchor, not this.
+    contentless = "fault" not in effective_fields and not has_anchor and not category_known
+    if contentless and budget_left:
+        return ElicitationPlan(
+            "incomplete",
+            _FAULT_Q,
+            "drill",
+            "contentless opener → ask what happened before any handoff",
+        )
+
+    # Emotion is data: an angry customer whose grievance we now understand (or whose order we found) goes
+    # to a human — never interrogated further (§5). Fires AFTER the investigate-first check above, so an
+    # empty angry opener is heard before it is ever handed off.
     if emotion == "angry":
         return ElicitationPlan(
             "in_review", None, None, "angry + incomplete → hand to a human, do not question"
         )
-
-    drills_used = question_count - (1 if anchor_asked else 0)
 
     # 1. The anchor first — highest information gain (it unlocks every downstream lookup). It is a
     #    key, not a drill, so it does not consume the drill budget; but it still respects the hard cap.

@@ -44,8 +44,27 @@ def test_actionable_when_essentials_present_asks_nothing() -> None:
 
 
 def test_anchor_is_asked_first_when_no_resolvable_identifier() -> None:
-    p = decide(set(), emotion=None, has_anchor=False, anchor_asked=False, question_count=0)
+    # Anchor-first holds once we KNOW the problem (grounded fault) but have no key to look it up: the
+    # anchor unlocks every downstream lookup (§5). (A CONTENTLESS opener with no problem yet is asked
+    # "what happened" first instead — see test_contentless_opener_is_asked_what_happened_first.)
+    p = decide(
+        {"fault"},
+        emotion=None,
+        has_anchor=False,
+        anchor_asked=False,
+        question_count=0,
+        fault_grounded=True,
+    )
     assert p.state == "incomplete" and p.question_kind == "anchor"
+
+
+def test_contentless_opener_is_asked_what_happened_first() -> None:
+    """A complaint with no matching object degrades to open questions (winning-condition §5 fallback):
+    an empty opener is asked "what happened", not "what's your order number" (which assumes an order).
+    """
+    p = decide(set(), emotion=None, has_anchor=False, anchor_asked=False, question_count=0)
+    assert p.state == "incomplete" and p.question_kind == "drill"
+    assert "what happened" in (p.next_question or "").lower()
 
 
 def test_outcome_asked_when_anchor_known_and_outcome_missing() -> None:
@@ -81,8 +100,37 @@ def test_present_field_is_never_reasked() -> None:
 
 
 def test_angry_incomplete_case_is_handed_off_not_interrogated() -> None:
+    # A REAL grievance (the order was found → substance) + angry → hand off, don't interrogate (§5).
     p = decide({"category"}, emotion="angry", has_anchor=True, anchor_asked=False, question_count=0)
     assert p.state == "in_review" and p.next_question is None
+
+
+def test_angry_but_contentless_opener_is_investigated_not_instantly_closed() -> None:
+    """The owner's bug (2026-08-21c): "something hurt me" was labelled angry and CLOSED into a case with
+    zero conversation. A contentless opener — no grounded problem AND no order to look up — must be
+    ASKED "what happened" first, even when angry. §5 protects a real grievance from being grilled, not an
+    empty three-word opener from being heard. A human can't act on "something hurt me" either."""
+    p = decide(
+        set(),  # nothing extracted that survives grounding
+        emotion="angry",
+        has_anchor=False,
+        anchor_asked=False,
+        question_count=0,
+        fault_grounded=False,  # "something hurt me" — category=other → fault ungrounded
+    )
+    assert p.state == "incomplete"
+    assert p.next_question is not None and "what happened" in p.next_question.lower()
+
+    # But once the customer has described a real problem (grounded) and is still angry → THEN hand off.
+    p2 = decide(
+        {"category", "fault"},
+        emotion="angry",
+        has_anchor=False,
+        anchor_asked=True,
+        question_count=1,
+        fault_grounded=True,
+    )
+    assert p2.state == "in_review" and p2.next_question is None
 
 
 def test_budget_spent_after_anchor_plus_two_hands_off() -> None:
