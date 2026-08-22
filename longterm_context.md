@@ -10,7 +10,12 @@ Phase 0), and `BUILD-PLAN.md` (Phase 0→ship, with per-phase subagent guidance 
 `winning-condition.md` — when this file and those disagree, those win and this file is stale and must
 be corrected (except the two research-backed spec deltas in §6, which supersede two of their numbers).*
 
-*Last updated: 2026-08-21c (session: **the case-must-not-lie + durable-portal + chat-mode arc**. (1) Portal
+*Last updated: 2026-08-22 (session: **market-ready hardening (R1–R8) + W2/W3 eval**. Single-worker advisory
+lock (zombie footgun fixed in code), worker-liveness heartbeat + honest dead-worker portal copy, fail-closed
+prod secrets, Ollama Linux-bind preflight + `docs/DEPLOY.md` runbook, Caddy TLS, backups, engine auto-restart.
+W2 `edit_breakdown.py` found desired_outcome (not severity) drives the zero-edit gap; a W3 prompt fix traded
+category −4 for outcome +6 on self-authored labels → reverted (lever is independent labels). HEAD @ cc38cde,
+234 tests +1 skip, all pushed. See §0 START-HERE. Prior session below:* **the case-must-not-lie + durable-portal + chat-mode arc**. (1) Portal
 moved OFF fragile BackgroundTask onto the DURABLE Procrastinate chain ingest already enqueues — stages now
 RETRY + on exhausted retries stamp `processing_failed`; (2) honest failure surfaced end-to-end — migration
 0019, `fail_case_processing`, portal stalled/handoff copy, review-UI error state (red banner + "needs a
@@ -32,9 +37,18 @@ live-testing (voice/image/text) → turn each failing case into a prompt/policy 
 
 > ## ✅ CURRENT STATE + NEXT STEPS (2026-08-21 — clean top-of-mind summary; the per-build bullets + dated SESSION HANDOFF notes below are detail + audit trail)
 >
-> **GIT:** `HEAD @ 40328a5`, tree clean, **all pushed** (`origin/main @ 40328a5`). **19 migrations, 225 tests +1 skip**, ruff/black/mypy(app) + UI tsc clean.
+> **GIT:** `HEAD @ cc38cde`, tree clean, **all pushed** (`origin/main @ cc38cde`). **20 migrations, 234 tests +1 skip**, ruff/black/mypy(app) + UI tsc clean.
 >
-> ## ⇢ NEXT SESSION — START HERE (2026-08-21c handoff)
+> ## ⇢ NEXT SESSION — START HERE (2026-08-22 handoff — MARKET-READY HARDENING + W2/W3)
+> **Owner directive this session: "make it market ready — we're not close."** Worked the W (data/eval) + R (it-runs) blocks. **All $0, full suite green (234+1), pushed** (`dbb45f5` W2/W3, `cc38cde` R1–R8).
+> - **THE ZOMBIE-WORKER FOOTGUN IS FIXED IN CODE (R2).** `scripts/run_worker.py` now takes a Postgres advisory lock per queue-set — a 2nd `default` worker refuses to start (exit 3). `default`/`backfill` coexist. Verified live; killed the 2 zombies that were running. **So "restart ONE worker" is now enforced, not a manual discipline** — but still run exactly one (the lock makes a second exit cleanly).
+> - **DEAD-WORKER HONESTY (R3).** migration 0020 `worker_heartbeat`; every worker beats ~15s; a stale beat → the portal shows honest handoff copy immediately (not an endless spinner) + `/health` reports `worker.status` alive/down/age. So "it hangs on still-working" now self-diagnoses: `curl localhost:8000/health | jq .worker`.
+> - **W2 done + W3 measured & REVERTED (the honest call).** `eval/edit_breakdown.py` decomposes the 28% zero-edit: **desired_outcome is the driver (44% edit, 62% of edited rows), NOT severity** (plan's guess, only +5 rows). A v22 desired_outcome prompt fix gave +6 outcome / +2 zero-edit but **−4 category (same-pass perturbation), all on self-authored labels, no gate passing** → reverted (v20 restored, like v21 fault-nullable). **The lever for outcome+category accuracy is the INDEPENDENT held-out labels (`eval/holdout_labels.csv`), not prompt-grinding** — same ceiling as confidence/category ([[calibration-label-ceiling-per-class]]).
+> - **W4 re-verified: anchor+2 holds** (drill_max 1, 0/216 already-stated, 0/216 derivable) post-v4/v5. **W6 was already done** (winning-condition §4 voice-vs-text swap, dated).
+> - **DEPLOY-READY (R1,R4,R5,R6,R7,R8): `docs/DEPLOY.md` is the runbook.** R5 fail-closed prod secrets (config.py, APP_ENV=prod refuses change_me_*); R1 `scripts/preflight_ollama.py` catches the Linux bind trap + wired into `deploy_rebuild.sh`; R6 Caddy TLS (SITE_ADDRESS, `--profile edge`); R8 `scripts/backup.sh` (pg_dump + MinIO); R4 engine restart:unless-stopped.
+> - **STILL OPEN (honest): R1 not yet run GREEN on an actual Linux host** (none exists — the preflight is built to catch it, verify on the first real box). Accuracy gates still FAIL (category 77/zero-edit 28/outcome 56) — **blocked on independent labels, not code**. External gate (3 strangers) still owner-action. See the older START-HERE below for the live-testing tuning loop (still valid).
+>
+> ## ⇢ PRIOR SESSION — START HERE (2026-08-21c handoff)
 > **The owner is now TESTING the live system** (voice/record, images, text through the portal) and will SHARE the cases that work vs don't. **Your job next session: turn each failing case into a fix** — the tightening loop. It's PROMPT/POLICY-driven ($0), not fine-tuning: a misread → tune the extraction prompt (v20) or the elicit policy (v5); a mis-act → tune the policy/routing. Two owner-caught fixes already came from this loop this session (grounding on customer-state faults → elicit-v4; the contentless-opener instant-handoff → elicit-v5). Expect more; each is a durable rule ([[feedback-into-rules-winning-condition-motto]]).
 > - **The live stack is UP and serving the owner's tests** (see RUN IT). If the owner reports "it hangs on still-working", the WORKER died — restart ONE (the zombie-worker footgun below). If they hit 429, the rate limit reset — it's currently RAISED for testing.
 > - **The portal chat + honest-failure + durable-pipeline work is DONE + verified** (the three owner asks this session). The extractor/policy TUNING is the ongoing work now.
