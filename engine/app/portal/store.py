@@ -56,16 +56,24 @@ _STATE_COPY = {
     ),
     "committed": ("This has been reviewed and actioned", "Thanks for letting us know."),
 }
-_NEEDS_INPUT = ("We need one more thing from you", "Just one quick question to finish your case.")
+_NEEDS_INPUT = (
+    "We need one more thing from you",
+    "Just one quick question to finish your case.",
+)
 
 
 @contextmanager
-def embed_key_session(embed_key: str, *, factory: sessionmaker[Session] = SessionFactory) -> Any:
+def embed_key_session(
+    embed_key: str, *, factory: sessionmaker[Session] = SessionFactory
+) -> Any:
     """A session scoped by the ``app.embed_key`` GUC — the RLS policy then exposes exactly the one tenant
-    row whose embed_key matches. Transaction-local (is_local=true), like ``tenant_session``."""
+    row whose embed_key matches. Transaction-local (is_local=true), like ``tenant_session``.
+    """
     session = factory()
     try:
-        session.execute(text("SELECT set_config('app.embed_key', :k, true)"), {"k": embed_key})
+        session.execute(
+            text("SELECT set_config('app.embed_key', :k, true)"), {"k": embed_key}
+        )
         yield session
         session.commit()
     except Exception:
@@ -120,12 +128,15 @@ def _processing_stage(session: Session, case_id: UUID, category: str | None) -> 
     if category:
         return "checking"  # governed core extracted; decision/elicit about to finish
     has_norm = session.execute(
-        text("SELECT 1 FROM normalised_content WHERE case_id = :c LIMIT 1"), {"c": case_id}
+        text("SELECT 1 FROM normalised_content WHERE case_id = :c LIMIT 1"),
+        {"c": case_id},
     ).first()
     if has_norm:
         return "understanding"
     has_audio = session.execute(
-        text("SELECT 1 FROM source_document WHERE case_id = :c AND mime LIKE 'audio/%' LIMIT 1"),
+        text(
+            "SELECT 1 FROM source_document WHERE case_id = :c AND mime LIKE 'audio/%' LIMIT 1"
+        ),
         {"c": case_id},
     ).first()
     return "transcribing" if has_audio else "received"
@@ -153,11 +164,34 @@ def _reprocessing(
     newest_in: datetime | None = row[0] if row else None
     processed_at: datetime | None = row[1] if row else None
     since = newest_in or first_contact_at
-    reproc = newest_in is not None and processed_at is not None and newest_in > processed_at
+    reproc = (
+        newest_in is not None and processed_at is not None and newest_in > processed_at
+    )
     return reproc, since
 
 
-def public_status(session: Session, case_id: UUID, *, stall_seconds: int) -> dict[str, Any] | None:
+def worker_down(session: Session, *, liveness_seconds: int) -> bool:
+    """Is the intake worker DOWN? (R3) True ONLY when a heartbeat row exists for the default queue but
+    is older than ``liveness_seconds`` — i.e. a worker ran and then died. Returns False when NO heartbeat
+    row exists at all (a cold start / never-provisioned worker), so a brand-new stack falls back to the
+    gentler time-based stall copy rather than crying "snag" before the worker has beat even once. This
+    distinguishes a genuinely dead worker (advance the customer to a human NOW) from a slow one.
+    """
+    beat = session.execute(
+        text("SELECT max(beat_at) FROM worker_heartbeat WHERE queue LIKE '%default%'")
+    ).scalar()
+    if beat is None:
+        return False
+    return bool((datetime.now(UTC) - beat).total_seconds() > liveness_seconds)
+
+
+def public_status(
+    session: Session,
+    case_id: UUID,
+    *,
+    stall_seconds: int,
+    worker_liveness_seconds: int | None = None,
+) -> dict[str, Any] | None:
     """The customer-safe status for one case, or None if absent for this tenant (RLS fail-closed)."""
     row = session.execute(
         text("SELECT case_state, first_contact_at FROM case_record WHERE id = :c"),
@@ -167,7 +201,9 @@ def public_status(session: Session, case_id: UUID, *, stall_seconds: int) -> dic
         return None
     case_state = str(row[0])
     first_contact_at: datetime = row[1]
-    gov = api.get_field_values(session, case_id, ["category", "anchor_value", "desired_outcome"])
+    gov = api.get_field_values(
+        session, case_id, ["category", "anchor_value", "desired_outcome"]
+    )
     ref = _reference(case_id)
 
     # PROCESSING FAILED: a durable pipeline stage exhausted its retries (an Ollama crash, a dropped job).
@@ -190,6 +226,21 @@ def public_status(session: Session, case_id: UUID, *, stall_seconds: int) -> dic
     # re-runs). Both must read as "we're working on it", not a stale ready-state (the chat would freeze).
     reproc, since = _reprocessing(session, case_id, first_contact_at)
     if case_state == "created" or reproc:
+        # WORKER DOWN (R3): if the intake worker's heartbeat has gone stale, nothing will advance this
+        # case until a human steps in — say so honestly and immediately, rather than an open-ended
+        # spinner that implies progress. Same handoff copy as the processing_failed terminal state.
+        if worker_liveness_seconds is not None and worker_down(
+            session, liveness_seconds=worker_liveness_seconds
+        ):
+            return {
+                "ref": ref,
+                "processing": True,
+                "stalled": True,
+                "stage": "delayed",
+                "headline": "We've hit a snag on our end — a person is taking over",
+                "detail": "We've got everything you sent and it's safe. Someone on our team will pick "
+                "this up personally — you don't need to resend it.",
+            }
         age = (datetime.now(UTC) - since).total_seconds()
         if age > stall_seconds:
             # A restart may have dropped the in-flight background task — never hang the customer on a
@@ -214,7 +265,9 @@ def public_status(session: Session, case_id: UUID, *, stall_seconds: int) -> dic
     # READY: elicitation has run → a status + maybe one question.
     pending = api.get_pending_question(session, case_id)
     elicit = session.execute(
-        text("SELECT external_mappings #> '{elicit,options}' FROM case_record WHERE id = :c"),
+        text(
+            "SELECT external_mappings #> '{elicit,options}' FROM case_record WHERE id = :c"
+        ),
         {"c": case_id},
     ).scalar()
     options = list(elicit) if isinstance(elicit, list) else None
@@ -233,7 +286,8 @@ def public_status(session: Session, case_id: UUID, *, stall_seconds: int) -> dic
         headline, detail = _NEEDS_INPUT
     else:
         headline, detail = _STATE_COPY.get(
-            case_state, ("We've got it — and we're on it", "Your case is with our team.")
+            case_state,
+            ("We've got it — and we're on it", "Your case is with our team."),
         )
     decision = api.get_case_decision(session, case_id)
     deadline = decision.get("sla_response_due_at") if decision else None

@@ -12,7 +12,7 @@ from __future__ import annotations
 from enum import StrEnum
 from pathlib import Path
 
-from pydantic import Field
+from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # Absolute path to the repo-root `.env`, so config loads identically from any CWD
@@ -69,7 +69,9 @@ class Settings(BaseSettings):
     whatsapp_tenant_id: str = ""
 
     # --- customer portal (PORTAL.md) — the public /p surface is a SEPARATE router, gated on `enabled` ---
-    portal_enabled: bool = False  # the public routes only mount when this is on (fail-closed)
+    portal_enabled: bool = (
+        False  # the public routes only mount when this is on (fail-closed)
+    )
     portal_secret: str = (
         ""  # HMAC key for signed case tokens; the router refuses to sign without it
     )
@@ -82,6 +84,12 @@ class Settings(BaseSettings):
     portal_stall_seconds: int = (
         90  # a still-processing case older than this shows "taking longer" copy
     )
+
+    # --- worker liveness (R3) ---
+    # A worker stamps worker_heartbeat every ~15s; if the newest beat is older than this, the worker is
+    # treated as DOWN — the portal shows the honest handoff copy immediately (not an open-ended spinner)
+    # and /health reports it. 60s = tolerate a missed beat or two before crying wolf.
+    worker_liveness_seconds: int = 60
 
     # --- postgres ---
     # TWO roles, deliberately (EDD §7.1). The engine connects as the least-privilege
@@ -128,6 +136,41 @@ class Settings(BaseSettings):
             f"postgresql+psycopg://{self.postgres_admin_user}:{self.postgres_admin_password}"
             f"@{self.postgres_host}:{self.postgres_port}/{self.postgres_db}"
         )
+
+    @model_validator(mode="after")
+    def _fail_closed_on_default_secrets(self) -> Settings:
+        """R5 — refuse to START in prod with an empty or placeholder secret on anything reachable.
+
+        The whole point of "market ready" is that ``change_me_*`` / the PoC portal secret never sits on a
+        deployment holding real complaint data. This is fail-CLOSED: only ``app_env`` in {prod,production}
+        is gated, so dev / test / the local PoC (the committed default) are entirely unaffected — a real
+        deployment must set real secrets or it will not boot, with the exact list of what's missing. Never
+        weaken this to a warning: a warning on a prod boot is a secret nobody rotated.
+        """
+        if self.app_env.strip().lower() not in ("prod", "production"):
+            return self
+
+        def insecure(v: str) -> bool:
+            s = (v or "").strip().lower()
+            return s == "" or "change_me" in s or "poc-portal-secret" in s
+
+        problems: list[str] = []
+        if insecure(self.postgres_password):
+            problems.append("POSTGRES_PASSWORD (the app_rw runtime role)")
+        if insecure(self.postgres_admin_password):
+            problems.append("POSTGRES_ADMIN_PASSWORD")
+        if insecure(self.minio_secret_key):
+            problems.append("MINIO_SECRET_KEY")
+        if self.portal_enabled and insecure(self.portal_secret):
+            problems.append("PORTAL_SECRET (portal is enabled)")
+        if problems:
+            raise ValueError(
+                "Refusing to start in prod with default/empty secrets: "
+                + ", ".join(problems)
+                + ". Set real values in .env before deploying "
+                "(generate one with: openssl rand -hex 32). See docs/DEPLOY.md."
+            )
+        return self
 
 
 # Import-time singleton. Cheap; reads env once.

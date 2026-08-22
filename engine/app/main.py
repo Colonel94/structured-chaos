@@ -24,9 +24,42 @@ if settings.portal_enabled:
     app.include_router(portal_router)
 
 
+def _worker_health() -> dict[str, object]:
+    """Best-effort worker liveness for /health (R3): the newest intake-worker heartbeat and whether it is
+    within the liveness window. Never raises — a DB hiccup reports 'unknown', it must not 500 /health.
+    """
+    from datetime import UTC, datetime
+
+    from sqlalchemy import text
+
+    from .store.db import engine
+
+    try:
+        with engine.connect() as conn:
+            beat = conn.execute(
+                text(
+                    "SELECT max(beat_at) FROM worker_heartbeat WHERE queue LIKE '%default%'"
+                )
+            ).scalar()
+        if beat is None:
+            return {"status": "unknown", "detail": "no heartbeat recorded yet"}
+        age = (datetime.now(UTC) - beat).total_seconds()
+        alive = age <= settings.worker_liveness_seconds
+        return {
+            "status": "alive" if alive else "down",
+            "last_beat_age_seconds": round(age, 1),
+            "liveness_seconds": settings.worker_liveness_seconds,
+        }
+    except Exception as exc:  # noqa: BLE001 — health must never crash on a DB blip
+        return {
+            "status": "unknown",
+            "detail": f"heartbeat read failed: {type(exc).__name__}",
+        }
+
+
 @app.get("/health")
 def health() -> dict[str, object]:
-    """Liveness + a readout of which backend impl each interface is wired to."""
+    """Liveness + a readout of which backend impl each interface is wired to + intake-worker liveness."""
     return {
         "status": "ok",
         "env": settings.app_env,
@@ -36,4 +69,5 @@ def health() -> dict[str, object]:
             "embedding": settings.embedding_backend,
             "blob": settings.blob_backend,
         },
+        "worker": _worker_health(),
     }

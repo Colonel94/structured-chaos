@@ -1,7 +1,19 @@
-# Reverse proxy for the external gate (Phase 9) / production. Local dev uses cloudflared
-# to tunnel the WhatsApp webhook straight to :8000; this Caddyfile is for a hosted target.
-# Automatic HTTPS. Replace the site address with the real domain when it exists.
-
-:80 {
+# Reverse proxy for the external gate / production (R6). Local dev uses cloudflared to tunnel
+# straight to :8000; this Caddyfile is for a hosted target with a real domain.
+#
+# SITE_ADDRESS drives it:
+#   * a domain (e.g. intake.example.com) → Caddy gets a real Let's Encrypt cert automatically (TLS,
+#     HTTP→HTTPS redirect, renewal — all built in, zero config beyond the domain);
+#   * ":80" (the default) → plain HTTP, for a quick internal test with no domain yet.
+# Set it in .env:  SITE_ADDRESS=intake.example.com   and point the domain's A record at this host.
+# Bring the edge up:  docker compose --profile edge -f deploy/docker-compose.yml up -d caddy
+{$SITE_ADDRESS::80} {
 	reverse_proxy engine:8000
+
+	# Basic hardening headers for a public surface.
+	header {
+		Strict-Transport-Security "max-age=31536000;"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "strict-origin-when-cross-origin"
+	}
 }

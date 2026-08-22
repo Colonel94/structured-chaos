@@ -89,6 +89,8 @@ services:
         condition: service_completed_successfully
     # Heavy deps (OCR/report/embed) are baked into the image so the Windows host stays clean.
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000
+    # Survive a crash / host reboot (R4). The workers already carry this; the API did not.
+    restart: unless-stopped
 
   # The Procrastinate worker — what actually FIRES the queued pipeline stages (normalise → extract)
   # and the periodic promote-scan, so intake flows end-to-end with no manual trigger. Runs the async
@@ -143,6 +145,28 @@ services:
     command: python /app/scripts/run_worker.py backfill
     restart: unless-stopped
 
+  # The public edge (R6): automatic HTTPS via Caddy for a hosted deployment with a real domain. OPT-IN
+  # via the `edge` profile so local dev (which uses cloudflared) never starts it:
+  #     docker compose --profile edge -f deploy/docker-compose.yml up -d caddy
+  # Needs SITE_ADDRESS in .env (a domain → real TLS; ":80" → plain HTTP for a no-domain internal test).
+  caddy:
+    image: caddy:2
+    profiles: ["edge"]
+    environment:
+      SITE_ADDRESS: ${SITE_ADDRESS:-:80}
+    depends_on:
+      - engine
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddydata:/data
+      - caddyconfig:/config
+    restart: unless-stopped
+
 volumes:
   pgdata:
   miniodata:
+  caddydata:
+  caddyconfig:

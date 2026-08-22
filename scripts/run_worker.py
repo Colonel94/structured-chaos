@@ -20,15 +20,74 @@ Usage:
 from __future__ import annotations
 
 import asyncio
+import contextlib
+import hashlib
+import os
 import sys
+from typing import Any
 
 from app.obs.logging import get_logger
-from app.queue import app, dedup_scan, mint_scan, promote_scan, worker_app
+from app.queue import _conninfo, app, dedup_scan, mint_scan, promote_scan, worker_app
 
 log = get_logger(__name__)
 
 # How often the intake worker defers the schema-maintenance scans (the old @app.periodic cron was */30).
 PROMOTE_SCAN_INTERVAL_SECONDS = 30 * 60
+
+# How often EVERY worker stamps its liveness heartbeat (R3). Short relative to the liveness threshold
+# (settings.worker_liveness_seconds, default 60) so a live-but-busy worker never reads as dead.
+HEARTBEAT_INTERVAL_SECONDS = 15
+
+
+def _lock_key(queues: list[str]) -> int:
+    """A STABLE 64-bit signed advisory-lock key for a queue-set. Sorted so ['a','b'] == ['b','a'];
+    hashed (not Python ``hash()``, which is per-process randomised) so two processes agree. Different
+    queue-sets → different keys, so the intake (``default``) and ``backfill`` workers never collide.
+    """
+    key_src = "adaptive-intake.worker:" + ",".join(sorted(queues))
+    return int.from_bytes(
+        hashlib.blake2b(key_src.encode(), digest_size=8).digest(), "big", signed=True
+    )
+
+
+def _singleton_lock(queues: list[str]) -> Any:
+    """Refuse to start a SECOND worker on the same queue-set — the zombie-worker footgun.
+
+    Two ``run_worker default`` processes (or a stale one on old code) race the same jobs and cause
+    spurious stage failures / bogus ``processing_failed`` cases — a whole test session was lost to this
+    (longterm_context.md §0). "Remember to check" is not a fix; this enforces it in code.
+
+    Mechanism: a Postgres SESSION-level advisory lock, keyed by the sorted queue-set. It is the right
+    tool here because it (a) auto-releases the instant the connection dies — no stale PID files to
+    reap after a crash — and (b) is shared by the host AND the container against the same DB. The
+    ``default`` (intake) and ``backfill`` workers take DIFFERENT keys, so compose runs both fine; only a
+    second worker on the SAME queues collides and exits. Set ``WORKER_ALLOW_MULTIPLE=1`` to bypass (only
+    ever legitimate for a deliberate multi-worker scale-out sharing one queue — not the PoC).
+
+    Returns the held connection (the caller must keep the reference alive for the whole process so the
+    lock is not released early), or exits the process with a clear message if the lock is already held.
+    """
+    if os.environ.get("WORKER_ALLOW_MULTIPLE") == "1":
+        log.warning("worker.singleton_lock_bypassed", queues=queues)
+        return None
+    import psycopg
+
+    key = _lock_key(queues)
+    conn = psycopg.connect(_conninfo(), autocommit=True)
+    got = conn.execute("SELECT pg_try_advisory_lock(%s)", (key,)).fetchone()
+    if not got or not got[0]:
+        conn.close()
+        log.error("worker.already_running", queues=queues)
+        print(
+            f"!! a worker on queues {queues} is ALREADY RUNNING (advisory lock held).\n"
+            f"   Refusing to start a second one — two workers on the same queue race jobs and cause\n"
+            f"   spurious stage failures. Stop the other worker first, or set WORKER_ALLOW_MULTIPLE=1\n"
+            f"   to override (only for a deliberate multi-worker scale-out).",
+            file=sys.stderr,
+        )
+        raise SystemExit(3)
+    log.info("worker.singleton_lock_acquired", queues=queues, key=key)
+    return conn
 
 
 async def _scheduler() -> None:
@@ -48,9 +107,47 @@ async def _scheduler() -> None:
         log.info("scheduler.schema_maintenance_scans_deferred")
 
 
+def _beat(conn: Any, queue: str) -> None:
+    conn.execute(
+        "INSERT INTO worker_heartbeat (queue, beat_at) VALUES (%s, now()) "
+        "ON CONFLICT (queue) DO UPDATE SET beat_at = now()",
+        (queue,),
+    )
+
+
+async def _heartbeat_loop(queues: list[str]) -> None:
+    """Stamp this worker's liveness on a short interval so the portal/health can tell 'down' from 'busy'
+    (R3). Its own dedicated connection (the procrastinate pool is busy fetching); a stale heartbeat means
+    the worker is gone, and the portal switches to honest handoff copy. A heartbeat failure must NEVER
+    take the worker down — the worker's JOB is to process jobs; log and keep beating."""
+    import psycopg
+
+    queue = ",".join(sorted(queues))
+    conn = psycopg.connect(_conninfo(), autocommit=True)
+    try:
+        while True:
+            try:
+                await asyncio.to_thread(_beat, conn, queue)
+            except Exception:
+                log.exception("worker.heartbeat_failed", queue=queue)
+                with contextlib.suppress(Exception):
+                    conn.close()
+                conn = psycopg.connect(
+                    _conninfo(), autocommit=True
+                )  # reconnect and carry on
+            await asyncio.sleep(HEARTBEAT_INTERVAL_SECONDS)
+    finally:
+        with contextlib.suppress(Exception):
+            conn.close()
+
+
 async def _run(queues: list[str], schedule: bool) -> None:
     async with worker_app.open_async():
-        coros = [worker_app.run_worker_async(queues=queues, wait=True)]
+        # The heartbeat runs on EVERY worker (not gated on --schedule) — liveness is universal.
+        coros = [
+            worker_app.run_worker_async(queues=queues, wait=True),
+            _heartbeat_loop(queues),
+        ]
         if schedule:
             coros.append(_scheduler())
         await asyncio.gather(*coros)
@@ -64,6 +161,9 @@ def main() -> None:
     argv = [a for a in sys.argv[1:] if not a.startswith("-")]
     schedule = "--schedule" in sys.argv[1:]
     queues = argv or ["default"]
+    # Refuse a second worker on these queues BEFORE opening the pool (the zombie-worker footgun). The
+    # returned connection is bound to a local so the advisory lock lives for the whole process.
+    _lock_conn = _singleton_lock(queues)
     log.info("worker.start", queues=queues, schedule=schedule)
     # Hold the sync connector pool open for the whole process so task-body defers have a live pool.
     with app.open():
