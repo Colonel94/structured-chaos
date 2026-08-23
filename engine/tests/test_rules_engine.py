@@ -54,6 +54,29 @@ def test_safety_severity_dominates_everything() -> None:
     )
 
 
+def test_escalating_trend_routes_to_human_before_full_anger() -> None:
+    # A rising-frustration conversation (peak frustrated, trend escalating) is caught by the sentiment
+    # rule and routed to a human — before it hits full anger. (emotion here is the PEAK the stage feeds.)
+    d = _decide(
+        category="service_fault",
+        severity_signal="none",
+        emotion_signal="frustrated",
+        emotion_trend="escalating",
+    )
+    assert d.matched_rule_id == "escalating-sentiment" and d.routing == "human_review"
+
+
+def test_single_turn_trend_does_not_escalate() -> None:
+    # A single-turn case (trend 'single' — the whole eval set) takes the normal category path, unchanged.
+    d = _decide(
+        category="service_fault",
+        severity_signal="none",
+        emotion_signal="frustrated",
+        emotion_trend="single",
+    )
+    assert d.matched_rule_id == "service"
+
+
 def test_angry_escalates_above_the_plain_category_path() -> None:
     calm = _decide(category="billing_charge", severity_signal="none", emotion_signal="calm")
     angry = _decide(category="billing_charge", severity_signal="none", emotion_signal="angry")

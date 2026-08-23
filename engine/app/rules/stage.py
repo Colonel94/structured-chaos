@@ -25,7 +25,8 @@ from ..config import settings
 from ..obs.logging import get_logger
 from ..store import api
 from ..store.db import SessionFactory, tenant_session
-from .engine import evaluate, evaluated_inputs, load_policy
+from .engine import evaluate, load_policy
+from .sentiment import analyze
 
 log = get_logger(__name__)
 
@@ -47,10 +48,25 @@ def decide_case(
             return False
         first_contact_at, governed = row
         policy = load_policy(api.get_tenant_policy_yaml(session))
-        inputs = evaluated_inputs(governed)
 
-        # Idempotent on (inputs snapshot + policy version): unchanged → a replay is a no-op; a
-        # re-extraction that moves a signal, or a policy change, yields a new key → recompute.
+        # SENTIMENT TRAJECTORY (best practice — track sentiment over the interaction, not one snapshot):
+        # route on the conversation's PEAK emotion + its DIRECTION, so a customer who vents ANGRY then
+        # calmly gives an order number still escalates (their latest word is 'calm', but the case is not).
+        # Single-message cases (the whole eval set) have ONE reading → peak == current, trend == "single"
+        # → the identical decision as before this change (additive, eval-safe).
+        history = api.get_emotion_history(session, case_id)
+        traj = analyze(history or [governed.get("emotion_signal")])
+        inputs = {
+            "category": governed.get("category"),
+            "severity_signal": governed.get("severity_signal"),
+            "emotion_signal": traj.peak or governed.get("emotion_signal"),  # ROUTE ON PEAK
+            "emotion_trend": traj.trend,
+            "emotion_current": traj.current,  # persisted for audit; no rule reads it (peak drives routing)
+        }
+
+        # Idempotent on (inputs snapshot + policy version): unchanged → a replay is a no-op; a new turn
+        # that moves the peak or the trend, a re-extraction that moves a signal, or a policy change all
+        # yield a new key → recompute.
         material = json.dumps({"inputs": inputs, "policy": policy.version}, sort_keys=True)
         key = api.compute_idempotency_key(
             source_sha256=hashlib.sha256(f"{case_id}\x1f{material}".encode()).hexdigest(),
@@ -63,7 +79,7 @@ def decide_case(
             log.info("rules.skip_done", case_id=str(case_id))
             return False
 
-        decision = evaluate(governed, policy)
+        decision = evaluate(inputs, policy)
         due_at = first_contact_at + timedelta(hours=decision.sla_target_hours)
         api.upsert_case_decision(
             session,

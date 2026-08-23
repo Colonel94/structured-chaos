@@ -11,7 +11,7 @@
 # emotion_signal. The final rule MUST be a catch-all ({}) so evaluation is total (every case gets a
 # decision). `sla_hours` sets the response deadline, measured from first_contact_at (the clock starts at
 # first contact, not at completeness — CLAUDE.md §3).
-version: default-v2  # v2 (2026-08-21b): category routing (delivery/product/service/staff/access)
+version: default-v3  # v3 (2026-08-23): sentiment TRAJECTORY — route on the conversation's peak emotion + an escalating-trend rule (best practice: track sentiment over the interaction, act on escalation early). v2: category routing (delivery/product/service/staff/access)
 
 rules:
   # --- Severity dominates: a checkable state (safety, a vulnerable party) beats arguable conduct. ---
@@ -50,6 +50,18 @@ rules:
     routing: human_review
     sla_hours: 4
     rationale: "An angry customer — high priority, routed to a human reviewer."
+
+  # Escalation caught EARLY: a customer whose sentiment is rising across the conversation (calm→frustrated,
+  # frustrated→angry) is a churn/reputation risk before they hit full anger — get a human on it (best
+  # practice: act on escalation, don't wait for the peak). `emotion` above is the conversation PEAK, so a
+  # steady-angry case already routed via angry-any; this adds the RISING-frustration case. Single-turn
+  # cases have trend 'single' and never match — so the eval set is unaffected.
+  - id: escalating-sentiment
+    when: { emotion_trend: [escalating] }
+    priority: P2
+    routing: human_review
+    sla_hours: 4
+    rationale: "The customer's frustration is escalating across the conversation — routed to a human reviewer."
 
   # --- A safety/health complaint that severity did not already flag still escalates on the category. ---
   - id: safety-category

@@ -1391,6 +1391,24 @@ def get_field_values(session: Session, case_id: UUID, field_paths: Sequence[str]
     return {str(r[0]): str(r[1]) for r in rows if r[1] not in (None, "")}
 
 
+def get_emotion_history(session: Session, case_id: UUID) -> list[str]:
+    """The ordered ``emotion_signal`` readings across a case's extractions (oldest→newest) — the sentiment
+    ARC that :func:`app.rules.sentiment.analyze` reduces to (current, peak, trend). Read from the
+    append-only ``field_extraction`` log so it captures EVERY turn's reading (the portal re-extracts each
+    reply), not just the current snapshot — that history is exactly what lets routing act on the peak of
+    the conversation rather than the latest word. RLS-scoped. ``#>> '{}'`` unwraps the jsonb scalar string.
+    """
+    rows = session.execute(
+        text("""
+            SELECT value #>> '{}' FROM field_extraction
+            WHERE case_id = :cid AND field_path = 'emotion_signal'
+            ORDER BY created_at, id
+            """),
+        {"cid": case_id},
+    ).all()
+    return [str(r[0]) for r in rows if r[0] is not None]
+
+
 def apply_elicitation(
     session: Session, case_id: UUID, *, state: str, asked: bool, meta: Mapping[str, JsonValue]
 ) -> None:

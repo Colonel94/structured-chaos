@@ -83,10 +83,14 @@ def test_stage_writes_the_decision_and_clock_runs_from_first_contact(
     # The SLA deadline is first_contact_at + the target — the clock starts at first contact, not now.
     due = datetime.fromisoformat(str(d["sla_response_due_at"]))
     assert due == fca + timedelta(hours=float(d["sla_target_hours"]))  # type: ignore[arg-type]
+    # A single-message case: one emotion reading → peak == current == calm, trend == "single" (the
+    # sentiment-trajectory fields are present but inert, so the decision is identical to pre-trajectory).
     assert d["inputs"] == {
         "category": "billing_charge",
         "severity_signal": "financial_harm",
         "emotion_signal": "calm",
+        "emotion_trend": "single",
+        "emotion_current": "calm",
     }
 
 
@@ -152,6 +156,85 @@ def test_stage_recomputes_when_a_signal_changes(
     with tenant_session(tenant, factory=app_factory) as s:
         d = api.get_case_decision(s, case)
     assert d is not None and d["matched_rule_id"] == "angry-any" and d["routing"] == "human_review"
+
+
+def _add_emotion_turn(
+    session: Session, case: UUID, fca: datetime, emotion: str, *, prompt_version: str
+) -> None:
+    """Append one more emotion_signal reading (a later conversation turn) + refresh the projection."""
+    sha = hashlib.sha256(uuid4().bytes).hexdigest()
+    doc = api.add_source_document(
+        session,
+        case_id=case,
+        sha256=sha,
+        blob_key=sha,
+        mime="text/plain",
+        channel="file_drop",
+        byte_size=10,
+        received_at=fca,
+    )
+    api.record_extraction(
+        session,
+        case_id=case,
+        field_path="emotion_signal",
+        value=emotion,
+        model="t",
+        model_version="t",
+        prompt_version=prompt_version,
+        run_id=uuid4(),
+        confidence=0.5,
+        citations=[api.Citation(source_document_id=doc, role="primary")],
+        layer="governed_core",
+    )
+    api.rebuild_field_current(session, case)
+
+
+def test_peak_routing_survives_a_later_calm_turn(
+    admin_session: Session, app_factory: sessionmaker[Session]
+) -> None:
+    """THE sentiment-trajectory value: a customer vents ANGRY, then calmly answers a follow-up. The latest
+    snapshot is 'calm', but routing must act on the conversation's PEAK (angry) → human_review, never wash
+    the anger out (winning-condition §5: an angry customer goes to a human)."""
+    tenant = api.create_tenant(admin_session, "Rules-Peak-Co")
+    admin_session.commit()
+    with tenant_session(tenant, factory=app_factory) as s:
+        case, fca = _seed_case(s, governed={"category": "service_fault", "emotion_signal": "angry"})
+    # A later turn — SEPARATE transaction so its created_at is strictly later (as in production, where
+    # each reply is its own pipeline run); same-transaction now() would tie and the order would be random.
+    with tenant_session(tenant, factory=app_factory) as s:
+        _add_emotion_turn(
+            s, case, fca, "calm", prompt_version="t2"
+        )  # they calm down giving details
+
+    assert decide_case(tenant, case, factory=app_factory) is True
+    with tenant_session(tenant, factory=app_factory) as s:
+        d = api.get_case_decision(s, case)
+    assert (
+        d is not None and d["routing"] == "human_review"
+    )  # peak angry wins, not the calm latest word
+    assert d["inputs"]["emotion_signal"] == "angry"  # routed on peak
+    assert d["inputs"]["emotion_current"] == "calm"  # latest word recorded honestly for audit
+    assert d["inputs"]["emotion_trend"] == "de_escalating"
+
+
+def test_rising_frustration_routes_to_a_human(
+    admin_session: Session, app_factory: sessionmaker[Session]
+) -> None:
+    """A conversation trending calm→frustrated (escalating, peak not yet angry) is caught EARLY and routed
+    to a human by the escalating-sentiment rule — the best-practice 'act on escalation' win."""
+    tenant = api.create_tenant(admin_session, "Rules-Rising-Co")
+    admin_session.commit()
+    with tenant_session(tenant, factory=app_factory) as s:
+        case, fca = _seed_case(s, governed={"category": "service_fault", "emotion_signal": "calm"})
+    # Separate transaction → strictly-later created_at (production-faithful ordering; see the note above).
+    with tenant_session(tenant, factory=app_factory) as s:
+        _add_emotion_turn(s, case, fca, "frustrated", prompt_version="t2")
+
+    assert decide_case(tenant, case, factory=app_factory) is True
+    with tenant_session(tenant, factory=app_factory) as s:
+        d = api.get_case_decision(s, case)
+    assert d is not None and d["matched_rule_id"] == "escalating-sentiment"
+    assert d["routing"] == "human_review" and d["inputs"]["emotion_trend"] == "escalating"
 
 
 def test_decision_is_tenant_isolated(

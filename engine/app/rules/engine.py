@@ -22,11 +22,16 @@ import yaml
 
 _DEFAULT_POLICY_PATH = Path(__file__).resolve().parent / "policy_default.yaml"
 
-# The governed-core keys the engine reads, and the `when` condition key each maps to.
+# The input keys the engine reads, and the `when` condition key each maps to. `emotion` is the routing
+# emotion (the conversation's PEAK, computed by the rules stage from the sentiment arc — not necessarily
+# the latest snapshot); `emotion_trend` is its direction (single|steady|escalating|de_escalating), so a
+# policy can escalate a customer whose frustration is RISING before they hit full anger (best practice —
+# track sentiment over the interaction; see app.rules.sentiment).
 _INPUT_KEYS: dict[str, str] = {
     "category": "category",
     "severity": "severity_signal",
     "emotion": "emotion_signal",
+    "emotion_trend": "emotion_trend",
 }
 _PRIORITIES = frozenset({"P1", "P2", "P3", "P4"})
 
