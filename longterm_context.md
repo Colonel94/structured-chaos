@@ -37,9 +37,16 @@ live-testing (voice/image/text) → turn each failing case into a prompt/policy 
 
 > ## ✅ CURRENT STATE + NEXT STEPS (2026-08-21 — clean top-of-mind summary; the per-build bullets + dated SESSION HANDOFF notes below are detail + audit trail)
 >
-> **GIT:** `HEAD @ cc38cde`, tree clean, **all pushed** (`origin/main @ cc38cde`). **20 migrations, 234 tests +1 skip**, ruff/black/mypy(app) + UI tsc clean.
+> **GIT:** `HEAD @ 73bcef0` (sentiment trajectory), tree clean, **all pushed**. **20 migrations, 248 tests +1 skip**, ruff/black/mypy(app) + UI tsc clean.
 >
-> ## ⇢ NEXT SESSION — START HERE (2026-08-22 handoff — MARKET-READY HARDENING + W2/W3)
+> ## ⇢ NEXT SESSION — START HERE (2026-08-23 — SENTIMENT TRAJECTORY, on top of the 2026-08-22 hardening below)
+> **Owner: "enhance sentiment analysis" (CallMiner best practices + others).** Built + tested + LIVE-verified, pushed (`73bcef0`).
+> - **What changed:** the rules engine now routes on the conversation's **peak** emotion + a new **`emotion_trend`** input (single|steady|escalating|de_escalating), not just the latest snapshot — so a customer who vents angry then calmly answers isn't washed to "calm," and a **rising-frustration** customer is caught early (policy `default-v3`, new `escalating-sentiment` rule → human_review). `app/rules/sentiment.py` (pure, $0) + `api.get_emotion_history` (from the append-only extraction log).
+> - **Safe by construction:** the scored `emotion_signal` EXTRACTION is untouched → the 216 eval is UNCHANGED (77/28/56); single-message cases have one reading → peak==current, trend='single', identical decision. 248 tests +1 skip, mypy/ruff/black clean.
+> - **LIVE-VERIFIED on the portal:** a frustrated opener escalating to angry over two turns → arc `frustrated→angry`, `emotion_trend=escalating`, routed **P2 human_review**. (Gotcha found & noted: the portal `/answer` form field is **`answer=`**, not `text=`.)
+> - **Follow-on (flagged, not built):** the elicit-layer angry→handoff still uses CURRENT emotion, not peak — make it peak-aware for full consistency (delicate elicit policy; rare in practice since an angry OPENER hands off immediately, before any calmer turn). The demo tenant now carries a few sentiment test cases from this verification — reseed (`scripts/reset_demo_tenant.py`) before the external gate.
+>
+> ## ⇢ PRIOR — START HERE (2026-08-22 handoff — MARKET-READY HARDENING + W2/W3)
 > **Owner directive this session: "make it market ready — we're not close."** Worked the W (data/eval) + R (it-runs) blocks. **All $0, full suite green (234+1), pushed** (`dbb45f5` W2/W3, `cc38cde` R1–R8).
 > - **THE ZOMBIE-WORKER FOOTGUN IS FIXED IN CODE (R2).** `scripts/run_worker.py` now takes a Postgres advisory lock per queue-set — a 2nd `default` worker refuses to start (exit 3). `default`/`backfill` coexist. Verified live; killed the 2 zombies that were running. **So "restart ONE worker" is now enforced, not a manual discipline** — but still run exactly one (the lock makes a second exit cleanly).
 > - **DEAD-WORKER HONESTY (R3).** migration 0020 `worker_heartbeat`; every worker beats ~15s; a stale beat → the portal shows honest handoff copy immediately (not an endless spinner) + `/health` reports `worker.status` alive/down/age. So "it hangs on still-working" now self-diagnoses: `curl localhost:8000/health | jq .worker`.
