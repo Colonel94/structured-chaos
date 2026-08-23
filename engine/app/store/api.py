@@ -1391,20 +1391,39 @@ def get_field_values(session: Session, case_id: UUID, field_paths: Sequence[str]
     return {str(r[0]): str(r[1]) for r in rows if r[1] not in (None, "")}
 
 
-def get_emotion_history(session: Session, case_id: UUID) -> list[str]:
-    """The ordered ``emotion_signal`` readings across a case's extractions (oldest→newest) — the sentiment
-    ARC that :func:`app.rules.sentiment.analyze` reduces to (current, peak, trend). Read from the
-    append-only ``field_extraction`` log so it captures EVERY turn's reading (the portal re-extracts each
-    reply), not just the current snapshot — that history is exactly what lets routing act on the peak of
-    the conversation rather than the latest word. RLS-scoped. ``#>> '{}'`` unwraps the jsonb scalar string.
+def get_emotion_history(
+    session: Session, case_id: UUID, *, within_hours: float | None = None
+) -> list[str]:
+    """The ordered ``emotion_signal`` readings for a case (oldest→newest) — the sentiment ARC that
+    :func:`app.rules.sentiment.analyze` reduces to (current, peak, trend). Read from the append-only
+    ``field_extraction`` log so it captures EVERY turn's reading (the portal re-extracts each reply), not
+    just the current snapshot — that history is what lets routing act on the peak of the conversation
+    rather than the latest word.
+
+    SCOPE: strictly this ``case_id`` (RLS-scoped) — never the customer's other cases, so a fresh case
+    starts with a fresh arc. RECENCY (decay): with ``within_hours`` set, only readings within that many
+    hours of the LATEST reading are returned, so an old peak from an earlier episode (a follow-up
+    windowing folded into this case days later, a "thanks" after resolution) ages out instead of routing
+    the case as angry forever. ``#>> '{}'`` unwraps the jsonb scalar string.
     """
+    params: dict[str, object] = {"cid": case_id}
+    # The recency cutoff is relative to THIS case's newest reading (not now()), so a case whose whole
+    # conversation happened days ago still yields its own arc, not an empty list.
+    cutoff = ""
+    if within_hours is not None:
+        cutoff = (
+            " AND created_at >= (SELECT max(created_at) FROM field_extraction "
+            "WHERE case_id = :cid AND field_path = 'emotion_signal') - (:h * interval '1 hour')"
+        )
+        params["h"] = float(within_hours)
     rows = session.execute(
-        text("""
-            SELECT value #>> '{}' FROM field_extraction
-            WHERE case_id = :cid AND field_path = 'emotion_signal'
-            ORDER BY created_at, id
-            """),
-        {"cid": case_id},
+        text(
+            "SELECT value #>> '{}' FROM field_extraction "
+            "WHERE case_id = :cid AND field_path = 'emotion_signal'"
+            + cutoff
+            + " ORDER BY created_at, id"
+        ),
+        params,
     ).all()
     return [str(r[0]) for r in rows if r[0] is not None]
 

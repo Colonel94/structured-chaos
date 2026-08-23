@@ -54,7 +54,20 @@ def decide_case(
         # calmly gives an order number still escalates (their latest word is 'calm', but the case is not).
         # Single-message cases (the whole eval set) have ONE reading → peak == current, trend == "single"
         # → the identical decision as before this change (additive, eval-safe).
-        history = api.get_emotion_history(session, case_id)
+        #
+        # SCOPE + DECAY (design decision 2026-08-23, owner-flagged — logged in longterm_context.md §0):
+        # the arc is case-scoped (never the customer's other cases) AND bounded to a recency window, so an
+        # old peak from an earlier episode (a follow-up windowing folded in days later, a "thanks" after
+        # resolution) ages out instead of routing the case as angry forever.
+        # ESCALATE-ONLY ASYMMETRY (same decision): sentiment may RAISE priority within an episode (peak),
+        # never LOWER it — a de_escalating trend does NOT drop priority. Within an UNRESOLVED case,
+        # evidence of anger is durable (a human should look, winning-condition §5) while a later calm is
+        # procedural, not proof the issue is solved; de-escalation's value is realised at the episode
+        # boundary (resolution/decay above), not by overriding the peak. Do NOT add a de_escalating
+        # priority-drop rule without revisiting this reasoning.
+        history = api.get_emotion_history(
+            session, case_id, within_hours=settings.sentiment_window_hours
+        )
         traj = analyze(history or [governed.get("emotion_signal")])
         inputs = {
             "category": governed.get("category"),

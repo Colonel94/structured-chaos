@@ -9,6 +9,7 @@ from datetime import UTC, datetime, timedelta
 from uuid import UUID, uuid4
 
 import pytest
+from sqlalchemy import text
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.rules.stage import decide_case
@@ -215,6 +216,39 @@ def test_peak_routing_survives_a_later_calm_turn(
     assert d["inputs"]["emotion_signal"] == "angry"  # routed on peak
     assert d["inputs"]["emotion_current"] == "calm"  # latest word recorded honestly for audit
     assert d["inputs"]["emotion_trend"] == "de_escalating"
+
+
+def test_old_peak_ages_out_of_the_recency_window(
+    admin_session: Session, app_factory: sessionmaker[Session]
+) -> None:
+    """Concern 1 (owner-flagged 2026-08-23 — decay + scope): a case that was ANGRY in an earlier episode
+    and then gets a much-later CALM reading (a follow-up windowing folded in, or a 'thanks' after
+    resolution) must NOT route as angry forever — the stale peak ages out of the recency window, so
+    routing reflects the current episode, not the case's whole lifetime."""
+    tenant = api.create_tenant(admin_session, "Rules-Decay-Co")
+    admin_session.commit()
+    with tenant_session(tenant, factory=app_factory) as s:
+        case, _ = _seed_case(s, governed={"category": "service_fault", "emotion_signal": "calm"})
+        # An earlier episode's ANGRY reading, 10 days old. INSERT with an explicit created_at (field_
+        # extraction is append-only — immutability blocks UPDATE/DELETE, not INSERT), so we get a real
+        # time gap without fighting the trust gate.
+        s.execute(
+            text(
+                "INSERT INTO field_extraction (tenant_id, case_id, field_path, value, layer, model, "
+                "model_version, prompt_version, confidence, run_id, created_at) VALUES "
+                "(NULLIF(current_setting('app.tenant_id', true), '')::uuid, :c, 'emotion_signal', "
+                "'\"angry\"'::jsonb, 'governed_core', 't', 't', 't0', 0.5, gen_random_uuid(), "
+                "now() - interval '10 days')"
+            ),
+            {"c": case},
+        )
+
+    assert decide_case(tenant, case, factory=app_factory) is True
+    with tenant_session(tenant, factory=app_factory) as s:
+        d = api.get_case_decision(s, case)
+    # The angry reading is >72h before the calm one → out of the arc → routes on the current calm, not angry.
+    assert d is not None and d["inputs"]["emotion_signal"] == "calm"
+    assert d["routing"] != "human_review" and d["inputs"]["emotion_trend"] == "single"
 
 
 def test_rising_frustration_routes_to_a_human(

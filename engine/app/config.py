@@ -69,9 +69,7 @@ class Settings(BaseSettings):
     whatsapp_tenant_id: str = ""
 
     # --- customer portal (PORTAL.md) — the public /p surface is a SEPARATE router, gated on `enabled` ---
-    portal_enabled: bool = (
-        False  # the public routes only mount when this is on (fail-closed)
-    )
+    portal_enabled: bool = False  # the public routes only mount when this is on (fail-closed)
     portal_secret: str = (
         ""  # HMAC key for signed case tokens; the router refuses to sign without it
     )
@@ -84,6 +82,15 @@ class Settings(BaseSettings):
     portal_stall_seconds: int = (
         90  # a still-processing case older than this shows "taking longer" copy
     )
+
+    # --- sentiment trajectory (rules/sentiment) ---
+    # The recency window the peak/trend is computed over. A case can accrue MULTIPLE episodes (an original
+    # complaint, a follow-up windowing folds in days later, a "thanks" within the reopen window); without a
+    # bound, a single early angry reading would route the case as angry FOREVER, including after it's
+    # resolved. So readings older than this before the latest reading age out of the arc — peak/trend
+    # reflect the CURRENT episode, not the case's whole lifetime. 72h > the 24h same-conversation gap (a
+    # multi-day active complaint keeps its peak) but < a week (a later thank-you ages the old anger out).
+    sentiment_window_hours: float = 72
 
     # --- worker liveness (R3) ---
     # A worker stamps worker_heartbeat every ~15s; if the newest beat is older than this, the worker is
