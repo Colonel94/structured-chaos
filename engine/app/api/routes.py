@@ -63,6 +63,16 @@ class CommitIn(BaseModel):
     fields_edited: int = 0
 
 
+class FeedbackIn(BaseModel):
+    """A reviewer's verdict on the model's extraction — the feedback loop, independent of field edits and
+    approval. ``verdict`` is accurate/inaccurate/partial; ``comment`` is the optional why (what the model
+    missed/nailed) that guides the next prompt/policy fix."""
+
+    reviewer_id: str
+    verdict: str
+    comment: str | None = None
+
+
 class CommitBatchIn(BaseModel):
     """Approve several cases at once — the reviewer's single act of clearing a whole reliability band (still
     a human approval per §3, just amortised). ``review_ms`` is the time spent on the batch; it is split
@@ -316,6 +326,43 @@ def post_uncommit(
             status_code=409, detail="approval is final — the undo window has passed"
         )
     return {"uncommitted": result}
+
+
+_FEEDBACK_VERDICTS = frozenset({"accurate", "inaccurate", "partial"})
+
+
+@router.post("/cases/{case_id}/feedback")
+def post_feedback(
+    case_id: str, body: FeedbackIn, x_tenant_id: TenantHeader, factory: FactoryDep
+) -> dict[str, Any]:
+    """Record a reviewer's verdict on the model's extraction for this case — the feedback loop. Distinct
+    from a field correction (which fixes a value) and from approval: it's the qualitative signal ("what did
+    the model get right/wrong and why") that a human uses to tune prompts/policies ($0). Append-only;
+    allowed on any case (even committed — feedback on the model is not the same as re-opening the record).
+    404 if the case is absent for this tenant (RLS fail-closed); 400 on an unknown verdict."""
+    cid = _case_uuid(case_id)
+    verdict = body.verdict.strip().lower()
+    if verdict not in _FEEDBACK_VERDICTS:
+        raise HTTPException(
+            status_code=400, detail=f"verdict must be one of {sorted(_FEEDBACK_VERDICTS)}"
+        )
+    comment = (body.comment or "").strip() or None
+    with tenant_session(_tenant(x_tenant_id), factory=factory) as s:
+        if api.get_case_channel(s, cid) is None:  # None ⇒ absent for this tenant (RLS fail-closed)
+            raise HTTPException(status_code=404, detail="case not found")
+        entry = api.record_case_feedback(
+            s, case_id=cid, reviewer_id=body.reviewer_id, verdict=verdict, comment=comment
+        )
+    return {"feedback": entry}
+
+
+@router.get("/feedback")
+def get_feedback(x_tenant_id: TenantHeader, factory: FactoryDep) -> dict[str, Any]:
+    """The feedback loop's OUTPUT for this tenant — a verdict tally + recent entries (newest first), the
+    queue an engineer works from to pick the next prompt/policy fix. This is 'where the feedback goes'.
+    """
+    with tenant_session(_tenant(x_tenant_id), factory=factory) as s:
+        return api.recent_feedback(s)
 
 
 @router.get("/review-stats")

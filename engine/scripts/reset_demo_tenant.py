@@ -8,7 +8,7 @@ seed_portal_orders.py for the clean orders.
 
 Safety: refuses to run unless APP_ENV is a non-prod env (this is a demo reset, never a prod tool). Scoped
 to a single tenant_id — never touches another tenant's rows or the tenant row itself. Runs as the admin
-(superuser) with FK triggers deferred for the duration, so the delete order across the 18 inter-referencing
+(superuser) with FK triggers deferred for the duration, so the delete order across the 19 inter-referencing
 tables doesn't matter; re-enabled before commit.
 
 Run:
@@ -33,6 +33,7 @@ _TENANT_DATA_TABLES = [
     "backend_call",
     "backfill_attempt",
     "case_decision",
+    "case_feedback",
     "extraction_citation",
     "field_correction",
     "field_current",
@@ -67,7 +68,7 @@ def main() -> int:
             print(f'tenant "{name}" not found', file=sys.stderr)
             return 1
 
-        # Disable FK triggers for this session (superuser) so the 18 inter-referencing tables can be
+        # Disable FK triggers for this session (superuser) so the 19 inter-referencing tables can be
         # cleared without a hand-maintained child→parent order. Re-enabled implicitly at commit/close.
         s.execute(text("SET session_replication_role = replica"))
         cleared: dict[str, int] = {}

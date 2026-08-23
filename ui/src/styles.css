@@ -1508,3 +1508,146 @@ kbd {
   padding: 0 4px;
   margin-left: var(--sp-2);
 }
+
+/* ---- feedback to the model: the feedback loop, made visible ---- */
+.feedback {
+  margin-top: var(--sp-5);
+  padding: var(--sp-4);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  background: var(--surface-2);
+}
+.feedback__head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--sp-2);
+  margin-bottom: var(--sp-3);
+}
+.feedback__title {
+  font-size: var(--t-micro);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--ink-2);
+  font-weight: 600;
+}
+.feedback__sub {
+  font-size: var(--t-meta);
+  color: var(--ink-3);
+}
+.feedback__verdicts {
+  display: flex;
+  gap: var(--sp-2);
+  margin-bottom: var(--sp-3);
+}
+.verdict {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+  justify-content: center;
+  font-size: var(--t-meta);
+  color: var(--ink-2);
+  background: var(--surface-3);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-sm);
+  padding: 5px var(--sp-2);
+  transition:
+    border-color var(--motion),
+    color var(--motion),
+    background var(--motion);
+}
+.verdict:hover:not(:disabled) {
+  border-color: var(--ink-3);
+}
+.verdict__glyph {
+  font-family: var(--font-mono);
+  font-weight: 700;
+}
+.verdict--accurate:hover:not(:disabled),
+.verdict--accurate.verdict--on {
+  color: var(--committed);
+  border-color: color-mix(in srgb, var(--committed) 45%, transparent);
+  background: color-mix(in srgb, var(--committed) 12%, var(--surface));
+}
+.verdict--partial:hover:not(:disabled),
+.verdict--partial.verdict--on {
+  color: var(--uncertain-ink);
+  border-color: color-mix(in srgb, var(--uncertain) 45%, transparent);
+  background: color-mix(in srgb, var(--uncertain) 12%, var(--surface));
+}
+.verdict--inaccurate:hover:not(:disabled),
+.verdict--inaccurate.verdict--on {
+  color: var(--alarm);
+  border-color: color-mix(in srgb, var(--alarm) 45%, transparent);
+  background: color-mix(in srgb, var(--alarm) 12%, var(--surface));
+}
+.feedback__note {
+  width: 100%;
+  font-family: var(--font-sans);
+  font-size: var(--t-ui);
+  color: var(--ink);
+  background: var(--bg);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-sm);
+  padding: var(--sp-2);
+  resize: vertical;
+  margin-bottom: var(--sp-2);
+}
+.feedback__note:focus {
+  outline: none;
+  border-color: var(--ink-3);
+}
+.feedback__loop {
+  margin: var(--sp-2) 0 0;
+  font-size: var(--t-micro);
+  color: var(--ink-3);
+  line-height: 1.5;
+}
+.feedback__log {
+  list-style: none;
+  margin: var(--sp-3) 0 0;
+  padding: var(--sp-3) 0 0;
+  border-top: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+.feedback__item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--sp-2);
+  font-size: var(--t-meta);
+}
+.feedback__verdict-tag {
+  font-family: var(--font-mono);
+  font-size: var(--t-micro);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  padding: 1px 6px;
+  border-radius: var(--r-sm);
+  color: var(--ink-2);
+  border: 1px solid var(--line-strong);
+}
+.feedback__item--accurate .feedback__verdict-tag {
+  color: var(--committed);
+  border-color: color-mix(in srgb, var(--committed) 40%, transparent);
+}
+.feedback__item--partial .feedback__verdict-tag {
+  color: var(--uncertain-ink);
+  border-color: color-mix(in srgb, var(--uncertain) 40%, transparent);
+}
+.feedback__item--inaccurate .feedback__verdict-tag {
+  color: var(--alarm);
+  border-color: color-mix(in srgb, var(--alarm) 40%, transparent);
+}
+.feedback__comment {
+  color: var(--ink);
+  flex: 1 1 100%;
+}
+.feedback__meta {
+  font-family: var(--font-mono);
+  font-size: var(--t-micro);
+  color: var(--ink-3);
+}

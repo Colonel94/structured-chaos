@@ -1110,6 +1110,8 @@ def get_case_review(session: Session, case_id: UUID) -> dict[str, JsonValue] | N
         "analysis": analysis,
         # The human-approval stamp (Phase 7). Non-null ⇒ approved; the report gate + UI read it.
         "commit": commit_status(session, case_id),
+        # The reviewer's feedback on the model for this case (the feedback loop, visible on the case).
+        "feedback": list_case_feedback(session, case_id),
         "min_governed_confidence": min(gov_conf) if gov_conf else None,
         "normalised_text": get_case_normalised_text(session, case_id),
         "source_documents": [
@@ -1794,6 +1796,80 @@ def review_breakdown(session: Session) -> list[dict[str, JsonValue]]:
         }
         for r in rows
     ]
+
+
+def record_case_feedback(
+    session: Session, *, case_id: UUID, reviewer_id: str, verdict: str, comment: str | None
+) -> dict[str, JsonValue]:
+    """Append a reviewer's verdict on the model's extraction (``accurate``/``inaccurate``/``partial`` +
+    an optional note) — the qualitative feedback loop, independent of any field edit or approval. Returns
+    the new row. Append-only (never overwritten): each visit's judgement is its own evidence. RLS-scoped.
+    """
+    row = session.execute(
+        text(f"""
+            INSERT INTO case_feedback (tenant_id, case_id, reviewer_id, verdict, comment)
+            VALUES ({_GUC_TENANT}, :cid, :rev, :verdict, :comment)
+            RETURNING id, reviewer_id, verdict, comment, created_at
+            """),
+        {"cid": case_id, "rev": reviewer_id, "verdict": verdict, "comment": comment},
+    ).first()
+    assert row is not None  # a RETURNING insert always yields the row
+    return {
+        "id": str(row[0]),
+        "reviewer_id": row[1],
+        "verdict": row[2],
+        "comment": row[3],
+        "created_at": row[4].isoformat(),
+    }
+
+
+def list_case_feedback(session: Session, case_id: UUID) -> list[dict[str, JsonValue]]:
+    """Every feedback entry on one case, oldest first — the reviewer sees prior verdicts on this case so
+    the loop is visible (their input was recorded, not dropped). RLS-scoped."""
+    rows = session.execute(
+        text("""
+            SELECT reviewer_id, verdict, comment, created_at
+            FROM case_feedback WHERE case_id = :cid ORDER BY seq
+            """),
+        {"cid": case_id},
+    ).all()
+    return [
+        {
+            "reviewer_id": r[0],
+            "verdict": r[1],
+            "comment": r[2],
+            "created_at": r[3].isoformat(),
+        }
+        for r in rows
+    ]
+
+
+def recent_feedback(session: Session, *, limit: int = 100) -> dict[str, JsonValue]:
+    """The tenant's feedback loop OUTPUT: recent verdicts (newest first) + a verdict tally — the queue an
+    engineer works from to decide the next prompt/policy fix ($0, human-driven). RLS-scoped."""
+    rows = session.execute(
+        text("""
+            SELECT case_id, reviewer_id, verdict, comment, created_at
+            FROM case_feedback ORDER BY seq DESC LIMIT :limit
+            """),
+        {"limit": limit},
+    ).all()
+    tally = session.execute(
+        text("SELECT verdict, count(*) FROM case_feedback GROUP BY verdict")
+    ).all()
+    return {
+        "counts": {r[0]: int(r[1]) for r in tally},
+        "recent": [
+            {
+                "case_id": str(r[0]),
+                "reviewer_id": r[1],
+                "verdict": r[2],
+                "comment": r[3],
+                "created_at": r[4].isoformat(),
+            }
+            for r in rows
+        ],
+    }
 
 
 def get_source_blob_ref(session: Session, source_document_id: UUID) -> tuple[str, str] | None:

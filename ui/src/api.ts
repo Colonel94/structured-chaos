@@ -2,7 +2,14 @@
 // convention — RLS is the real isolation boundary; see engine/app/api/routes.py). Same-origin in
 // prod; via the Vite `/api` proxy in dev.
 
-import type { CaseReview, CaseSummary, FieldOptions, ReviewStats } from "./types";
+import type {
+  CaseReview,
+  CaseSummary,
+  FeedbackEntry,
+  FeedbackVerdict,
+  FieldOptions,
+  ReviewStats,
+} from "./types";
 
 const TENANT_KEY = "adaptive-intake.tenant-id";
 const REVIEWER_KEY = "adaptive-intake.reviewer-id";
@@ -163,6 +170,21 @@ export function uncommitCase(caseId: string, reviewerId: string): Promise<{ unco
 /** The tenant's review-time aggregates — the ≤30s gate the whole review UI is optimised against. */
 export function getReviewStats(): Promise<ReviewStats> {
   return get<ReviewStats>("/api/review-stats");
+}
+
+/** Give feedback on the model's extraction for a case (the feedback loop) — a verdict + optional note,
+ *  independent of correcting a field or approving. Returns the recorded entry. */
+export function postFeedback(
+  caseId: string,
+  verdict: FeedbackVerdict,
+  comment: string,
+  reviewerId: string,
+): Promise<{ feedback: FeedbackEntry }> {
+  return post(`/api/cases/${caseId}/feedback`, {
+    verdict,
+    comment: comment.trim() || null,
+    reviewer_id: reviewerId,
+  });
 }
 
 /** The allowed values per closed-vocabulary governed field — the one-key correction picks. Not tenant

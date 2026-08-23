@@ -61,6 +61,15 @@ export interface CaseAnalysis {
   next_step: string;
 }
 
+// A reviewer's verdict on the model's extraction (the feedback loop) — distinct from a field correction.
+export type FeedbackVerdict = "accurate" | "inaccurate" | "partial";
+export interface FeedbackEntry {
+  reviewer_id: string;
+  verdict: FeedbackVerdict;
+  comment: string | null;
+  created_at: string;
+}
+
 export interface CaseReview {
   case_id: string;
   channel: string;
@@ -70,6 +79,7 @@ export interface CaseReview {
   decision: Decision | null;
   analysis: CaseAnalysis | null;
   commit: Commit | null;
+  feedback: FeedbackEntry[];
   min_governed_confidence: number | null;
   normalised_text: string;
   source_documents: SourceDocument[];

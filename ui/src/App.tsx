@@ -14,6 +14,7 @@ import {
   getTenantId,
   ingestCase,
   listCases,
+  postFeedback,
   recordCorrection,
   registerCsvUrl,
   reportUrl,
@@ -28,6 +29,7 @@ import {
   type CaseReview,
   type CaseSummary,
   type Citation,
+  type FeedbackVerdict,
   type FieldOptions,
   type ReviewField,
   type ReviewStats,
@@ -491,6 +493,116 @@ function caseFingerprint(review: CaseReview): Record<string, string> {
 }
 const seenKey = (caseId: string): string => `adaptive-intake.seen.${caseId}`;
 
+const VERDICTS: { key: FeedbackVerdict; label: string; glyph: string }[] = [
+  { key: "accurate", label: "accurate", glyph: "✓" },
+  { key: "partial", label: "partial", glyph: "~" },
+  { key: "inaccurate", label: "inaccurate", glyph: "✗" },
+];
+
+/** The FEEDBACK LOOP, made visible. Distinct from correcting a field (which fixes a value) and from
+ * approving (which clears the case): here the reviewer tells the model how it did — a verdict + an
+ * optional why. It's the qualitative signal that guides the next prompt/policy fix. Honest about where it
+ * goes: collected as the model's eval + tuning set, $0, human-driven — never silent online learning. */
+function FeedbackPanel({
+  caseId,
+  reviewer,
+  feedback,
+  onSubmitted,
+}: {
+  caseId: string;
+  reviewer: string;
+  feedback: CaseReview["feedback"];
+  onSubmitted: () => void;
+}) {
+  const [verdict, setVerdict] = useState<FeedbackVerdict | null>(null);
+  const [comment, setComment] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  // Reset the draft when the case changes (prior verdicts still render from `feedback`).
+  useEffect(() => {
+    setVerdict(null);
+    setComment("");
+    setErr(null);
+  }, [caseId]);
+
+  async function submit(v: FeedbackVerdict) {
+    setBusy(true);
+    setErr(null);
+    try {
+      await postFeedback(caseId, v, comment, reviewer);
+      setVerdict(null);
+      setComment("");
+      onSubmitted();
+    } catch (e) {
+      setErr((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="feedback">
+      <div className="feedback__head">
+        <span className="feedback__title">feedback to the model</span>
+        <span className="feedback__sub">how did the extraction do?</span>
+      </div>
+      <div className="feedback__verdicts">
+        {VERDICTS.map((v) => (
+          <button
+            key={v.key}
+            type="button"
+            className={`verdict verdict--${v.key}${verdict === v.key ? " verdict--on" : ""}`}
+            disabled={busy}
+            // A verdict with no note submits on click; with a note, click sets it and "send" posts it.
+            onClick={() => (comment.trim() ? setVerdict(v.key) : void submit(v.key))}
+          >
+            <span className="verdict__glyph">{v.glyph}</span>
+            {v.label}
+          </button>
+        ))}
+      </div>
+      <textarea
+        className="feedback__note"
+        placeholder="optional — what did it get right or wrong, and why? (guides the next prompt fix)"
+        value={comment}
+        onChange={(e) => setComment(e.target.value)}
+        disabled={busy}
+        rows={2}
+      />
+      {comment.trim() && (
+        <button
+          type="button"
+          className="primary primary--sm"
+          disabled={busy || !verdict}
+          onClick={() => verdict && void submit(verdict)}
+          title={verdict ? "" : "pick a verdict above first"}
+        >
+          {busy ? "sending…" : verdict ? `send "${verdict}" + note` : "pick a verdict above"}
+        </button>
+      )}
+      {err && <div className="banner banner--error">{err}</div>}
+      <p className="feedback__loop">
+        Your feedback and field corrections are collected as the model’s eval + tuning set — they shape
+        prompt and policy fixes. $0, human-driven; no data leaves.
+      </p>
+      {feedback.length > 0 && (
+        <ul className="feedback__log">
+          {feedback.map((f, i) => (
+            <li key={i} className={`feedback__item feedback__item--${f.verdict}`}>
+              <span className="feedback__verdict-tag">{f.verdict}</span>
+              {f.comment && <span className="feedback__comment">{f.comment}</span>}
+              <span className="feedback__meta">
+                {f.reviewer_id} · {new Date(f.created_at).toLocaleString()}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 function CaseDetail({
   review,
   reviewer,
@@ -837,6 +949,14 @@ function CaseDetail({
               Select a field (or press <kbd>j</kbd>) to trace its source — the exact sentence, audio
               segment, or image region it was read from.
             </div>
+          )}
+          {!failed && (
+            <FeedbackPanel
+              caseId={review.case_id}
+              reviewer={reviewer}
+              feedback={review.feedback}
+              onSubmitted={onReload}
+            />
           )}
           {showJson && <pre className="json">{JSON.stringify(review, null, 2)}</pre>}
         </aside>

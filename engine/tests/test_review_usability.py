@@ -285,6 +285,87 @@ async def test_review_breakdown_ties_corrections_to_case_time(
         app.dependency_overrides.clear()
 
 
+async def test_feedback_records_surfaces_and_tallies(
+    admin_session: Session, app_factory: sessionmaker[Session]
+) -> None:
+    """A reviewer's model-feedback is recorded, shows on the case review, appears in the tenant feedback
+    loop with a tally, and is allowed even after the case is committed (feedback ≠ re-opening the record).
+    """
+    tenant = api.create_tenant(admin_session, "Feedback-Co")
+    admin_session.commit()
+    case_id = await _seed_case(tenant, app_factory)
+    headers = {"X-Tenant-Id": str(tenant)}
+    try:
+        client = _client(app_factory)
+        # Commit first — feedback on the model must still be allowed on an approved case.
+        client.post(f"/api/cases/{case_id}/commit", headers=headers, json={"reviewer_id": "r1"})
+        r = client.post(
+            f"/api/cases/{case_id}/feedback",
+            headers=headers,
+            json={"reviewer_id": "r1", "verdict": "inaccurate", "comment": "missed the anchor"},
+        )
+        assert r.status_code == 200
+        assert r.json()["feedback"]["verdict"] == "inaccurate"
+
+        # It surfaces on the case review…
+        review = client.get(f"/api/cases/{case_id}", headers=headers).json()
+        assert review["feedback"][0]["comment"] == "missed the anchor"
+        # …and in the tenant-wide feedback loop with a tally.
+        loop = client.get("/api/feedback", headers=headers).json()
+        assert loop["counts"] == {"inaccurate": 1}
+        assert loop["recent"][0]["case_id"] == str(case_id)
+    finally:
+        app.dependency_overrides.clear()
+
+
+async def test_feedback_rejects_bad_verdict_and_missing_case(
+    admin_session: Session, app_factory: sessionmaker[Session]
+) -> None:
+    """An unknown verdict is a 400; a case absent for this tenant is a fail-closed 404."""
+    tenant = api.create_tenant(admin_session, "FeedbackGuard-Co")
+    admin_session.commit()
+    case_id = await _seed_case(tenant, app_factory)
+    headers = {"X-Tenant-Id": str(tenant)}
+    try:
+        client = _client(app_factory)
+        bad = client.post(
+            f"/api/cases/{case_id}/feedback",
+            headers=headers,
+            json={"reviewer_id": "r1", "verdict": "meh"},
+        )
+        assert bad.status_code == 400
+        missing = client.post(
+            f"/api/cases/{tenant}/feedback",  # a valid UUID that is not a case
+            headers=headers,
+            json={"reviewer_id": "r1", "verdict": "accurate"},
+        )
+        assert missing.status_code == 404
+    finally:
+        app.dependency_overrides.clear()
+
+
+async def test_feedback_loop_is_tenant_isolated(
+    admin_session: Session, app_factory: sessionmaker[Session]
+) -> None:
+    """One tenant's model-feedback never appears in another's loop (RLS)."""
+    tenant_a = api.create_tenant(admin_session, "FbIso-A")
+    tenant_b = api.create_tenant(admin_session, "FbIso-B")
+    admin_session.commit()
+    case_a = await _seed_case(tenant_a, app_factory)
+    try:
+        client = _client(app_factory)
+        client.post(
+            f"/api/cases/{case_a}/feedback",
+            headers={"X-Tenant-Id": str(tenant_a)},
+            json={"reviewer_id": "r1", "verdict": "accurate"},
+        )
+        loop_b = client.get("/api/feedback", headers={"X-Tenant-Id": str(tenant_b)}).json()
+        assert loop_b["counts"] == {}
+        assert loop_b["recent"] == []
+    finally:
+        app.dependency_overrides.clear()
+
+
 def test_field_options_match_the_extraction_schema(
     app_factory: sessionmaker[Session],
 ) -> None:

@@ -206,6 +206,16 @@ single lever on review time: a mis-classification becomes one keystroke, not typ
 *allowed* set (from `/api/field-options`), not a claimed likelihood ranking (no per-value probability
 exists).
 
+**Feedback to the model — the feedback loop, made visible (new 2026-08-24).** Distinct from correcting a
+field (fixes a *value* → `field_correction`) and from approving (clears the case): a right-panel affordance
+lets the reviewer give a verdict on the extraction — `✓ accurate` / `~ partial` / `✗ inaccurate` (green /
+amber / red, the existing signal palette) + an optional "what did it get right/wrong, and why" note. It
+posts to `case_feedback` (append-only, `POST /api/cases/{id}/feedback`), shows the case's prior verdicts,
+and states honestly where it goes: *"collected as the model's eval + tuning set — they shape prompt and
+policy fixes. $0, human-driven; no data leaves"* (never online fine-tuning, Directive 2). The tenant-wide
+loop output is `GET /api/feedback` (verdict tally + recent). This answers "where is the feedback loop" — it
+was previously only the invisible correction log; now it's a first-class, visible action.
+
 **Triage + batch approve (new 2026-08-23).** The register splits into a "nothing flagged for review" band
 (every governed field above the 0.5 flag line) and the needs-you remainder; `approve all N clean` clears
 the whole band in one act (still a per-case human approval, §3). Honest: "nothing flagged" is a class-level
