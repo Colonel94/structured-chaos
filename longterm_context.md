@@ -37,7 +37,7 @@ live-testing (voice/image/text) → turn each failing case into a prompt/policy 
 
 > ## ✅ CURRENT STATE + NEXT STEPS (2026-08-21 — clean top-of-mind summary; the per-build bullets + dated SESSION HANDOFF notes below are detail + audit trail)
 >
-> **GIT:** `HEAD @ 73bcef0` (sentiment trajectory), tree clean, **all pushed**. **20 migrations, 248 tests +1 skip**, ruff/black/mypy(app) + UI tsc clean.
+> **GIT:** `HEAD @ 61f000d` (sentiment trajectory + peak decay/scope), tree clean, **all pushed**. **20 migrations, 249 tests +1 skip**, ruff/black/mypy(app) + UI tsc clean.
 >
 > ## ⇢ NEXT SESSION — START HERE (2026-08-23 — SENTIMENT TRAJECTORY, on top of the 2026-08-22 hardening below)
 > **Owner: "enhance sentiment analysis" (CallMiner best practices + others).** Built + tested + LIVE-verified, pushed (`73bcef0`).
