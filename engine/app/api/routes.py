@@ -326,6 +326,16 @@ def get_review_stats(x_tenant_id: TenantHeader, factory: FactoryDep) -> dict[str
         return api.review_stats(s)
 
 
+@router.get("/review-breakdown")
+def get_review_breakdown(x_tenant_id: TenantHeader, factory: FactoryDep) -> dict[str, Any]:
+    """WHICH corrections are costing the review time — per field, how many approved cases corrected it and
+    the median review time of those cases (slowest first). The diagnostic that turns the single median into
+    an actionable "where is it going" when it comes back high. Correlational (see ``api.review_breakdown``).
+    """
+    with tenant_session(_tenant(x_tenant_id), factory=factory) as s:
+        return {"fields": api.review_breakdown(s)}
+
+
 @router.get("/field-options")
 def get_field_options() -> dict[str, list[str]]:
     """The allowed values for each closed-vocabulary governed field — the source of the review UI's one-key

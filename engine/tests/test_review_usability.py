@@ -253,6 +253,38 @@ async def test_uncommit_absent_case_is_404(
         app.dependency_overrides.clear()
 
 
+async def test_review_breakdown_ties_corrections_to_case_time(
+    admin_session: Session, app_factory: sessionmaker[Session]
+) -> None:
+    """The breakdown attributes a case's measured review time to the fields corrected in it — so a high
+    median has a per-field culprit list. A field never corrected does not appear."""
+    tenant = api.create_tenant(admin_session, "Breakdown-Co")
+    admin_session.commit()
+    case_id = await _seed_case(tenant, app_factory)
+    headers = {"X-Tenant-Id": str(tenant)}
+    try:
+        client = _client(app_factory)
+        # Correct one field, then approve with a measured time.
+        client.post(
+            f"/api/cases/{case_id}/corrections",
+            headers=headers,
+            json={"field_path": "desired_outcome", "new_value": "replacement", "reviewer_id": "r1"},
+        )
+        client.post(
+            f"/api/cases/{case_id}/commit",
+            headers=headers,
+            json={"reviewer_id": "r1", "review_ms": 30000, "fields_edited": 1},
+        )
+        fields = client.get("/api/review-breakdown", headers=headers).json()["fields"]
+        by_path = {f["field_path"]: f for f in fields}
+        assert by_path["desired_outcome"]["cases"] == 1
+        assert by_path["desired_outcome"]["median_ms"] == 30000.0
+        # A field the reviewer never touched is not attributed any time.
+        assert "category" not in by_path
+    finally:
+        app.dependency_overrides.clear()
+
+
 def test_field_options_match_the_extraction_schema(
     app_factory: sessionmaker[Session],
 ) -> None:

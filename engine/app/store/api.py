@@ -1765,6 +1765,37 @@ def review_stats(session: Session) -> dict[str, JsonValue]:
     }
 
 
+def review_breakdown(session: Session) -> list[dict[str, JsonValue]]:
+    """WHICH corrections are costing the review time — the per-field companion to ``review_stats``' single
+    number. For each field a reviewer corrected, across cases that were approved WITH a measured time:
+    how many such cases corrected it, and the median review time of those cases. When the headline median
+    comes back high, this says where it's going.
+
+    CORRELATIONAL, not causal: a slow case may carry several edits and this attributes its whole time to
+    each field it corrected — so read a row as "cases where <field> was corrected took ~Nms", never
+    "correcting <field> costs Nms". Sourced by JOINING the append-only correction log (which field —
+    ``field_correction`` is the asset, §3) to ``review_event`` (how long); no state is duplicated. Ordered
+    slowest-median first (the likely culprit on top). RLS scopes both tables to the tenant."""
+    rows = session.execute(text("""
+            SELECT fc.field_path,
+                   count(DISTINCT re.case_id) AS n_cases,
+                   percentile_cont(0.5) WITHIN GROUP (ORDER BY re.review_ms) AS median_ms
+            FROM review_event re
+            JOIN field_correction fc ON fc.case_id = re.case_id
+            WHERE re.review_ms IS NOT NULL
+            GROUP BY fc.field_path
+            ORDER BY median_ms DESC NULLS LAST, n_cases DESC
+            """)).all()
+    return [
+        {
+            "field_path": r[0],
+            "cases": int(r[1]),
+            "median_ms": float(r[2]) if r[2] is not None else None,
+        }
+        for r in rows
+    ]
+
+
 def get_source_blob_ref(session: Session, source_document_id: UUID) -> tuple[str, str] | None:
     """The ``(blob_key, mime)`` for a source document, so the provenance route can stream the original
     (audio/image) a reviewer clicks through to. RLS-scoped: a document outside the tenant reads as None
