@@ -90,6 +90,18 @@ export interface CaseSummary {
   committed_at: string | null;
 }
 
+// The tenant's review-time aggregates (GET /api/review-stats) — the ≤30s load-bearing gate.
+export interface ReviewStats {
+  count: number;
+  median_ms: number | null;
+  p90_ms: number | null;
+  avg_fields_edited: number;
+}
+
+// The allowed values per closed-vocabulary governed field (GET /api/field-options) — the one-key
+// correction picks. Sourced from the extraction schema so they never drift from what the model emits.
+export type FieldOptions = Record<string, string[]>;
+
 // The governed core in review order — the small, stable, human-controlled layer (CLAUDE.md §4).
 // A governed field absent from the payload is a refuse-to-guess absence (the customer never stated
 // it), rendered explicitly rather than silently filled.

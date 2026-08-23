@@ -33,6 +33,11 @@ from ..store.db import SessionFactory, tenant_session
 
 router = APIRouter(prefix="/api")
 
+# The grace window during which a fresh approval can be undone (api.uncommit_case). Lets the review UI
+# commit on a single keystroke — the fast path — with a brief, honest "undo" instead of the slower
+# arm/confirm two-step. Server-authoritative: past this, the approval is durable (DESIGN.md §10).
+UNDO_WINDOW_SECONDS = 15
+
 
 class CorrectionIn(BaseModel):
     """A reviewer's edit to one field — appended to the correction log (never overwrites), then the
@@ -46,9 +51,26 @@ class CorrectionIn(BaseModel):
 
 
 class CommitIn(BaseModel):
-    """The human-approval act — who is approving. Turns on the commit gate (a report may then issue)."""
+    """The human-approval act — who is approving. Turns on the commit gate (a report may then issue).
+
+    ``review_ms``/``fields_edited`` are the CLIENT-measured cost of clearing this case (only the browser
+    knows when a human actually started looking). Optional so a non-instrumented caller still commits; when
+    present they are logged once (``review_event``) for the ≤30s review-time gate (winning-condition §4).
+    """
 
     reviewer_id: str
+    review_ms: int | None = None
+    fields_edited: int = 0
+
+
+class CommitBatchIn(BaseModel):
+    """Approve several cases at once — the reviewer's single act of clearing a whole reliability band (still
+    a human approval per §3, just amortised). ``review_ms`` is the time spent on the batch; it is split
+    evenly across the cases as each one's measured cost so the median stays honest."""
+
+    reviewer_id: str
+    case_ids: list[str]
+    review_ms: int | None = None
 
 
 def get_factory() -> sessionmaker[Session]:
@@ -232,13 +254,91 @@ def post_commit(
     case_id: str, body: CommitIn, x_tenant_id: TenantHeader, factory: FactoryDep
 ) -> dict[str, Any]:
     """Approve a case (the commit gate). One-way + idempotent: a re-commit returns the original stamp,
-    never re-attributing it. After this, and only after this, a report may be issued (§3)."""
+    never re-attributing it. After this, and only after this, a report may be issued (§3). The measured
+    review time is logged once (for the ≤30s gate). Returns the undo window so the UI can offer a brief,
+    honest undo of a fresh, accidental approval."""
     cid = _case_uuid(case_id)
     with tenant_session(_tenant(x_tenant_id), factory=factory) as s:
         result = api.commit_case(s, cid, reviewer_id=body.reviewer_id)
+        if result is None:
+            raise HTTPException(status_code=404, detail="case not found")
+        api.record_review_event(
+            s,
+            case_id=cid,
+            reviewer_id=body.reviewer_id,
+            review_ms=body.review_ms,
+            fields_edited=body.fields_edited,
+        )
+    return {"commit": result, "undo_window_seconds": UNDO_WINDOW_SECONDS}
+
+
+@router.post("/cases/commit-batch")
+def post_commit_batch(
+    body: CommitBatchIn, x_tenant_id: TenantHeader, factory: FactoryDep
+) -> dict[str, Any]:
+    """Approve several cases in one act — the reviewer clears a whole high-reliability band at once. Each
+    commit is the same one-way, idempotent human approval (§3); a case already committed just returns its
+    stamp. The batch's ``review_ms`` is split evenly as each case's measured cost. Absent/cross-tenant ids
+    are reported in ``failed`` (fail-closed), never a leak."""
+    tid = _tenant(x_tenant_id)
+    ids = [_case_uuid(c) for c in body.case_ids]
+    per_case_ms = round(body.review_ms / len(ids)) if body.review_ms is not None and ids else None
+    committed: list[str] = []
+    failed: list[str] = []
+    with tenant_session(tid, factory=factory) as s:
+        for cid in ids:
+            result = api.commit_case(s, cid, reviewer_id=body.reviewer_id)
+            if result is None:
+                failed.append(str(cid))
+                continue
+            api.record_review_event(
+                s, case_id=cid, reviewer_id=body.reviewer_id, review_ms=per_case_ms, fields_edited=0
+            )
+            committed.append(str(cid))
+    return {"committed": committed, "failed": failed}
+
+
+@router.post("/cases/{case_id}/uncommit")
+def post_uncommit(
+    case_id: str, body: CommitIn, x_tenant_id: TenantHeader, factory: FactoryDep
+) -> dict[str, Any]:
+    """Undo a just-approved case within the grace window (``UNDO_WINDOW_SECONDS``). 409 if the case is not
+    committed or the window has passed (the approval is durable); 404 if absent for this tenant. This is
+    what makes single-keystroke commit safe — an accidental approval is reversible for a few seconds, and
+    permanent after (DESIGN.md §10)."""
+    cid = _case_uuid(case_id)
+    with tenant_session(_tenant(x_tenant_id), factory=factory) as s:
+        if api.get_case_channel(s, cid) is None:  # None ⇒ absent for this tenant (RLS fail-closed)
+            raise HTTPException(status_code=404, detail="case not found")
+        result = api.uncommit_case(s, cid, window_seconds=UNDO_WINDOW_SECONDS)
     if result is None:
-        raise HTTPException(status_code=404, detail="case not found")
-    return {"commit": result}
+        raise HTTPException(
+            status_code=409, detail="approval is final — the undo window has passed"
+        )
+    return {"uncommitted": result}
+
+
+@router.get("/review-stats")
+def get_review_stats(x_tenant_id: TenantHeader, factory: FactoryDep) -> dict[str, Any]:
+    """The tenant's review-time aggregates — count, median/p90 ms, avg fields edited. The load-bearing
+    ≤30s gate lives here (winning-condition §4)."""
+    with tenant_session(_tenant(x_tenant_id), factory=factory) as s:
+        return api.review_stats(s)
+
+
+@router.get("/field-options")
+def get_field_options() -> dict[str, list[str]]:
+    """The allowed values for each closed-vocabulary governed field — the source of the review UI's one-key
+    correction picks. Sourced from the extraction schema so the picks can never drift from what the model
+    is constrained to emit. Not tenant data (a fixed universal vocabulary), so no header needed."""
+    from ..extract.schema import DESIRED_OUTCOMES, EMOTIONS, SEVERITIES, TAXONOMY
+
+    return {
+        "category": list(TAXONOMY),
+        "desired_outcome": list(DESIRED_OUTCOMES),
+        "emotion_signal": list(EMOTIONS),
+        "severity_signal": list(SEVERITIES),
+    }
 
 
 @router.get("/cases/{case_id}/report.pdf")

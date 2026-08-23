@@ -1695,6 +1695,76 @@ def commit_case(
     return commit_status(session, case_id)
 
 
+def uncommit_case(
+    session: Session, case_id: UUID, *, window_seconds: int
+) -> dict[str, JsonValue] | None:
+    """Undo an approval **within a grace window** — the honest safety net that lets the review UI commit
+    on a single keystroke instead of a two-step arm/confirm (DESIGN.md §10; the owner-blessed long-term
+    answer to commit irreversibility). Clears the stamp and moves the case back to ``in_review`` ONLY if it
+    was committed within the last ``window_seconds`` (server-authoritative clock). Past the window the
+    approval is durable and this is a no-op — so an old approval can never be silently reversed.
+
+    Nothing external fires on commit alone (a report is pulled on demand, §3), so undoing a fresh,
+    accidental approval before any report is issued leaves no external trace. Returns ``{"case_id"}`` on a
+    successful undo, or None if the case is absent for this tenant / not committed / outside the window.
+    """
+    row = session.execute(
+        text("""
+            UPDATE case_record
+            SET committed_at = NULL, committed_by = NULL, case_state = 'in_review'
+            WHERE id = :cid
+              AND committed_at IS NOT NULL
+              AND committed_at > now() - make_interval(secs => :w)
+            RETURNING id
+            """),
+        {"cid": case_id, "w": window_seconds},
+    ).first()
+    return None if row is None else {"case_id": str(row[0])}
+
+
+def record_review_event(
+    session: Session,
+    *,
+    case_id: UUID,
+    reviewer_id: str,
+    review_ms: int | None,
+    fields_edited: int,
+) -> None:
+    """Record how long the approving reviewer had this case open and how many fields they corrected — the
+    measured cost of clearing a case (the ≤30s review-time gate, winning-condition §4). Written once per
+    case: ``ON CONFLICT DO NOTHING`` so an idempotent re-commit (or undo→re-approve) keeps the first
+    honest measurement instead of double-counting. RLS-scoped."""
+    session.execute(
+        text(f"""
+            INSERT INTO review_event (tenant_id, case_id, reviewer_id, review_ms, fields_edited)
+            VALUES ({_GUC_TENANT}, :cid, :rev, :ms, :edits)
+            ON CONFLICT (tenant_id, case_id) DO NOTHING
+            """),
+        {"cid": case_id, "rev": reviewer_id, "ms": review_ms, "edits": fields_edited},
+    )
+
+
+def review_stats(session: Session) -> dict[str, JsonValue]:
+    """Aggregate review-time for the current tenant: how many cases have a measured approval time and the
+    median / p90 in milliseconds. The number the whole review UI is optimised against (≤30s median). RLS
+    scopes it to the tenant; only rows with a measured ``review_ms`` count."""
+    row = session.execute(text("""
+            SELECT count(review_ms),
+                   percentile_cont(0.5) WITHIN GROUP (ORDER BY review_ms),
+                   percentile_cont(0.9) WITHIN GROUP (ORDER BY review_ms),
+                   coalesce(avg(fields_edited), 0)
+            FROM review_event
+            WHERE review_ms IS NOT NULL
+            """)).first()
+    n = int(row[0]) if row is not None else 0
+    return {
+        "count": n,
+        "median_ms": float(row[1]) if row is not None and row[1] is not None else None,
+        "p90_ms": float(row[2]) if row is not None and row[2] is not None else None,
+        "avg_fields_edited": float(row[3]) if row is not None and row[3] is not None else 0.0,
+    }
+
+
 def get_source_blob_ref(session: Session, source_document_id: UUID) -> tuple[str, str] | None:
     """The ``(blob_key, mime)`` for a source document, so the provenance route can stream the original
     (audio/image) a reviewer clicks through to. RLS-scoped: a document outside the tenant reads as None

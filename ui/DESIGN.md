@@ -180,19 +180,37 @@ mono treatment and a small `RULES` tag, visually separated from anything model-g
 pill, neutral ramp) · routing · SLA (mono, tabular, due time) · the one-sentence rationale in plain
 authoritative type. It should feel deterministic and distinct from the extracted fields above it.
 
-**The commit gate — visible, weighty, and keyboard-native (RESOLVED, owner call 2).** Pre-approval: a
-prominent `approve` action; **no report button exists**. **The confirmation is a two-step with DIFFERENT
-keys: `c` ARMS, `Enter` COMMITS** — never `c` twice. Commit is a one-way stamp (first-writer-wins;
-corrections 409 afterwards, no undo), and a reviewer hammering `c` at 30s/case *will* double-tap — a
-same-key confirm makes the fastest reviewer the most likely to irreversibly commit a half-read case.
-Arming shows an inline amber `press Enter to approve · Esc to cancel` for ~3s; `Enter` commits, `Esc` or
-timeout disarms. Fully keyboard, no `window.confirm()` (dropped — it broke the keyboard flow anyway). On
-approval the chrome transforms: a `--committed` green seal stamps `APPROVED · <reviewer> · <timestamp>`
-(mono), a green left-edge on the case, the approve action replaced by `report (r)`. Pre-approval vs
-committed is unmistakable across the room.
+**The commit gate — visible, weighty, and keyboard-native (UPDATED 2026-08-23: single-key `c` + undo
+window, superseding the `c`-arms/`Enter` two-step).** Pre-approval: a prominent `approve (c)` action;
+**no report button exists**. **`c` commits immediately** — no arming step — because the previously-deferred
+**undo window is now built** (engine `POST /api/cases/{id}/uncommit`, `UNDO_WINDOW_SECONDS`). This is the
+owner-blessed long-term answer to commit irreversibility that the old two-step was a stopgap for: instead
+of taxing *every* approval to guard against a rare double-tap, a fresh approval is reversible for a few
+seconds and durable after. On approval a green **undo toast** appears — `Approved. Nothing external has
+been issued yet — you can still undo. undo (Ns) · u` — counting down; `u` (or the button) reverts the case
+to `in_review` within the window, 409 after. Nothing external fires on commit alone (the report is pulled
+on demand, §3), so undoing before any report is issued leaves no external trace. The chrome still
+transforms on approval: a `--committed` green seal stamps `APPROVED · <reviewer>`, a green left-edge on the
+case, the approve action replaced by `report (r)`; the HUD freezes at `done`. Pre-approval vs committed is
+unmistakable across the room.
 
-*Logged for later (engine, out of scope here): the better long-term answer is a short **undo window**
-after an immediate `c` commit, rather than any pre-confirmation — see longterm_context §0 deferred.*
+**Review-time HUD (new 2026-08-23).** Because τ=1.01 routes nothing automatically, every case is cleared
+by a human and **time-to-approve is the load-bearing gate** (winning-condition §4, ≤30s). The case header
+carries a live `⏱ <elapsed> · median <tenant median> (n)` readout — amber once a case passes 30s — so the
+number being optimised is visible while working, not discovered after. Measured client-side (only the
+browser knows when a human started looking) and logged at approval (`review_event`).
+
+**One-key correction (new 2026-08-23).** For a closed-vocabulary governed field the allowed values render
+as number-key picks (`CORRECT TO — PRESS THE NUMBER`, `1`–`9`, current value excluded) — the biggest
+single lever on review time: a mis-classification becomes one keystroke, not typing. Honest label: the
+*allowed* set (from `/api/field-options`), not a claimed likelihood ranking (no per-value probability
+exists).
+
+**Triage + batch approve (new 2026-08-23).** The register splits into a "nothing flagged for review" band
+(every governed field above the 0.5 flag line) and the needs-you remainder; `approve all N clean` clears
+the whole band in one act (still a per-case human approval, §3). Honest: "nothing flagged" is a class-level
+band, not a per-case safety guarantee (§10 CORRECTION) — the floor is the same 0.5 line the flag uses, so
+it's reachable, unlike an aspirational high-confidence threshold on a MIN-of-products signal.
 
 **The empty register is a first impression, designed.** A new tenant sees a quiet centred state: one
 line naming what this screen is, and the `+ submit your first case` action — never a blank rail.
@@ -245,7 +263,7 @@ own container.
 
 ## 8. Non-negotiables — how the design keeps each
 
-- **Keyboard flow sacred** (`j/k n/p e r ?` unchanged; approve is now `c` arm → `Enter` commit, §10):
+- **Keyboard flow sacred** (`j/k n/p e r ?` unchanged; `1`–`9` one-key correction, `c` commits, `u` undoes, §10):
   no visual change costs a keystroke. Selection and focus states are re-skinned, not re-wired. The
   approve change makes the gate *more* keyboard-native (drops the browser modal), not less.
 - **Uncertainty is the primary signal:** the amber confidence spine (§6) is the single loudest thing.
@@ -261,13 +279,20 @@ The title text **"Adaptive Intake — Review"**, an input with **`aria-label` ma
 the empty-state text **"Set a tenant id to load cases."** all remain. `pnpm tsc` + `pnpm vitest` stay
 green, tests unmodified.
 
-## 10. Speed-vs-weight on approve — RESOLVED (owner call 2)
+## 10. Speed-vs-weight on approve — RESOLVED, then SUPERSEDED 2026-08-23 (undo window built)
 
-Today `c` fires a browser `window.confirm()` — breaks keyboard flow and taxes every approval.
-**Resolution: `c` arms, `Enter` commits (different keys — never `c` twice), `window.confirm()` dropped.**
-Different keys break the double-tap muscle-memory chain, so a fast reviewer can't irreversibly commit a
-half-read case by a stray repeat; still fully keyboard, still deliberate. See §6 for the armed-state
-detail. Long-term better answer (undo window instead of confirmation) logged as deferred engine work.
+History: `c` first fired a browser `window.confirm()` (broke keyboard flow); owner call 2 replaced it with
+`c` ARMS / `Enter` COMMITS (different keys, so a double-tap can't commit). That two-step was always a
+stopgap for the real fix, which was logged as deferred engine work: an **undo window**.
+
+**Now built (2026-08-23): `c` commits immediately + a short undo window** (`POST /api/cases/{id}/uncommit`,
+`UNDO_WINDOW_SECONDS`, `u` to undo). This is strictly better on review time — it stops taxing *every*
+approval to guard against a *rare* accidental one — and it is honest: nothing external happens on commit
+alone (the report is pulled on demand, §3), so a fresh approval reversed within the window leaves no trace.
+Past the window the approval is durable (server-authoritative clock). The arm/`Enter` two-step is retired.
+See §6 for the toast + HUD detail. *(This changes owner call 2; it realises the successor the owner had
+already blessed as the long-term answer — flagged here so it's a visible, logged decision, not a silent
+drift.)*
 
 ## 11. New dependencies (justified, permissive)
 

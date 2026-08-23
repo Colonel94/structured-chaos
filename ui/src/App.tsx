@@ -3,11 +3,14 @@ import { useHotkeys } from "react-hotkeys-hook";
 import AudioProvenance, { type AudioSegment } from "./AudioProvenance";
 import ImageProvenance from "./ImageProvenance";
 import {
+  commitBatch,
   commitCase,
   docUrl,
   fetchBlobUrl,
   getCase,
+  getFieldOptions,
   getReviewerId,
+  getReviewStats,
   getTenantId,
   ingestCase,
   listCases,
@@ -16,6 +19,7 @@ import {
   reportUrl,
   setReviewerId,
   setTenantId,
+  uncommitCase,
   uploadObjects,
   type ObjectUploadResult,
 } from "./api";
@@ -24,9 +28,27 @@ import {
   type CaseReview,
   type CaseSummary,
   type Citation,
+  type FieldOptions,
   type ReviewField,
+  type ReviewStats,
   type SourceDocument,
 } from "./types";
+
+// The line above which a case is "clean" — i.e. the system flagged NOTHING on it for review. This is the
+// SAME 0.5 line the whole UI already uses for the amber "needs review" flag (confBand/confidenceLabel/the
+// register), so "clean" means exactly "no field fell to the needs-review flag" — an honest, reachable band,
+// not an aspirational high-confidence claim (case confidence is a MIN of per-CLASS reliability × grounding
+// and tops out well below 0.9, so a 0.85 floor would sit permanently empty — the §10 capped-input trap).
+// A null confidence (no governed signal) is NOT clean — it goes to the needs-you band.
+const CLEAN_BAND_FLOOR = 0.5;
+
+/** ms → a compact human duration for the review-time HUD ("24s", "1m 30s", "—"). */
+function fmtDuration(ms: number | null): string {
+  if (ms === null || !Number.isFinite(ms)) return "—";
+  const s = Math.round(ms / 1000);
+  if (s < 60) return `${s}s`;
+  return `${Math.floor(s / 60)}m ${s % 60}s`;
+}
 
 // The review screen — a verification INSTRUMENT (DESIGN.md). A reviewer clears a case in under 30s from
 // the keyboard, tracing every value to its exact source (sentence / audio segment / image region) and
@@ -177,11 +199,13 @@ function GovernedField({
   field,
   onSelect,
   active,
+  changed,
 }: {
   path: string;
   field: ReviewField | undefined;
   onSelect: () => void;
   active: boolean;
+  changed: boolean;
 }) {
   const label = path.replace(/_/g, " ");
   // A governed field absent from the payload is a refuse-to-guess absence — a first-class, deliberate
@@ -203,10 +227,17 @@ function GovernedField({
   return (
     <button
       type="button"
-      className={`field field--button${wide}${bandClass}${active ? " field--active" : ""}`}
+      className={`field field--button${wide}${bandClass}${active ? " field--active" : ""}${changed ? " field--changed" : ""}`}
       onClick={onSelect}
     >
-      <div className="field__label">{label}</div>
+      <div className="field__label">
+        {label}
+        {changed && (
+          <span className="field__changed" title="changed since you last reviewed this case">
+            changed
+          </span>
+        )}
+      </div>
       <div className="field__value">{formatValue(field.value)}</div>
       {field.confidence !== null ? (
         <span className="field__conf" data-flagged={flagged}>
@@ -220,16 +251,22 @@ function GovernedField({
   );
 }
 
-/** The provenance + metadata detail for the selected field, plus inline correction (until committed). */
+/** The provenance + metadata detail for the selected field, plus inline correction (until committed).
+ * For a closed-vocabulary governed field the allowed values are offered as ONE-KEY picks (1–9) — the
+ * biggest single lever on review time: correcting a mis-classified field becomes a keystroke, not typing
+ * (the plan's frontend #2). `options` are the field's enum values from /api/field-options (honest: the
+ * allowed set, not a claimed likelihood ranking — no per-value probability exists). */
 function FieldDetail({
   field,
   docs,
   editable,
+  options,
   onCorrect,
 }: {
   field: ReviewField;
   docs: Map<string, SourceDocument>;
   editable: boolean;
+  options: string[] | undefined;
   onCorrect: (fieldPath: string, newValue: string) => Promise<void>;
 }) {
   const [editing, setEditing] = useState(false);
@@ -241,6 +278,13 @@ function FieldDetail({
     setEditing(true);
   }, [field.value]);
 
+  // The one-key picks: the allowed values minus the current one, capped at 9 (digit keys), first-9 shown.
+  const picks = useMemo(() => {
+    if (!options) return [];
+    const current = formatValue(field.value);
+    return options.filter((o) => o !== current).slice(0, 9);
+  }, [options, field.value]);
+
   // `e` from the case screen opens the editor for the selected field.
   useEffect(() => {
     setEditing(false);
@@ -249,6 +293,18 @@ function FieldDetail({
     if (editing) inputRef.current?.focus();
   }, [editing]);
   useHotkeys("e", () => editable && begin(), { enabled: editable }, [editable, begin]);
+
+  // 1–9 pick a value for a closed-vocab field without typing (disabled while the free-text editor is open,
+  // so a digit typed into the input isn't stolen).
+  useHotkeys(
+    "1,2,3,4,5,6,7,8,9",
+    (e) => {
+      const idx = Number((e as KeyboardEvent).key) - 1;
+      if (idx >= 0 && idx < picks.length) void onCorrect(field.field_path, picks[idx]);
+    },
+    { enabled: editable && !editing && picks.length > 0 },
+    [editable, editing, picks, field.field_path, onCorrect],
+  );
 
   async function save() {
     await onCorrect(field.field_path, draft);
@@ -265,6 +321,25 @@ function FieldDetail({
           </button>
         )}
       </div>
+
+      {editable && !editing && picks.length > 0 && (
+        <div className="picks">
+          <div className="picks__label">correct to — press the number</div>
+          <div className="picks__row">
+            {picks.map((p, i) => (
+              <button
+                key={p}
+                type="button"
+                className="pick"
+                onClick={() => void onCorrect(field.field_path, p)}
+              >
+                <span className="pick__key">{i + 1}</span>
+                {p.replace(/_/g, " ")}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       {editing ? (
         <div className="edit">
@@ -406,14 +481,28 @@ function AnalysisPanel({ review }: { review: CaseReview }) {
 
 // ---- one case ----
 
+/** The value of every field, keyed by path — the snapshot diff-on-return compares against, so a case that
+ * REOPENS after new customer messages (re-extraction) highlights only what changed since the reviewer last
+ * looked, instead of forcing them to re-read an unchanged case (the plan's frontend #5). */
+function caseFingerprint(review: CaseReview): Record<string, string> {
+  const fp: Record<string, string> = {};
+  for (const f of review.fields) fp[f.field_path] = formatValue(f.value);
+  return fp;
+}
+const seenKey = (caseId: string): string => `adaptive-intake.seen.${caseId}`;
+
 function CaseDetail({
   review,
   reviewer,
+  fieldOptions,
+  reviewStats,
   onReload,
   onCommitted,
 }: {
   review: CaseReview;
   reviewer: string;
+  fieldOptions: FieldOptions;
+  reviewStats: ReviewStats | null;
   onReload: () => void;
   onCommitted: () => void;
 }) {
@@ -421,8 +510,17 @@ function CaseDetail({
   const [showJson, setShowJson] = useState(false);
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<string | null>(null);
-  const [armed, setArmed] = useState(false); // commit gate: c arms, Enter commits (DESIGN.md §6)
-  const armTimer = useRef<number | undefined>(undefined);
+  // Review-time instrumentation: the clock starts when a case opens in front of a human (only the client
+  // knows that) and is sent, with the edit count, at approval — the ≤30s gate (winning-condition §4).
+  const openedAtRef = useRef<number>(Date.now());
+  const [elapsed, setElapsed] = useState(0);
+  const [edits, setEdits] = useState(0);
+  // The undo window: a fresh approval is reversible for a few seconds, which is what makes single-key
+  // commit safe (replaces the arm/confirm two-step — the owner-blessed long-term answer, DESIGN.md §10).
+  const [undoUntil, setUndoUntil] = useState<number | null>(null);
+  const [undoLeft, setUndoLeft] = useState(0);
+  // Diff-on-return: which fields changed since this reviewer last saw the case.
+  const [changed, setChanged] = useState<Set<string>>(() => new Set());
 
   const byPath = useMemo(() => new Map(review.fields.map((f) => [f.field_path, f])), [review]);
   const docs = useMemo(
@@ -442,11 +540,57 @@ function CaseDetail({
     return [...gov, ...emergent.map((f) => f.field_path)];
   }, [byPath, emergent]);
 
+  // On entering a case: reset selection/undo, and diff current values against the last-seen snapshot
+  // (diff-on-return), then persist the snapshot so a later return diffs against what they see now. Keyed
+  // on case_id only — a reviewer's OWN correction reloads the same case and must not re-mark itself.
   useEffect(() => {
     setSelected(null);
-    setArmed(false); // a new case is never pre-armed to commit
+    setUndoUntil(null);
+    setEdits(0);
+    let prev: Record<string, string> | null = null;
+    try {
+      prev = JSON.parse(localStorage.getItem(seenKey(review.case_id)) ?? "null");
+    } catch {
+      prev = null;
+    }
+    const now = caseFingerprint(review);
+    const set = new Set<string>();
+    if (prev) for (const [k, v] of Object.entries(now)) if (prev[k] !== v) set.add(k);
+    setChanged(set);
+    try {
+      localStorage.setItem(seenKey(review.case_id), JSON.stringify(now));
+    } catch {
+      /* storage full/blocked — diff-on-return degrades to no highlight, never an error */
+    }
+    // review is intentionally read at case-entry only (not a dep) so own-edits don't re-trigger the diff.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [review.case_id]);
-  useEffect(() => () => window.clearTimeout(armTimer.current), []);
+
+  // The live review clock — starts on case open, ticks while unapproved, freezes once approved/failed.
+  useEffect(() => {
+    openedAtRef.current = Date.now();
+    setElapsed(0);
+    if (review.commit !== null || review.case_state === "processing_failed") return;
+    const t = window.setInterval(() => setElapsed(Date.now() - openedAtRef.current), 1000);
+    return () => window.clearInterval(t);
+  }, [review.case_id, review.commit, review.case_state]);
+
+  // Count down the undo window; clear it when it lapses.
+  useEffect(() => {
+    if (undoUntil === null) return;
+    const tick = () => {
+      const left = Math.ceil((undoUntil - Date.now()) / 1000);
+      if (left <= 0) {
+        setUndoUntil(null);
+        setUndoLeft(0);
+      } else {
+        setUndoLeft(left);
+      }
+    };
+    tick();
+    const t = window.setInterval(tick, 250);
+    return () => window.clearInterval(t);
+  }, [undoUntil]);
 
   const move = useCallback(
     (delta: number) => {
@@ -478,6 +622,7 @@ function CaseDetail({
     setNote(null);
     try {
       await recordCorrection(review.case_id, fieldPath, newValue, reviewer);
+      setEdits((n) => n + 1); // the measured cost of this case (fields the reviewer had to fix)
       onReload();
     } catch (e) {
       setNote((e as Error).message);
@@ -486,34 +631,49 @@ function CaseDetail({
     }
   }
 
-  // The commit gate is a ONE-WAY stamp (first-writer-wins; corrections 409 after). So it is a two-step
-  // with DIFFERENT keys — `c` arms, `Enter` commits — so a reviewer hammering `c` at speed can never
-  // irreversibly approve a half-read case by a double-tap (owner call, DESIGN.md §10). No window.confirm.
+  // Commit on a SINGLE keystroke (the fast path), made safe by the undo window rather than an arm/confirm
+  // two-step: an accidental approval is reversible for a few seconds, then durable (DESIGN.md §10; the
+  // owner-blessed successor to the c-arms/Enter gate). The measured review time + edit count go with it.
   const doCommit = useCallback(async () => {
     if (committed || busy || failed) return; // never approve a case that failed to process
-    setArmed(false);
     setBusy(true);
     setNote(null);
+    const reviewMs = Date.now() - openedAtRef.current;
     try {
-      await commitCase(review.case_id, reviewer);
+      const res = await commitCase(review.case_id, reviewer, reviewMs, edits);
+      setUndoUntil(Date.now() + res.undo_window_seconds * 1000);
       onCommitted();
     } catch (e) {
       setNote((e as Error).message);
     } finally {
       setBusy(false);
     }
-  }, [committed, busy, failed, review.case_id, reviewer, onCommitted]);
+  }, [committed, busy, failed, review.case_id, reviewer, edits, onCommitted]);
 
-  const arm = useCallback(() => {
-    if (committed || busy || failed) return;
-    setArmed(true);
-    window.clearTimeout(armTimer.current);
-    armTimer.current = window.setTimeout(() => setArmed(false), 3000);
-  }, [committed, busy, failed]);
+  const doUndo = useCallback(async () => {
+    setBusy(true);
+    setNote(null);
+    try {
+      await uncommitCase(review.case_id, reviewer);
+      setUndoUntil(null);
+      openedAtRef.current = Date.now(); // resume the clock — the case is back under review
+      onCommitted(); // reload → back to in_review
+    } catch (e) {
+      setNote((e as Error).message); // 409 once the window has passed — the approval stands
+    } finally {
+      setBusy(false);
+    }
+  }, [review.case_id, reviewer, onCommitted]);
 
-  useHotkeys("c", () => arm(), [arm]);
-  useHotkeys("enter", () => armed && void doCommit(), { enabled: armed }, [armed, doCommit]);
-  useHotkeys("escape", () => setArmed(false), { enabled: armed }, [armed]);
+  useHotkeys("c", () => void doCommit(), { enabled: !committed && !failed }, [
+    doCommit,
+    committed,
+    failed,
+  ]);
+  useHotkeys("u", () => undoUntil !== null && void doUndo(), { enabled: undoUntil !== null }, [
+    undoUntil,
+    doUndo,
+  ]);
 
   const downloadReport = useCallback(async () => {
     setNote(null);
@@ -540,6 +700,21 @@ function CaseDetail({
           </span>
         </div>
         <div className="case__actions">
+          {/* Review-time HUD — the live cost of this case + the tenant's running median (the ≤30s gate).
+              A case over 30s reads amber, so the load-bearing number is visible while working, not after. */}
+          {!failed && (
+            <span
+              className={`hud${!committed && elapsed > 30000 ? " hud--over" : ""}`}
+              title="time on this case · your tenant's median time-to-approve (the ≤30s review-time gate)"
+            >
+              <span className="hud__now">⏱ {committed ? "done" : fmtDuration(elapsed)}</span>
+              <span className="hud__sep">·</span>
+              <span className="hud__med">
+                median {fmtDuration(reviewStats?.median_ms ?? null)}
+                {reviewStats && reviewStats.count > 0 ? ` (${reviewStats.count})` : ""}
+              </span>
+            </span>
+          )}
           {failed ? (
             <span className="seal seal--fail">handle manually — nothing to approve</span>
           ) : committed ? (
@@ -553,25 +728,32 @@ function CaseDetail({
               </button>
             </>
           ) : (
-            <>
-              {armed && (
-                <span className="approve__arm-hint">press Enter to approve · Esc to cancel</span>
-              )}
-              <button
-                type="button"
-                className={`approve${armed ? " approve--armed" : ""}`}
-                disabled={busy}
-                onClick={() => (armed ? void doCommit() : arm())}
-              >
-                {armed ? "confirm approve" : "approve (c)"}
-              </button>
-            </>
+            <button
+              type="button"
+              className="approve"
+              disabled={busy}
+              onClick={() => void doCommit()}
+            >
+              approve (c)
+            </button>
           )}
           <button type="button" className="ghost" onClick={() => setShowJson((v) => !v)}>
             {showJson ? "hide JSON" : "JSON"}
           </button>
         </div>
       </header>
+
+      {/* The undo toast — a brief, honest window to reverse a just-made approval before it is durable. */}
+      {undoUntil !== null && (
+        <div className="undo-toast" role="status">
+          <span>
+            Approved. Nothing external has been issued yet — you can still undo.
+          </span>
+          <button type="button" className="undo-toast__btn" disabled={busy} onClick={() => void doUndo()}>
+            undo ({undoLeft}s) · u
+          </button>
+        </div>
+      )}
 
       {failed && (
         <div className="banner banner--failed" role="alert">
@@ -597,6 +779,7 @@ function CaseDetail({
                 path={path}
                 field={byPath.get(path)}
                 active={selected === path}
+                changed={changed.has(path)}
                 onSelect={() => setSelected(path)}
               />
             ))}
@@ -646,6 +829,7 @@ function CaseDetail({
               field={selectedField}
               docs={docs}
               editable={!committed && !busy}
+              options={fieldOptions[selectedField.field_path]}
               onCorrect={correct}
             />
           ) : (
@@ -877,8 +1061,35 @@ export default function App() {
   const [showHelp, setShowHelp] = useState(false);
   const [showNew, setShowNew] = useState(false);
   const [showObjects, setShowObjects] = useState(false);
+  const [fieldOptions, setFieldOptions] = useState<FieldOptions>({});
+  const [reviewStats, setReviewStats] = useState<ReviewStats | null>(null);
+  const [batchBusy, setBatchBusy] = useState(false);
 
   const ordered = useMemo(() => (cases ? reviewOrder(cases) : null), [cases]);
+
+  // The triage split (the plan's frontend #3): CLEAN = an unapproved, non-failed case with NO field
+  // flagged for review (every governed field above the 0.5 flag line) — the system raised no uncertainty
+  // on it, so the reviewer can clear the whole band in one act; everything else NEEDS YOU. Honest: this is
+  // "nothing flagged", a class-level band, not a per-case safety guarantee (§10 CORRECTION). Failed/
+  // committed cases are in neither band.
+  const clean = useMemo(
+    () =>
+      (ordered ?? []).filter(
+        (c) =>
+          !c.committed_at &&
+          c.case_state !== "processing_failed" &&
+          c.min_governed_confidence !== null &&
+          c.min_governed_confidence > CLEAN_BAND_FLOOR,
+      ),
+    [ordered],
+  );
+
+  const refreshStats = useCallback(() => {
+    if (!getTenantId()) return;
+    void getReviewStats()
+      .then(setReviewStats)
+      .catch(() => setReviewStats(null));
+  }, []);
 
   const onCreated = useCallback((caseId: string) => {
     setShowNew(false);
@@ -905,12 +1116,42 @@ export default function App() {
       .then(setReview)
       .catch((e) => setError((e as Error).message));
     void refresh(); // keep the register's confidence/committed badges live
-  }, [selectedId, refresh]);
+    refreshStats(); // an approve/undo just moved the review-time median
+  }, [selectedId, refresh, refreshStats]);
+
+  // Approve a whole clean band at once — one human act clearing many cases (§3), the only way ≤30s/case
+  // scales past a big queue. The batch's elapsed time is split evenly so the median stays honest.
+  const batchStartRef = useRef<number>(Date.now());
+  const approveClean = useCallback(async () => {
+    if (clean.length === 0 || batchBusy) return;
+    setBatchBusy(true);
+    setError(null);
+    const ms = Date.now() - batchStartRef.current;
+    try {
+      await commitBatch(
+        clean.map((c) => c.case_id),
+        reviewer || "reviewer",
+        ms,
+      );
+      await refresh();
+      refreshStats();
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBatchBusy(false);
+    }
+  }, [clean, batchBusy, reviewer, refresh, refreshStats]);
 
   useEffect(() => {
     if (INITIAL_TENANT) setTenantId(INITIAL_TENANT);
-    if (getTenantId()) void refresh();
-  }, [refresh]);
+    if (getTenantId()) {
+      void refresh();
+      refreshStats();
+    }
+    void getFieldOptions()
+      .then(setFieldOptions)
+      .catch(() => setFieldOptions({}));
+  }, [refresh, refreshStats]);
 
   useEffect(() => {
     if (!selectedId) {
@@ -946,7 +1187,12 @@ export default function App() {
     setReviewerId(reviewer);
     setSelectedId(null);
     setReview(null);
+    batchStartRef.current = Date.now(); // the triage clock for this queue starts now
     void refresh();
+    refreshStats();
+    void getFieldOptions()
+      .then(setFieldOptions)
+      .catch(() => setFieldOptions({}));
   }
 
   async function exportCsv() {
@@ -1034,6 +1280,24 @@ export default function App() {
               ordered by class reliability — least-reliable predicted class first
             </p>
           )}
+          {/* Triage: clear the high-reliability band in one act so a reviewer only ever opens cases that
+              need them. Honest label — class-level band, not a per-case safety claim (§10). */}
+          {clean.length > 0 && (
+            <div className="triage">
+              <span className="triage__count">
+                {clean.length} with nothing flagged for review
+              </span>
+              <button
+                type="button"
+                className="triage__btn"
+                onClick={() => void approveClean()}
+                disabled={batchBusy}
+                title="approve every case with no flagged field in one act — each is still your approval (§3)"
+              >
+                {batchBusy ? "approving…" : `approve all ${clean.length} clean`}
+              </button>
+            </div>
+          )}
           {ordered === null ? (
             <div className="register__empty">
               <h4>No tenant loaded</h4>
@@ -1110,6 +1374,8 @@ export default function App() {
             <CaseDetail
               review={review}
               reviewer={reviewer || "reviewer"}
+              fieldOptions={fieldOptions}
+              reviewStats={reviewStats}
               onReload={reloadCase}
               onCommitted={reloadCase}
             />
@@ -1131,10 +1397,14 @@ export default function App() {
               <dd>next / previous field</dd>
               <dt>n / p</dt>
               <dd>next / previous case</dd>
+              <dt>1 – 9</dt>
+              <dd>correct the selected field to a listed value (one key, no typing)</dd>
               <dt>e</dt>
-              <dd>edit (correct) the selected field</dd>
-              <dt>c → ⏎</dt>
-              <dd>approve the case — c arms, Enter commits (the gate)</dd>
+              <dd>edit (correct) the selected field as free text</dd>
+              <dt>c</dt>
+              <dd>approve the case (undoable for a few seconds)</dd>
+              <dt>u</dt>
+              <dd>undo a just-made approval (within the window)</dd>
               <dt>r</dt>
               <dd>download the report (approved cases)</dd>
               <dt>?</dt>

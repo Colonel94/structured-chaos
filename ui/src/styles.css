@@ -1343,3 +1343,168 @@ kbd {
     margin-left: 0;
   }
 }
+
+/* ---- review-time HUD: the ≤30s gate, visible while working (winning-condition §4) ---- */
+.hud {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--sp-2);
+  font-family: var(--font-mono);
+  font-size: var(--t-meta);
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-2);
+  padding: 3px var(--sp-3);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  background: var(--surface-2);
+  white-space: nowrap;
+}
+.hud--over .hud__now {
+  color: var(--uncertain-ink); /* over the ≤30s gate → the one loud colour */
+}
+.hud__now {
+  font-weight: 600;
+  color: var(--ink);
+}
+.hud__sep {
+  color: var(--ink-3);
+}
+.hud__med {
+  color: var(--ink-3);
+}
+
+/* ---- undo toast: a brief, honest window to reverse a just-made approval ---- */
+.undo-toast {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-4);
+  margin: var(--sp-3) var(--sp-6) 0;
+  padding: var(--sp-2) var(--sp-4);
+  font-size: var(--t-ui);
+  color: var(--committed);
+  border: 1px solid color-mix(in srgb, var(--committed) 34%, transparent);
+  border-radius: var(--r);
+  background: color-mix(in srgb, var(--committed) 10%, var(--surface));
+}
+.undo-toast__btn {
+  font-family: var(--font-mono);
+  font-size: var(--t-meta);
+  font-weight: 600;
+  color: var(--ink);
+  background: var(--surface-3);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-sm);
+  padding: 3px var(--sp-3);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.undo-toast__btn:hover:not(:disabled) {
+  border-color: var(--ink-3);
+}
+.undo-toast__btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+/* ---- triage: clear the high-reliability band in one act ---- */
+.triage {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  padding: var(--sp-2) var(--sp-4);
+  border-bottom: 1px solid var(--line);
+  background: color-mix(in srgb, var(--committed) 7%, var(--bg));
+}
+.triage__count {
+  font-size: var(--t-micro);
+  color: var(--ink-2);
+  letter-spacing: 0.01em;
+}
+.triage__btn {
+  font-family: var(--font-mono);
+  font-size: var(--t-micro);
+  font-weight: 600;
+  color: var(--committed);
+  background: color-mix(in srgb, var(--committed) 12%, var(--surface));
+  border: 1px solid color-mix(in srgb, var(--committed) 34%, transparent);
+  border-radius: var(--r-sm);
+  padding: 3px var(--sp-3);
+  white-space: nowrap;
+}
+.triage__btn:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--committed) 20%, var(--surface));
+}
+.triage__btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+/* ---- one-key correction: the allowed values as number-key picks (biggest review-time lever) ---- */
+.picks {
+  margin: var(--sp-3) 0 var(--sp-4);
+  padding: var(--sp-3);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  background: var(--surface-2);
+}
+.picks__label {
+  font-size: var(--t-micro);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--ink-3);
+  font-weight: 600;
+  margin-bottom: var(--sp-2);
+}
+.picks__row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+}
+.pick {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  font-size: var(--t-meta);
+  color: var(--ink);
+  background: var(--surface-3);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-sm);
+  padding: 3px var(--sp-2) 3px 3px;
+  transition: border-color var(--motion);
+}
+.pick:hover {
+  border-color: var(--ink-3);
+}
+.pick__key {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 16px;
+  height: 16px;
+  font-family: var(--font-mono);
+  font-size: var(--t-micro);
+  font-weight: 600;
+  color: var(--ink-2);
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+}
+
+/* ---- diff-on-return: a field that changed since this reviewer last looked ---- */
+.field--changed {
+  border-left-color: var(--uncertain);
+}
+.field__changed {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--uncertain-ink);
+  background: color-mix(in srgb, var(--uncertain) 14%, transparent);
+  border-radius: var(--r-sm);
+  padding: 0 4px;
+  margin-left: var(--sp-2);
+}

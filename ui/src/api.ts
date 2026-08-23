@@ -2,7 +2,7 @@
 // convention — RLS is the real isolation boundary; see engine/app/api/routes.py). Same-origin in
 // prod; via the Vite `/api` proxy in dev.
 
-import type { CaseReview, CaseSummary } from "./types";
+import type { CaseReview, CaseSummary, FieldOptions, ReviewStats } from "./types";
 
 const TENANT_KEY = "adaptive-intake.tenant-id";
 const REVIEWER_KEY = "adaptive-intake.reviewer-id";
@@ -122,12 +122,55 @@ export async function uploadObjects(objectType: string, file: File): Promise<Obj
   return (await res.json()) as ObjectUploadResult;
 }
 
-/** Approve a case (the commit gate). One-way; only after this may a report be issued. */
+/** Approve a case (the commit gate). One-way past the undo window; only after this may a report be
+ *  issued. `reviewMs`/`fieldsEdited` are the client-measured cost of clearing the case — logged for the
+ *  ≤30s review-time gate. Returns the undo window so the UI can offer a brief undo. */
 export function commitCase(
   caseId: string,
   reviewerId: string,
-): Promise<{ commit: { committed_at: string; committed_by: string } }> {
-  return post(`/api/cases/${caseId}/commit`, { reviewer_id: reviewerId });
+  reviewMs?: number,
+  fieldsEdited?: number,
+): Promise<{
+  commit: { committed_at: string; committed_by: string };
+  undo_window_seconds: number;
+}> {
+  return post(`/api/cases/${caseId}/commit`, {
+    reviewer_id: reviewerId,
+    review_ms: reviewMs ?? null,
+    fields_edited: fieldsEdited ?? 0,
+  });
+}
+
+/** Approve several cases in one act (a whole reliability band). Each is still a per-case human approval;
+ *  the batch time is split evenly across them. Returns which committed and which failed (cross-tenant). */
+export function commitBatch(
+  caseIds: string[],
+  reviewerId: string,
+  reviewMs?: number,
+): Promise<{ committed: string[]; failed: string[] }> {
+  return post(`/api/cases/commit-batch`, {
+    reviewer_id: reviewerId,
+    case_ids: caseIds,
+    review_ms: reviewMs ?? null,
+  });
+}
+
+/** Undo a just-approved case, within the server's grace window. 409 once the window has passed. */
+export function uncommitCase(caseId: string, reviewerId: string): Promise<{ uncommitted: unknown }> {
+  return post(`/api/cases/${caseId}/uncommit`, { reviewer_id: reviewerId });
+}
+
+/** The tenant's review-time aggregates — the ≤30s gate the whole review UI is optimised against. */
+export function getReviewStats(): Promise<ReviewStats> {
+  return get<ReviewStats>("/api/review-stats");
+}
+
+/** The allowed values per closed-vocabulary governed field — the one-key correction picks. Not tenant
+ *  data, so no header; fetched once and cached by the caller. */
+export async function getFieldOptions(): Promise<FieldOptions> {
+  const res = await fetch("/api/field-options");
+  if (!res.ok) throw new Error(`Request failed (${res.status})`);
+  return (await res.json()) as FieldOptions;
 }
 
 // Download URLs — the tenant travels in the header on fetch, but a plain <a> can't set one, so these
