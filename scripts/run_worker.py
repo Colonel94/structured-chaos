@@ -90,6 +90,42 @@ def _singleton_lock(queues: list[str]) -> Any:
     return conn
 
 
+def reap_orphaned_jobs(conn: Any, queues: list[str]) -> list[int]:
+    """Release jobs stuck in ``doing`` on THIS worker's queues back to ``todo`` so they re-run.
+
+    Safe ONLY because the caller holds the queue-set's singleton advisory lock: no other worker is
+    processing these queues, and this worker has not started fetching yet — so every ``doing`` job is
+    orphaned by a predecessor that died mid-job (killed / crashed / OOM). Procrastinate does not re-queue
+    those on its own (its ``worker_id``/stalled-worker pruning didn't catch it in the wild), so without this
+    the job's CASE hangs at ``created`` FOREVER while the live worker still looks healthy — the exact
+    failure a real iPhone voice test hit (longterm_context §0: worker killed mid-transcription → orphaned
+    ``pipeline.normalise`` job → case stuck, portal shows "still processing" indefinitely).
+
+    NEVER call this while the singleton lock is bypassed (``WORKER_ALLOW_MULTIPLE=1``): with a live sibling
+    worker on the same queues, a ``doing`` job may be genuinely in flight and releasing it would double-run
+    it. ``main`` only calls this when the lock was actually acquired.
+
+    (Not handled here — a genuine *poison* job that crashes the worker every run would be reaped in a loop;
+    that class is caught instead by each stage's ``RetryStrategy`` → ``processing_failed`` on repeated
+    *exceptions*. This reaper is for a healthy job whose worker was killed, not a job that kills workers.)
+    """
+    rows = conn.execute(
+        "UPDATE procrastinate_jobs SET status = 'todo', worker_id = NULL, abort_requested = false "
+        "WHERE status = 'doing' AND queue_name = ANY(%s) RETURNING id",
+        (queues,),
+    ).fetchall()
+    ids = [int(r[0]) for r in rows]
+    if ids:
+        # Loud on purpose (§10 no-silent-caps): a reaped job means a worker died mid-job — operationally
+        # notable, and the reason a case that was hung is now moving again.
+        log.warning(
+            "worker.reaped_orphaned_jobs", count=len(ids), queues=queues, job_ids=ids
+        )
+    else:
+        log.info("worker.no_orphaned_jobs", queues=queues)
+    return ids
+
+
 async def _scheduler() -> None:
     """Defer the schema-maintenance scans every interval, IN ORDER — the order is the moat's pipeline:
       1. dedup  — collapse synonym qualifiers to their canonical (so promotion counts pooled support
@@ -164,6 +200,14 @@ def main() -> None:
     # Refuse a second worker on these queues BEFORE opening the pool (the zombie-worker footgun). The
     # returned connection is bound to a local so the advisory lock lives for the whole process.
     _lock_conn = _singleton_lock(queues)
+    # We now hold the exclusive lock (unless bypassed) → any 'doing' job on these queues is orphaned by a
+    # dead worker. Release them so they re-run. A reaper failure must NEVER stop the worker from starting
+    # (its job is to process jobs — mirrors the heartbeat's fail-open discipline).
+    if _lock_conn is not None:
+        try:
+            reap_orphaned_jobs(_lock_conn, queues)
+        except Exception:
+            log.exception("worker.reap_failed", queues=queues)
     log.info("worker.start", queues=queues, schedule=schedule)
     # Hold the sync connector pool open for the whole process so task-body defers have a live pool.
     with app.open():
