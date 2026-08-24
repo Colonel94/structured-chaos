@@ -33,7 +33,18 @@ def _run_capture(cmd: list[str], *, env_dataset: str) -> str:
     import os
 
     env = {**os.environ, "EVAL_DATASET": env_dataset, "PYTHONIOENCODING": "utf-8"}
-    p = subprocess.run(cmd, cwd=_ENGINE, capture_output=True, text=True, env=env, check=False)
+    # The child emits UTF-8 (PYTHONIOENCODING above); decode it as UTF-8 too — else Windows' cp1252 default
+    # mangles the em-dashes/≤ in score.py's output into mojibake in the posted PR comment.
+    p = subprocess.run(
+        cmd,
+        cwd=_ENGINE,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        env=env,
+        check=False,
+    )
     return (p.stdout + p.stderr).strip()
 
 
