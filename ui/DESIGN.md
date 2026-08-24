@@ -20,7 +20,13 @@ passes unmodified; tsc + vitest + production build all green):**
 - **Light Fluent palette.** Near-white canvas (`--bg #f0f0f0`), white cards with soft elevation
   shadows (`--shadow-2/8/16`), Fluent neutral ramp, **communication-blue brand** (`--brand #0f6cbd`)
   as the single interactive accent (primary buttons, selection, links, keycaps). Every colour is a
-  `:root` token — flipping the neutrals + brand restores a dark theme with no other change.
+  `:root` token.
+- **Dark theme (shipped 2026-08-25).** A `:root[data-theme="dark"]` block swaps the ~40 tokens; a
+  top-bar toggle (`☾ dark` / `☀ light`) flips `data-theme` on `<html>`, persists to localStorage, and
+  defaults to the OS `prefers-color-scheme` on first visit (applied before first paint — no flash). A
+  few tokens whose role differs as a *fill* vs *text-on-a-surface* got a paired helper (`--brand-fg`,
+  `--committed-btn`, `--pri1-bg/-ink`, `--code-bg/-ink`) so the dark variant keeps contrast without any
+  structural change. Both themes nabu-ui-tested (desktop + mobile, 0 console errors).
 - **Segoe UI / system-sans is the interface voice** (the Power Platform register); **mono is now
   reserved for genuine machine data only** (case ids, confidence %, timestamps, doc-ids, JSON, kbd).
   The IBM Plex **Sans + Serif** families were dropped (main.tsx); only **Plex Mono** is still

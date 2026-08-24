@@ -76,6 +76,16 @@
   --wave-region-idle: rgba(227, 154, 43, 0.22);
   --wave-region-active: rgba(227, 154, 43, 0.5);
 
+  /* -- theme-adaptive helpers: tokens whose ROLE differs between a fill and text-on-a-surface, so the
+     dark theme can lighten the text variant without touching the (already-fine) fill. In light they
+     collapse to their base colour. -- */
+  --brand-fg: var(--brand); /* brand used as TEXT/outline on a surface (keycaps, links, focus ring) */
+  --committed-btn: var(--committed); /* green BUTTON fill (needs white-text contrast in both themes) */
+  --pri1-bg: var(--ink); /* the P1 pill — inverted to read as the top of the neutral ramp */
+  --pri1-ink: #fff;
+  --code-bg: #242424; /* the copyable command block — always a dark terminal, both themes */
+  --code-ink: #7fd88a;
+
   /* -- radius, elevation, motion -- */
   --r-sm: 4px; /* chips, meters, buttons */
   --r: 8px; /* cards, inputs, modals */
@@ -85,6 +95,67 @@
   --motion: 130ms cubic-bezier(0.33, 0, 0.1, 1);
 
   --topbar-h: 52px;
+}
+
+/* =====================================================================================
+   DARK THEME — a pure token swap on <html data-theme="dark"> (toggle in the top bar). Nothing below
+   this block references a raw colour, so flipping these ~40 tokens re-themes the whole app. The trust
+   signals keep their meaning: amber = uncertainty, green = committed, red = alarm, blue = interactive.
+   ===================================================================================== */
+:root[data-theme="dark"] {
+  --bg: #1a1a1a;
+  --surface: #262626;
+  --surface-2: #2e2d2c;
+  --surface-3: #393836;
+  --line: #3d3b39;
+  --line-strong: #514f4c;
+  --ink: #f3f2f1;
+  --ink-2: #c8c6c4;
+  --ink-3: #a19f9d;
+
+  --brand: #0f6cbd; /* fill stays saturated (white text reads on it); text uses --brand-fg below */
+  --brand-strong: #2b88d8; /* hover lightens in dark */
+  --brand-fg: #4aa0f0;
+  --brand-wash: #13293d;
+  --brand-line: #2c4a6b;
+
+  --uncertain: #e0a458;
+  --uncertain-ink: #f2b96a;
+  --uncertain-solid: #e39a2b;
+  --uncertain-wash: #33280f;
+  --uncertain-line: #5c471f;
+
+  --committed: #52c552;
+  --committed-strong: #6ad06a;
+  --committed-btn: #2e7d32; /* darker fill so white text stays legible */
+  --committed-wash: #16301a;
+  --committed-line: #2f5a33;
+
+  --alarm: #f0705e;
+  --alarm-wash: #3a1e1b;
+  --alarm-line: #6b332d;
+
+  --conf-flag: var(--uncertain-solid);
+  --conf-low: #c98a3f;
+  --conf-mid: #6e5a30;
+  --conf-high: #3a3834;
+  --conf-sure: transparent;
+  --conf-null: var(--line-strong);
+
+  --wave-wave: #6b7480;
+  --wave-progress: #9aa4b1;
+  --wave-cursor: #e6e9ee;
+  --wave-region-idle: rgba(227, 154, 43, 0.24);
+  --wave-region-active: rgba(227, 154, 43, 0.52);
+
+  --pri1-bg: #f3f2f1;
+  --pri1-ink: #1a1a1a;
+  --code-bg: #0f0f0f;
+  --code-ink: #7fd88a;
+
+  --shadow-2: 0 1px 2px rgba(0, 0, 0, 0.4), 0 0 1px rgba(0, 0, 0, 0.5);
+  --shadow-8: 0 3.2px 7.2px rgba(0, 0, 0, 0.45), 0 0.6px 1.8px rgba(0, 0, 0, 0.4);
+  --shadow-16: 0 12.8px 28.8px rgba(0, 0, 0, 0.55), 0 2.4px 7.2px rgba(0, 0, 0, 0.45);
 }
 
 * {
@@ -548,9 +619,9 @@ button {
   border: 1px solid var(--line-strong);
 }
 .pri--P1 {
-  background: var(--ink);
-  color: #fff;
-  border-color: var(--ink);
+  background: var(--pri1-bg);
+  color: var(--pri1-ink);
+  border-color: var(--pri1-bg);
 }
 .pri--P2 {
   background: var(--surface-3);
@@ -735,7 +806,7 @@ button {
 }
 .chip--primary {
   background: var(--brand-wash);
-  color: var(--brand);
+  color: var(--brand-fg);
   border-color: var(--brand-line);
 }
 .chip--corroborating,
@@ -779,7 +850,7 @@ button {
 }
 .attrs__row--active {
   background: var(--brand-wash);
-  box-shadow: inset 3px 0 0 var(--brand);
+  box-shadow: inset 3px 0 0 var(--brand-fg);
 }
 .attrs .mono-cell {
   font-family: var(--font-mono);
@@ -1319,7 +1390,7 @@ button {
 .help__card dt {
   font-family: var(--font-mono);
   font-weight: 600;
-  color: var(--brand);
+  color: var(--brand-fg);
 }
 .help__card dd {
   margin: 0;
@@ -1338,7 +1409,7 @@ kbd {
 
 /* ---- focus visibility (keyboard-first: focus must always be legible) ---- */
 :focus-visible {
-  outline: 2px solid var(--brand);
+  outline: 2px solid var(--brand-fg);
   outline-offset: 1px;
 }
 .field:focus-visible,
@@ -1446,8 +1517,8 @@ kbd {
   font-size: var(--t-meta);
   font-weight: 700;
   color: #fff;
-  background: var(--committed);
-  border: 1px solid var(--committed);
+  background: var(--committed-btn);
+  border: 1px solid var(--committed-btn);
   border-radius: var(--r-sm);
   padding: 4px var(--sp-3);
   white-space: nowrap;
@@ -1480,8 +1551,8 @@ kbd {
   font-size: var(--t-meta);
   font-weight: 600;
   color: #fff;
-  background: var(--committed);
-  border: 1px solid var(--committed);
+  background: var(--committed-btn);
+  border: 1px solid var(--committed-btn);
   border-radius: var(--r-sm);
   padding: 5px var(--sp-3);
   white-space: nowrap;
@@ -1540,7 +1611,7 @@ kbd {
   font-family: var(--font-mono);
   font-size: var(--t-micro);
   font-weight: 700;
-  color: var(--brand);
+  color: var(--brand-fg);
   background: var(--brand-wash);
   border: 1px solid var(--brand-line);
   border-radius: var(--r-sm);
@@ -1548,14 +1619,14 @@ kbd {
 
 /* ---- diff-on-return: a field that changed since this reviewer last looked (info, not uncertainty) ---- */
 .field--changed {
-  border-left-color: var(--brand);
+  border-left-color: var(--brand-fg);
 }
 .field__changed {
   font-size: 10px;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.03em;
-  color: var(--brand);
+  color: var(--brand-fg);
   background: var(--brand-wash);
   border: 1px solid var(--brand-line);
   border-radius: 999px;
@@ -2010,12 +2081,12 @@ kbd {
 .draft__cmd {
   margin: 0 0 var(--sp-2);
   padding: var(--sp-2) var(--sp-3);
-  background: var(--ink);
-  border: 1px solid var(--ink);
+  background: var(--code-bg);
+  border: 1px solid var(--code-bg);
   border-radius: var(--r-sm);
   font-family: var(--font-mono);
   font-size: var(--t-meta);
-  color: #7fd88a;
+  color: var(--code-ink);
   white-space: pre-wrap;
   word-break: break-all;
 }

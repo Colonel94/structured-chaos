@@ -1427,6 +1427,24 @@ const params = new URLSearchParams(window.location.search);
 const INITIAL_TENANT = params.get("tenant") ?? getTenantId();
 const INITIAL_CASE = params.get("case");
 
+// Theme — a light (Fluent / Power Platform) default with a dark swap; persisted, and honouring the OS
+// preference on first visit. The theme is a `data-theme` attribute on <html> that flips CSS tokens only.
+type Theme = "light" | "dark";
+const THEME_KEY = "adaptive-intake.theme";
+function initialTheme(): Theme {
+  try {
+    const saved = localStorage.getItem(THEME_KEY);
+    if (saved === "light" || saved === "dark") return saved;
+  } catch {
+    /* storage blocked — fall through to the OS preference */
+  }
+  return typeof matchMedia !== "undefined" && matchMedia("(prefers-color-scheme: dark)").matches
+    ? "dark"
+    : "light";
+}
+// Apply before first paint so there's no light-then-dark flash on load.
+if (typeof document !== "undefined") document.documentElement.setAttribute("data-theme", initialTheme());
+
 export default function App() {
   const [tenant, setTenant] = useState(INITIAL_TENANT);
   const [reviewer, setReviewer] = useState(getReviewerId());
@@ -1441,6 +1459,17 @@ export default function App() {
   const [fieldOptions, setFieldOptions] = useState<FieldOptions>({});
   const [reviewStats, setReviewStats] = useState<ReviewStats | null>(null);
   const [batchBusy, setBatchBusy] = useState(false);
+  const [theme, setTheme] = useState<Theme>(initialTheme);
+
+  // Reflect the theme onto <html> (flips the CSS token set) and remember the choice.
+  useEffect(() => {
+    document.documentElement.setAttribute("data-theme", theme);
+    try {
+      localStorage.setItem(THEME_KEY, theme);
+    } catch {
+      /* storage blocked — the theme still applies this session */
+    }
+  }, [theme]);
 
   const ordered = useMemo(() => (cases ? reviewOrder(cases) : null), [cases]);
 
@@ -1630,6 +1659,15 @@ export default function App() {
             title={getTenantId() ? "what to fix next — the feedback loop digest" : "set a tenant id first"}
           >
             tuning
+          </button>
+          <button
+            type="button"
+            className="ghost"
+            onClick={() => setTheme((t) => (t === "dark" ? "light" : "dark"))}
+            title={theme === "dark" ? "switch to light theme" : "switch to dark theme"}
+            aria-label="toggle light or dark theme"
+          >
+            {theme === "dark" ? "☀ light" : "☾ dark"}
           </button>
           <button type="button" className="ghost" onClick={() => setShowHelp((v) => !v)}>
             ? keys
