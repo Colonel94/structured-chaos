@@ -1,0 +1,49 @@
+# Tuning eval — re-score a prompt-delta PR and post the result, so no prompt change ships without
+# re-scoring (CLAUDE.md §10). Companion to scripts/open_tuning_pr.py + scripts/tuning_eval.py.
+#
+# ⚠️ WHY self-hosted: the eval RE-EXTRACTS ~216 cases with the LOCAL model (Ollama, GPU) — that is the $0
+# stack (Directive 2). GitHub-HOSTED runners have no GPU/Ollama, so they CANNOT run the real eval at $0.
+# This job therefore targets a SELF-HOSTED runner labelled `gpu` (register one on the box that has Ollama +
+# the Postgres/MinIO stack up). Until such a runner exists the job simply stays queued/unrun — it is wired,
+# not faked (same posture as the Linux-deploy preflight). To score without CI, run scripts/tuning_eval.py
+# locally and pass --post <pr#>.
+
+name: tuning-eval
+
+on:
+  pull_request:
+    branches: ["main"]
+    paths:
+      - "engine/app/extract/tuning_addenda.json"
+      - "engine/app/extract/prompt.py"
+  schedule:
+    - cron: "0 3 * * *" # nightly drift check on main (score-only unless a runner re-extracts)
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  pull-requests: write # to post the score as a PR comment
+
+jobs:
+  eval:
+    # Needs the local model + stack. Never GitHub-hosted (no GPU/Ollama at $0).
+    runs-on: [self-hosted, gpu]
+    defaults:
+      run:
+        working-directory: engine
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+      - name: Sync
+        run: uv sync --group dev
+      - name: Re-score the delta and post to the PR
+        # On a PR: full re-extraction with the branch's prompt, then score, then comment. The runner host
+        # must have Ollama + the Postgres/MinIO stack up (the same $0 local stack the app uses).
+        if: github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: uv run python scripts/tuning_eval.py --reextract --post ${{ github.event.pull_request.number }}
+      - name: Nightly drift check (score-only)
+        if: github.event_name != 'pull_request'
+        run: uv run python scripts/tuning_eval.py

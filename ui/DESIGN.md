@@ -237,6 +237,16 @@ the eval first (§10), and on self-authored corrections it's self-grading (earns
 reviewer). This is the loop's last mile — from "what to fix" to a concrete starting point — with the human
 firmly in the seat.
 
+**Open-as-PR (new 2026-08-24).** Under the draft, the card shows the exact one-command to open the delta as
+a PR — `cd engine && uv run python scripts/open_tuning_pr.py --tenant <id>` — with a copy button, and the
+honest note that **the engine never runs it**: opening a PR needs git-push + GitHub credentials, which the
+headless engine must not hold, so it's a deliberate operator command, not a UI action. The script applies
+the delta as a tuning addendum (`tuning_addenda.json` — `[]` on main, so eval-neutral) + bumps
+`PROMPT_VERSION`, opens a `tuning/…` PR (DO-NOT-MERGE-until-eval body), and the tuning-eval re-scores it
+(`.github/workflows/tuning-eval.yml`, self-hosted — the eval needs the local model, no GitHub-hosted GPU at
+$0). The human reviews, checks the score didn't regress, and merges. Every automated step still stops at a
+human gate.
+
 **Triage + batch approve (new 2026-08-23).** The register splits into a "nothing flagged for review" band
 (every governed field above the 0.5 flag line) and the needs-you remainder; `approve all N clean` clears
 the whole band in one act (still a per-case human approval, §3). Honest: "nothing flagged" is a class-level

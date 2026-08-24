@@ -1367,6 +1367,31 @@ function TuningDigestModal({ onClose }: { onClose: () => void }) {
                         <li key={i}>{c}</li>
                       ))}
                     </ul>
+                    <div className="draft__pr">
+                      <div className="draft__deltahead">
+                        <span>open it as a PR (runs the eval, human-merged)</span>
+                        <button
+                          type="button"
+                          className="ghost ghost--sm"
+                          onClick={() => {
+                            void navigator.clipboard?.writeText(
+                              `cd engine && uv run python scripts/open_tuning_pr.py --tenant ${getTenantId()}`,
+                            );
+                            setCopied(true);
+                          }}
+                        >
+                          copy command
+                        </button>
+                      </div>
+                      <pre className="draft__cmd">
+                        cd engine && uv run python scripts/open_tuning_pr.py --tenant {getTenantId()}
+                      </pre>
+                      <p className="digest__caveat">
+                        Run in your terminal — the engine never pushes to git or GitHub itself (it holds no
+                        repo credentials). This opens a <code>tuning/…</code> PR with the delta; the
+                        tuning-eval re-scores it; you review and merge. Nothing here is applied.
+                      </p>
+                    </div>
                   </div>
                 ) : draft?.reason ? (
                   <p className="empty">{draft.reason}</p>

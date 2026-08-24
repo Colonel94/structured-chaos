@@ -8,7 +8,9 @@ severity, stated-not-guessed outcome, closed-world grounding).
 
 from __future__ import annotations
 
+import json
 from collections.abc import Sequence
+from pathlib import Path
 
 from .head_nouns import HEAD_NOUNS
 
@@ -136,6 +138,33 @@ narrative ones.
 Return JSON only."""
 
 
+# Reviewer-tuned additive clarifications — proposed via the tuning digest, opened as a PR
+# (scripts/open_tuning_pr.py), and merged ONLY after the eval re-scores (tuning-eval; CLAUDE.md §10).
+# The file is `[]` on main → zero behaviour change and the eval is unaffected. A merged addendum also bumps
+# PROMPT_VERSION (part of the idempotency key) so it re-runs and never overwrites prior provenance.
+_ADDENDA_PATH = Path(__file__).resolve().parent / "tuning_addenda.json"
+
+
+def _load_tuning_addenda() -> list[str]:
+    """Active addenda from ``tuning_addenda.json`` (a list of ``{delta, active, ...}``). Fail-safe: any
+    missing/unreadable/malformed file → no addenda, so the hand-authored core prompt always stands alone.
+    """
+    try:
+        data = json.loads(_ADDENDA_PATH.read_text(encoding="utf-8"))
+    except (FileNotFoundError, json.JSONDecodeError, OSError):
+        return []
+    if not isinstance(data, list):
+        return []
+    return [
+        str(e["delta"]).strip()
+        for e in data
+        if isinstance(e, dict) and e.get("active", True) and str(e.get("delta", "")).strip()
+    ]
+
+
+_TUNING_ADDENDA: list[str] = _load_tuning_addenda()
+
+
 def build_prompt(
     case_text: str,
     heads: Sequence[str] = HEAD_NOUNS,
@@ -145,7 +174,8 @@ def build_prompt(
     head vocabulary (seed + minted); it defaults to the seed so existing callers are unchanged.
     ``minted_glosses`` (head → definition) is injected as explicit guidance — the enum alone does NOT
     make the model use a minted head; it needs to know what the column MEANS or it defaults to ``other``
-    (2026-08-17c live finding). Each minted head is offered with its gloss so an emerged column is used."""
+    (2026-08-17c live finding). Each minted head is offered with its gloss so an emerged column is used.
+    """
     system = _SYSTEM.replace("<<HEADS>>", ", ".join(heads))
     if minted_glosses:
         defs = "\n".join(f"    {h} = {g}" for h, g in minted_glosses.items())
@@ -153,4 +183,7 @@ def build_prompt(
             "\n\nThis account has LEARNED additional columns from past cases. Use one of these when a "
             "fact clearly matches it, in preference to `other`:\n" + defs
         )
+    if _TUNING_ADDENDA:
+        addenda = "\n".join(f"- {a}" for a in _TUNING_ADDENDA)
+        system += "\n\nADDITIONAL DISAMBIGUATION (reviewer-tuned):\n" + addenda
     return f'{system}\n\nCustomer message:\n"""{case_text}"""'

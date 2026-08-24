@@ -1943,3 +1943,22 @@ kbd {
   padding-left: var(--sp-3);
   border-left: 2px solid var(--uncertain);
 }
+
+/* ---- open-as-PR command in the draft card ---- */
+.draft__pr {
+  margin-top: var(--sp-3);
+  padding-top: var(--sp-3);
+  border-top: 1px solid var(--line);
+}
+.draft__cmd {
+  margin: 0 0 var(--sp-2);
+  padding: var(--sp-2) var(--sp-3);
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  font-family: var(--font-mono);
+  font-size: var(--t-meta);
+  color: var(--committed);
+  white-space: pre-wrap;
+  word-break: break-all;
+}
