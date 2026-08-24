@@ -1,47 +1,64 @@
 /* =============================================================================================
-   Review UI — Instrument. Design tokens first (DESIGN.md §3–§5); every value below references one.
-   Dark, single theme. Machine data = mono, interface = sans, the human's verbatim words = serif.
+   Review UI — Fluent / Power Platform light theme (DESIGN.md, redesign 2026-08-24).
+   Owner-directed pivot from the dark "Instrument" look: clean, light, approachable — a business app
+   anyone can operate, not a trading terminal. The trust mechanics are UNCHANGED (uncertainty is the one
+   loud signal; every value is traceable; the commit gate is explicit) — only the skin got friendlier.
+   Every value below is a token; nothing downstream uses a raw hex/px. Flip the :root neutrals + brand and
+   this becomes a dark theme with no other change.
    ============================================================================================= */
 
 :root {
-  /* -- type families: the three voices (DESIGN.md §2) -- */
-  --font-sans: "IBM Plex Sans", system-ui, sans-serif;
-  --font-mono: "IBM Plex Mono", ui-monospace, "Cascadia Code", Menlo, monospace;
-  --font-serif: "IBM Plex Serif", Georgia, serif;
+  /* -- type: the interface speaks Segoe UI (the Power Platform voice); only MACHINE DATA is mono -- */
+  --font-sans: "Segoe UI", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: "IBM Plex Mono", "Cascadia Code", Consolas, ui-monospace, monospace;
 
-  /* -- neutral ground: near-black, layered by elevation -- */
-  --bg: #0d0f12;
-  --surface: #14171c;
-  --surface-2: #1a1e24;
-  --surface-3: #22272e;
-  --line: #262b32;
-  --line-strong: #333a43;
-  --ink: #e6e9ee;
-  --ink-2: #9aa4b1;
-  --ink-3: #6b7480;
+  /* -- neutral ground: light, layered by elevation (Fluent neutral ramp) -- */
+  --bg: #f0f0f0; /* app canvas */
+  --surface: #ffffff; /* cards, panels, register */
+  --surface-2: #faf9f8; /* subtle raised / nav wash */
+  --surface-3: #f3f2f1; /* hover / active neutral fill */
+  --line: #e5e3e1; /* hairline rules */
+  --line-strong: #d2d0ce; /* stronger dividers, input borders */
+  --ink: #242424; /* primary text */
+  --ink-2: #545252; /* secondary text */
+  --ink-3: #7a7876; /* muted / meta */
 
-  /* -- the two signal accents, and the narrow alarm exception (DESIGN.md §3) -- */
-  --uncertain: #f5a524; /* UNCERTAINTY — the one loud colour. Confidence spine, needs-review. */
-  --uncertain-ink: #f6b64a;
-  --committed: #3fb950; /* COMMITTED — approval only. Nothing else is green. */
-  --committed-dim: #2a7d38;
-  --alarm: #f0553a; /* alarm only: errors + `contradicts`. Never decorative. */
+  /* -- brand (Fluent communication blue) — interactive: primary actions, selection, links -- */
+  --brand: #0f6cbd;
+  --brand-strong: #0c5a9e; /* hover / pressed */
+  --brand-wash: #eff6fc; /* selected-row / info fill */
+  --brand-line: #b3d3f0; /* selected-row border */
 
-  /* -- confidence spine: DISCRETE bands, not a continuous fade (DESIGN.md §6, "design truth") -- */
-  --conf-flag: rgba(245, 165, 36, 1); /* <=0.50  loudest */
-  --conf-low: rgba(245, 165, 36, 0.7); /* 0.50-0.70 */
-  --conf-mid: rgba(245, 165, 36, 0.45); /* 0.70-0.85 */
-  --conf-high: rgba(245, 165, 36, 0.22); /* 0.85-0.95 */
+  /* -- signals: uncertainty is the ONE loud accent; committed + alarm are the two status colours -- */
+  --uncertain: #9a5b00; /* UNCERTAINTY text (readable amber on white) */
+  --uncertain-ink: #8a5200;
+  --uncertain-solid: #e39a2b; /* the loud amber — spine, dots, meters */
+  --uncertain-wash: #fdf3e2; /* flag fill */
+  --uncertain-line: #f0cf9a;
+  --committed: #0e700e; /* COMMITTED — approval only. Nothing else is green. */
+  --committed-strong: #0b5c0b;
+  --committed-wash: #eef7ee;
+  --committed-line: #b3ddb3;
+  --alarm: #b10e1c; /* alarm only: errors + `contradicts`. Never decorative. */
+  --alarm-wash: #fdf3f3;
+  --alarm-line: #efc4c4;
+
+  /* -- confidence spine: DISCRETE bands, not a continuous fade (design truth over polish) -- */
+  --conf-flag: var(--uncertain-solid); /* <=0.50  loudest */
+  --conf-low: #eab765; /* 0.50-0.70 */
+  --conf-mid: #f2d7a6; /* 0.70-0.85 */
+  --conf-high: #e8e6e3; /* 0.85-0.95 — barely there */
   --conf-sure: transparent; /* >0.95  recedes to the hairline */
   --conf-null: var(--line-strong); /* no confidence — a neutral edge, no amber */
 
-  /* -- type scale (px / line-height in the rules below) -- */
-  --t-micro: 10.5px;
+  /* -- type scale -- */
+  --t-micro: 11px;
   --t-meta: 12px;
-  --t-ui: 13px;
-  --t-value: 14.5px;
-  --t-read: 15.5px;
-  --t-title: 17px;
+  --t-ui: 13.5px;
+  --t-value: 14px;
+  --t-read: 15px;
+  --t-title: 18px;
+  --t-hero: 20px;
 
   /* -- spacing (4px base) -- */
   --sp-1: 4px;
@@ -52,19 +69,22 @@
   --sp-6: 24px;
   --sp-8: 32px;
 
-  /* -- waveform (wavesurfer canvas needs plain colour strings; kept tokenised here) -- */
-  --wave-wave: #6b7480; /* unplayed waveform — muted (ink-3) */
-  --wave-progress: #9aa4b1; /* played portion (ink-2) */
-  --wave-cursor: #e6e9ee; /* playhead (ink) */
-  --wave-region-idle: rgba(245, 165, 36, 0.16); /* provenance span — amber, the uncertainty accent */
-  --wave-region-active: rgba(245, 165, 36, 0.42); /* the selected span */
+  /* -- waveform (wavesurfer canvas needs plain colour strings) -- */
+  --wave-wave: #b7b4b1;
+  --wave-progress: #7a7876;
+  --wave-cursor: #242424;
+  --wave-region-idle: rgba(227, 154, 43, 0.22);
+  --wave-region-active: rgba(227, 154, 43, 0.5);
 
-  /* -- radius + motion -- */
-  --r-sm: 3px;
-  --r: 5px;
-  --motion: 130ms cubic-bezier(0.2, 0, 0, 1);
+  /* -- radius, elevation, motion -- */
+  --r-sm: 4px; /* chips, meters, buttons */
+  --r: 8px; /* cards, inputs, modals */
+  --shadow-2: 0 1px 2px rgba(0, 0, 0, 0.08), 0 0 1px rgba(0, 0, 0, 0.06); /* resting card */
+  --shadow-8: 0 3.2px 7.2px rgba(0, 0, 0, 0.1), 0 0.6px 1.8px rgba(0, 0, 0, 0.07); /* raised */
+  --shadow-16: 0 12.8px 28.8px rgba(0, 0, 0, 0.14), 0 2.4px 7.2px rgba(0, 0, 0, 0.09); /* modal */
+  --motion: 130ms cubic-bezier(0.33, 0, 0.1, 1);
 
-  --topbar-h: 49px;
+  --topbar-h: 52px;
 }
 
 * {
@@ -88,7 +108,6 @@ button {
   color: inherit;
 }
 
-/* Motion is a machine responding, not a website performing — and off entirely when asked. */
 @media (prefers-reduced-motion: reduce) {
   * {
     transition: none !important;
@@ -104,7 +123,7 @@ button {
   font-variant-numeric: tabular-nums;
 }
 
-/* ---- top bar ---- */
+/* ---- top command bar ---- */
 .topbar {
   display: flex;
   align-items: center;
@@ -114,24 +133,35 @@ button {
   padding: 0 var(--sp-5);
   background: var(--surface);
   border-bottom: 1px solid var(--line);
+  box-shadow: var(--shadow-2);
+  position: relative;
+  z-index: 10;
 }
 .topbar__brand {
   display: flex;
   align-items: center;
-  gap: var(--sp-2);
+  gap: var(--sp-3);
 }
 .topbar h1 {
-  font-size: var(--t-ui);
+  font-size: 15px;
   font-weight: 600;
   margin: 0;
-  letter-spacing: 0.01em;
+  letter-spacing: 0;
   color: var(--ink);
   white-space: nowrap;
 }
 .topbar__mark {
-  color: var(--uncertain);
-  font-size: var(--t-title);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--r-sm);
+  background: var(--brand);
+  color: #fff;
+  font-size: 16px;
   line-height: 1;
+  box-shadow: var(--shadow-2);
 }
 .tenant {
   display: flex;
@@ -140,44 +170,51 @@ button {
 }
 .tenant input {
   width: 300px;
-  padding: 6px var(--sp-3);
-  border: 1px solid var(--line);
-  border-radius: var(--r);
-  background: var(--bg);
+  padding: 7px var(--sp-3);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-sm);
+  background: var(--surface);
   color: var(--ink);
   font-family: var(--font-mono);
   font-size: var(--t-meta);
+  transition: border-color var(--motion), box-shadow var(--motion);
 }
 .tenant input::placeholder {
   color: var(--ink-3);
 }
 .tenant input:focus-visible {
   outline: none;
-  border-color: var(--line-strong);
-  box-shadow: 0 0 0 2px var(--surface-3);
+  border-color: var(--brand);
+  box-shadow: 0 0 0 1px var(--brand);
 }
 .tenant__reviewer {
   width: 108px !important;
+  font-family: var(--font-sans) !important;
 }
 .tenant button {
   border: 1px solid var(--line-strong);
-  background: var(--surface-2);
+  background: var(--surface);
   color: var(--ink);
-  border-radius: var(--r);
-  padding: 6px var(--sp-3);
-  font-weight: 500;
+  border-radius: var(--r-sm);
+  padding: 7px var(--sp-3);
+  font-weight: 600;
   white-space: nowrap;
-  transition: border-color var(--motion);
+  transition: background var(--motion), border-color var(--motion);
 }
 .tenant button:hover {
-  border-color: var(--ink-3);
+  background: var(--surface-3);
 }
 .tenant button.load {
-  background: var(--surface-3);
-  font-weight: 600;
+  background: var(--brand);
+  border-color: var(--brand);
+  color: #fff;
+}
+.tenant button.load:hover {
+  background: var(--brand-strong);
+  border-color: var(--brand-strong);
 }
 .tenant .ghost:disabled {
-  opacity: 0.45;
+  opacity: 0.5;
   cursor: default;
 }
 
@@ -187,28 +224,27 @@ button {
   font-size: var(--t-meta);
 }
 .banner--error {
-  background: color-mix(in srgb, var(--alarm) 14%, var(--surface));
+  background: var(--alarm-wash);
   color: var(--alarm);
-  border-bottom: 1px solid color-mix(in srgb, var(--alarm) 35%, var(--line));
+  border-bottom: 1px solid var(--alarm-line);
 }
-/* Processing failed — the case must read as an error a human owns, never as a finished-but-empty case. */
 .banner--failed {
-  padding: var(--sp-3) var(--sp-5);
+  padding: var(--sp-3) var(--sp-4);
   line-height: 1.5;
-  background: color-mix(in srgb, var(--alarm) 16%, var(--surface));
+  background: var(--alarm-wash);
   color: var(--alarm);
-  border: 1px solid color-mix(in srgb, var(--alarm) 40%, var(--line));
-  border-radius: var(--radius, 6px);
-  margin: var(--sp-3) var(--sp-5) 0;
+  border: 1px solid var(--alarm-line);
+  border-radius: var(--r);
+  margin: var(--sp-4) var(--sp-6) 0;
 }
 .banner--failed strong {
   color: var(--alarm);
 }
 
-/* ---- three-zone layout: register rail | case | field detail ---- */
+/* ---- layout: register rail | case ---- */
 .layout {
   display: grid;
-  grid-template-columns: 284px 1fr;
+  grid-template-columns: 300px 1fr;
   height: calc(100vh - var(--topbar-h));
   min-height: 0;
 }
@@ -222,12 +258,12 @@ button {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: var(--sp-2);
   padding: var(--sp-3) var(--sp-4);
   font-weight: 600;
-  font-size: var(--t-micro);
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: var(--ink-3);
+  font-size: var(--t-ui);
+  letter-spacing: 0;
+  color: var(--ink);
   border-bottom: 1px solid var(--line);
   position: sticky;
   top: 0;
@@ -240,12 +276,11 @@ button {
 }
 .register__basis {
   margin: 0;
-  padding: 6px var(--sp-4);
+  padding: var(--sp-2) var(--sp-4);
   font-size: var(--t-micro);
   color: var(--ink-3);
   border-bottom: 1px solid var(--line);
-  background: var(--bg);
-  letter-spacing: 0.01em;
+  background: var(--surface-2);
 }
 .register ul {
   list-style: none;
@@ -255,24 +290,22 @@ button {
 .register__item {
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: var(--sp-1);
   width: 100%;
   text-align: left;
   background: none;
   border: 0;
   border-bottom: 1px solid var(--line);
-  border-left: 2px solid transparent;
+  border-left: 3px solid transparent;
   padding: var(--sp-3) var(--sp-4);
-  transition:
-    background var(--motion),
-    border-color var(--motion);
+  transition: background var(--motion), border-color var(--motion);
 }
 .register__item:hover {
-  background: var(--surface-2);
+  background: var(--surface-3);
 }
 .register__item--active {
-  background: var(--surface-2);
-  border-left-color: var(--ink-2);
+  background: var(--brand-wash);
+  border-left-color: var(--brand);
 }
 .register__item--failed {
   border-left-color: var(--alarm);
@@ -284,44 +317,50 @@ button {
 }
 .register__cat {
   font-weight: 600;
-  font-size: var(--t-meta);
+  font-size: var(--t-ui);
   color: var(--ink);
 }
 .register__conf {
   margin-left: auto;
   font-family: var(--font-mono);
   font-size: var(--t-micro);
-  font-weight: 500;
+  font-weight: 600;
   font-variant-numeric: tabular-nums;
-  color: var(--ink-2);
+  color: var(--ink-3);
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--surface-3);
 }
 .register__conf[data-flagged="true"] {
   color: var(--uncertain-ink);
+  background: var(--uncertain-wash);
 }
 .register__fault {
   color: var(--ink-2);
   font-size: var(--t-meta);
+  line-height: 1.4;
   overflow: hidden;
   text-overflow: ellipsis;
-  white-space: nowrap;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
 }
 .register__sub {
   color: var(--ink-3);
   font-size: var(--t-micro);
-  font-family: var(--font-mono);
-  letter-spacing: 0.01em;
+  letter-spacing: 0;
 }
 
 /* ---- register empty states (a designed first impression, never blank) ---- */
 .register__empty {
   padding: var(--sp-6) var(--sp-4);
-  color: var(--ink-3);
+  color: var(--ink-2);
   font-size: var(--t-meta);
   line-height: 1.6;
 }
 .register__empty h4 {
   margin: 0 0 var(--sp-2);
-  color: var(--ink-2);
+  color: var(--ink);
   font-size: var(--t-ui);
   font-weight: 600;
 }
@@ -345,69 +384,91 @@ button {
   display: flex;
   flex-direction: column;
   min-height: 0;
+  padding: var(--sp-5) var(--sp-6) var(--sp-8);
+  gap: var(--sp-4);
 }
-.case--committed {
-  box-shadow: inset 3px 0 0 var(--committed);
+
+/* the case is a stack of clean white cards on the light canvas */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  box-shadow: var(--shadow-2);
 }
-.case--failed {
-  box-shadow: inset 3px 0 0 var(--alarm);
+.case--committed .case__header {
+  border-top: 3px solid var(--committed);
 }
+.case--failed .case__header {
+  border-top: 3px solid var(--alarm);
+}
+
 .case__header {
   display: flex;
   justify-content: space-between;
-  align-items: center;
+  align-items: flex-start;
   gap: var(--sp-4);
-  padding: var(--sp-3) var(--sp-6);
-  border-bottom: 1px solid var(--line);
+  padding: var(--sp-4) var(--sp-5);
   background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  box-shadow: var(--shadow-2);
+  flex-wrap: wrap;
+}
+.case__headline-wrap {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
 }
 .case__id {
   font-family: var(--font-mono);
   font-weight: 500;
-  color: var(--ink);
-  margin-right: var(--sp-3);
+  color: var(--ink-3);
+  font-size: var(--t-meta);
 }
 .case__meta {
   color: var(--ink-3);
   font-size: var(--t-meta);
-  font-family: var(--font-mono);
 }
 .case__actions {
   display: flex;
   align-items: center;
   gap: var(--sp-2);
+  flex-wrap: wrap;
+  justify-content: flex-end;
 }
 
 /* ---- decision bar: the rules engine speaking, distinct + authoritative ---- */
 .decision {
   display: flex;
   align-items: center;
-  gap: var(--sp-4);
+  gap: var(--sp-3);
   flex-wrap: wrap;
-  padding: var(--sp-2) var(--sp-6);
+  padding: var(--sp-3) var(--sp-5);
   background: var(--surface-2);
-  border-bottom: 1px solid var(--line);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
   font-size: var(--t-meta);
 }
 .decision__tag {
-  font-family: var(--font-mono);
+  font-family: var(--font-sans);
   font-size: var(--t-micro);
-  font-weight: 500;
-  letter-spacing: 0.14em;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
   color: var(--ink-3);
-  border: 1px solid var(--line-strong);
-  border-radius: var(--r-sm);
-  padding: 1px 6px;
 }
 .decision__route,
 .decision__sla {
-  font-family: var(--font-mono);
   color: var(--ink-2);
   font-variant-numeric: tabular-nums;
 }
 .decision__route b {
   color: var(--ink);
-  font-weight: 500;
+  font-weight: 600;
+}
+.decision__sla {
+  font-family: var(--font-mono);
 }
 .decision__why {
   color: var(--ink-2);
@@ -419,26 +480,29 @@ button {
   color: var(--ink-3);
 }
 
-/* the synthesised read — the analysis a reviewer acts on, above the raw fields. Neutral by default; the
-   ONE sanctioned accent here is --alarm on a record discrepancy (DESIGN.md §3: alarm = contradicts). */
+/* the synthesised read — the human-readable summary a reviewer acts on */
 .analysis {
-  padding: var(--sp-4) var(--sp-6);
+  padding: var(--sp-5);
   background: var(--surface);
-  border-bottom: 1px solid var(--line);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  box-shadow: var(--shadow-2);
   display: flex;
   flex-direction: column;
-  gap: var(--sp-2);
+  gap: var(--sp-3);
 }
 .analysis__headline {
   font-weight: 600;
   color: var(--ink);
-  font-size: var(--t-body);
+  font-size: var(--t-hero);
+  line-height: 1.3;
 }
 .analysis__summary {
   margin: 0;
   color: var(--ink-2);
-  line-height: 1.5;
-  max-width: 68ch;
+  line-height: 1.55;
+  max-width: 72ch;
+  font-size: var(--t-value);
 }
 .analysis__flag,
 .analysis__next {
@@ -447,50 +511,55 @@ button {
   gap: var(--sp-3);
   font-size: var(--t-meta);
   color: var(--ink-2);
+  padding: var(--sp-2) var(--sp-3);
+  border-radius: var(--r-sm);
+}
+.analysis__flag {
+  color: var(--alarm);
+  background: var(--alarm-wash);
+  border: 1px solid var(--alarm-line);
+}
+.analysis__next {
+  background: var(--brand-wash);
+  border: 1px solid var(--brand-line);
+  color: var(--ink);
 }
 .analysis__tag {
   flex: none;
-  font-family: var(--font-mono);
   font-size: var(--t-micro);
-  font-weight: 500;
-  letter-spacing: 0.12em;
+  font-weight: 700;
+  letter-spacing: 0.05em;
   text-transform: uppercase;
   color: var(--ink-3);
-  border: 1px solid var(--line-strong);
-  border-radius: var(--r-sm);
-  padding: 1px 6px;
-}
-.analysis__flag {
-  color: var(--ink);
 }
 .analysis__tag--flag {
   color: var(--alarm);
-  border-color: color-mix(in srgb, var(--alarm) 55%, var(--line-strong));
 }
 
-/* priority — a NEUTRAL intensity ramp, never four colours (DESIGN.md §3) */
+/* priority — a NEUTRAL intensity ramp, never four colours (uncertainty stays the one loud signal) */
 .pri {
   display: inline-block;
   font-family: var(--font-mono);
   font-size: var(--t-micro);
-  font-weight: 600;
-  padding: 1px 6px;
+  font-weight: 700;
+  padding: 2px 7px;
   border-radius: var(--r-sm);
-  letter-spacing: 0.03em;
+  letter-spacing: 0.02em;
   border: 1px solid var(--line-strong);
 }
 .pri--P1 {
-  background: var(--surface-3);
-  color: var(--ink);
-  border-color: var(--ink-3);
+  background: var(--ink);
+  color: #fff;
+  border-color: var(--ink);
 }
 .pri--P2 {
   background: var(--surface-3);
-  color: var(--ink-2);
+  color: var(--ink);
+  border-color: var(--line-strong);
 }
 .pri--P3 {
   background: var(--surface-2);
-  color: var(--ink-3);
+  color: var(--ink-2);
 }
 .pri--P4 {
   background: transparent;
@@ -501,42 +570,48 @@ button {
 /* ---- case body: fields (centre) + provenance detail (right) ---- */
 .case__body {
   display: grid;
-  grid-template-columns: 1fr 340px;
+  grid-template-columns: 1fr 348px;
+  gap: var(--sp-4);
   min-height: 0;
-  flex: 1;
 }
 .case__left {
-  padding: var(--sp-5) var(--sp-6);
   min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
 }
 .case__right {
-  border-left: 1px solid var(--line);
-  padding: var(--sp-5);
-  background: var(--surface);
   min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+}
+.panel {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  box-shadow: var(--shadow-2);
+  padding: var(--sp-4) var(--sp-5);
 }
 
 .section-title {
-  font-size: var(--t-micro);
+  font-size: var(--t-ui);
   font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: var(--ink-3);
-  margin: var(--sp-5) 0 var(--sp-3);
+  letter-spacing: 0;
+  color: var(--ink);
+  margin: 0 0 var(--sp-3);
   display: flex;
   align-items: baseline;
   gap: var(--sp-2);
 }
-.section-title:first-child {
-  margin-top: 0;
-}
 .count {
   color: var(--ink-3);
   font-family: var(--font-mono);
-  font-weight: 400;
+  font-weight: 500;
+  font-size: var(--t-meta);
 }
 
-/* ---- governed core: fields scan as a COLUMN, each with a confidence spine ---- */
+/* ---- governed core: fields scan as a clean property column with a confidence indicator ---- */
 .fields {
   display: flex;
   flex-direction: column;
@@ -545,7 +620,7 @@ button {
 .field {
   position: relative;
   display: grid;
-  grid-template-columns: 150px 1fr auto;
+  grid-template-columns: 160px 1fr auto;
   align-items: baseline;
   gap: var(--sp-3);
   width: 100%;
@@ -553,26 +628,24 @@ button {
   background: none;
   border: 0;
   border-bottom: 1px solid var(--line);
-  border-left: 2px solid var(--conf-null); /* the confidence spine (band set per field) */
+  border-left: 3px solid var(--conf-null);
   padding: var(--sp-3) var(--sp-3) var(--sp-3) var(--sp-4);
-  transition:
-    background var(--motion),
-    border-left-color var(--motion);
+  transition: background var(--motion), border-left-color var(--motion);
 }
 .field--button:hover {
-  background: var(--surface-2);
+  background: var(--surface-3);
 }
 .field--active {
-  background: var(--surface-2);
+  background: var(--brand-wash);
 }
 .field--active::after {
   content: "";
   position: absolute;
-  inset: 0 auto 0 -2px;
-  width: 2px;
-  background: var(--ink-2);
+  inset: 0 auto 0 -3px;
+  width: 3px;
+  background: var(--brand);
 }
-/* the five discrete confidence bands (DESIGN.md §6) */
+/* the five discrete confidence bands */
 .field--conf-flag {
   border-left-color: var(--conf-flag);
 }
@@ -589,21 +662,20 @@ button {
   border-left-color: var(--conf-sure);
 }
 .field__label {
-  font-size: var(--t-micro);
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
+  font-size: var(--t-meta);
+  letter-spacing: 0;
   color: var(--ink-3);
-  font-weight: 600;
-  padding-top: 2px;
+  font-weight: 500;
+  text-transform: capitalize;
+  padding-top: 1px;
 }
 .field__value {
   font-size: var(--t-value);
-  font-weight: 500;
+  font-weight: 600;
   color: var(--ink);
   word-break: break-word;
   min-width: 0;
 }
-/* fault is prose — it keeps the 3-col grid (label | wrapping value | conf%), just a lighter value */
 .field--wide .field__value {
   font-weight: 400;
   line-height: 1.55;
@@ -615,8 +687,8 @@ button {
     -45deg,
     transparent,
     transparent 7px,
-    color-mix(in srgb, var(--surface-2) 60%, transparent) 7px,
-    color-mix(in srgb, var(--surface-2) 60%, transparent) 8px
+    var(--surface-2) 7px,
+    var(--surface-2) 8px
   );
 }
 .field__value--absent {
@@ -627,7 +699,7 @@ button {
 .field__conf {
   font-family: var(--font-mono);
   font-size: var(--t-meta);
-  font-weight: 500;
+  font-weight: 600;
   font-variant-numeric: tabular-nums;
   color: var(--ink-3);
   white-space: nowrap;
@@ -638,44 +710,44 @@ button {
 .field__flag {
   grid-column: 2 / -1;
   justify-self: start;
-  margin-top: 4px;
+  margin-top: var(--sp-1);
 }
 
 /* ---- chips ---- */
 .chip {
   display: inline-block;
-  font-family: var(--font-mono);
   font-size: var(--t-micro);
-  font-weight: 500;
-  padding: 1px 7px;
-  border-radius: var(--r-sm);
-  letter-spacing: 0.02em;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 999px;
+  letter-spacing: 0;
   border: 1px solid transparent;
 }
 .chip--needs-review {
-  background: color-mix(in srgb, var(--uncertain) 16%, var(--surface));
+  background: var(--uncertain-wash);
   color: var(--uncertain-ink);
-  border-color: color-mix(in srgb, var(--uncertain) 34%, transparent);
+  border-color: var(--uncertain-line);
 }
 .chip--corrected {
-  background: color-mix(in srgb, var(--committed) 14%, var(--surface));
+  background: var(--committed-wash);
   color: var(--committed);
-  border-color: color-mix(in srgb, var(--committed) 30%, transparent);
+  border-color: var(--committed-line);
 }
 .chip--primary {
-  background: var(--surface-3);
-  color: var(--ink-2);
+  background: var(--brand-wash);
+  color: var(--brand);
+  border-color: var(--brand-line);
 }
 .chip--corroborating,
 .chip--derived_from {
-  background: var(--surface-2);
-  color: var(--ink-3);
+  background: var(--surface-3);
+  color: var(--ink-2);
   border-color: var(--line);
 }
 .chip--contradicts {
-  background: color-mix(in srgb, var(--alarm) 15%, var(--surface));
+  background: var(--alarm-wash);
   color: var(--alarm);
-  border-color: color-mix(in srgb, var(--alarm) 34%, transparent);
+  border-color: var(--alarm-line);
 }
 
 /* ---- emergent attributes table ---- */
@@ -687,15 +759,14 @@ button {
 .attrs th {
   text-align: left;
   font-size: var(--t-micro);
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
+  letter-spacing: 0;
   color: var(--ink-3);
   font-weight: 600;
-  padding: var(--sp-1) var(--sp-3);
+  padding: var(--sp-2) var(--sp-3);
   border-bottom: 1px solid var(--line);
 }
 .attrs td {
-  padding: 6px var(--sp-3);
+  padding: var(--sp-2) var(--sp-3);
   border-bottom: 1px solid var(--line);
   color: var(--ink);
 }
@@ -704,11 +775,11 @@ button {
   transition: background var(--motion);
 }
 .attrs tbody tr:hover {
-  background: var(--surface-2);
+  background: var(--surface-3);
 }
 .attrs__row--active {
-  background: var(--surface-2);
-  box-shadow: inset 2px 0 0 var(--ink-2);
+  background: var(--brand-wash);
+  box-shadow: inset 3px 0 0 var(--brand);
 }
 .attrs .mono-cell {
   font-family: var(--font-mono);
@@ -722,24 +793,25 @@ button {
   padding: var(--sp-2) 0;
 }
 
-/* ---- source text: the human's VERBATIM words, set as a document (serif) ---- */
+/* ---- source text: the customer's verbatim words, set as a readable quote ---- */
 .source {
-  margin-top: var(--sp-2);
+  margin-top: 0;
 }
 .trace {
   white-space: pre-wrap;
   word-break: break-word;
   overflow-wrap: break-word;
-  background: var(--surface);
+  background: var(--surface-2);
   border: 1px solid var(--line);
-  border-radius: var(--r);
+  border-left: 3px solid var(--line-strong);
+  border-radius: var(--r-sm);
   padding: var(--sp-4) var(--sp-5);
-  font-family: var(--font-serif);
+  font-family: var(--font-sans);
   font-size: var(--t-read);
   line-height: 1.7;
   color: var(--ink);
   margin: 0;
-  max-width: 68ch;
+  max-width: 74ch;
 }
 .trace--empty {
   font-family: var(--font-mono);
@@ -747,11 +819,11 @@ button {
   color: var(--ink-3);
 }
 .trace mark {
-  background: color-mix(in srgb, var(--uncertain) 30%, transparent);
+  background: var(--uncertain-wash);
   color: var(--ink);
   border-radius: 2px;
   padding: 0 2px;
-  box-shadow: 0 0 0 1px color-mix(in srgb, var(--uncertain) 40%, transparent);
+  box-shadow: 0 0 0 1px var(--uncertain-line);
 }
 
 /* ---- field detail / provenance (right panel) ---- */
@@ -777,7 +849,7 @@ button {
 }
 .detail__value {
   font-size: var(--t-value);
-  font-weight: 500;
+  font-weight: 600;
   margin: var(--sp-2) 0;
   word-break: break-word;
   color: var(--ink);
@@ -788,10 +860,10 @@ button {
 }
 .detail__section {
   font-size: var(--t-micro);
+  letter-spacing: 0.03em;
   text-transform: uppercase;
-  letter-spacing: 0.06em;
   color: var(--ink-3);
-  font-weight: 600;
+  font-weight: 700;
   margin: var(--sp-4) 0 var(--sp-2);
 }
 .detail__prov {
@@ -811,7 +883,7 @@ button {
 .detail__prov code {
   font-family: var(--font-mono);
   font-size: var(--t-meta);
-  background: var(--surface-2);
+  background: var(--surface-3);
   padding: 1px 6px;
   border-radius: var(--r-sm);
   color: var(--ink-2);
@@ -826,7 +898,7 @@ button {
 .detail__diff {
   background: var(--surface-2);
   border: 1px solid var(--line);
-  border-radius: var(--r);
+  border-radius: var(--r-sm);
   padding: var(--sp-2) var(--sp-3);
   margin-bottom: var(--sp-2);
   font-size: var(--t-meta);
@@ -840,7 +912,7 @@ button {
 }
 .detail__diff-new {
   color: var(--committed);
-  font-weight: 500;
+  font-weight: 600;
 }
 
 /* ---- inline correction ---- */
@@ -850,15 +922,15 @@ button {
 .edit__input {
   width: 100%;
   padding: var(--sp-2) var(--sp-3);
-  border: 1px solid var(--uncertain);
-  border-radius: var(--r);
-  background: var(--bg);
+  border: 1px solid var(--brand);
+  border-radius: var(--r-sm);
+  background: var(--surface);
   color: var(--ink);
   font: inherit;
 }
 .edit__input:focus-visible {
   outline: none;
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--uncertain) 30%, transparent);
+  box-shadow: 0 0 0 1px var(--brand);
 }
 .edit__actions {
   display: flex;
@@ -877,7 +949,7 @@ button {
 /* audio provenance */
 .audio-prov {
   border: 1px solid var(--line);
-  border-radius: var(--r);
+  border-radius: var(--r-sm);
   padding: var(--sp-3);
   background: var(--surface-2);
 }
@@ -892,11 +964,12 @@ button {
 }
 .audio-prov__play {
   border: 1px solid var(--line-strong);
-  background: var(--surface-3);
+  background: var(--surface);
   color: var(--ink);
-  border-radius: var(--r);
-  padding: 3px var(--sp-3);
+  border-radius: var(--r-sm);
+  padding: 4px var(--sp-3);
   font-size: var(--t-meta);
+  font-weight: 600;
 }
 .audio-prov__play:disabled {
   opacity: 0.4;
@@ -909,16 +982,15 @@ button {
   font-variant-numeric: tabular-nums;
 }
 
-/* image provenance — WHITE DOCUMENTS ARE MATTED, never flush against near-black (DESIGN.md §6) */
+/* image provenance — a scanned/photographed document sits matted in a clean frame */
 .img-prov {
   margin: 0;
 }
 .img-prov__mat {
   background: var(--surface-2);
   border: 1px solid var(--line);
-  border-radius: var(--r);
+  border-radius: var(--r-sm);
   padding: var(--sp-3);
-  box-shadow: inset 0 0 0 1px var(--bg);
 }
 .img-prov__frame {
   position: relative;
@@ -930,7 +1002,7 @@ button {
   max-width: 100%;
   height: auto;
   border-radius: var(--r-sm);
-  box-shadow: 0 1px 8px rgba(0, 0, 0, 0.5);
+  box-shadow: var(--shadow-8);
 }
 .img-prov__overlay {
   position: absolute;
@@ -946,12 +1018,12 @@ button {
   background: transparent;
 }
 .img-prov__box--faint {
-  border: 1px solid color-mix(in srgb, var(--uncertain) 55%, transparent);
+  border: 1px solid var(--uncertain-solid);
 }
 .img-prov__box--active {
-  border: 2px solid var(--uncertain);
-  background: color-mix(in srgb, var(--uncertain) 20%, transparent);
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--uncertain) 30%, transparent);
+  border: 2px solid var(--uncertain-solid);
+  background: color-mix(in srgb, var(--uncertain-solid) 18%, transparent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--uncertain-solid) 28%, transparent);
 }
 .img-prov__caption {
   color: var(--ink-3);
@@ -962,117 +1034,99 @@ button {
 
 /* ---- buttons ---- */
 .primary {
-  background: var(--surface-3);
-  color: var(--ink);
-  border: 1px solid var(--line-strong);
-  border-radius: var(--r);
-  padding: 6px var(--sp-4);
+  background: var(--brand);
+  color: #fff;
+  border: 1px solid var(--brand);
+  border-radius: var(--r-sm);
+  padding: 7px var(--sp-4);
   font-weight: 600;
-  transition:
-    background var(--motion),
-    border-color var(--motion);
+  transition: background var(--motion), border-color var(--motion);
 }
 .primary:hover:not(:disabled) {
-  border-color: var(--ink-3);
-  background: var(--surface-2);
+  background: var(--brand-strong);
+  border-color: var(--brand-strong);
 }
 .primary:disabled {
   opacity: 0.5;
   cursor: default;
 }
 .primary--sm {
-  padding: 4px var(--sp-3);
+  padding: 5px var(--sp-3);
   font-size: var(--t-meta);
 }
 .ghost {
-  border: 1px solid var(--line);
-  background: transparent;
-  color: var(--ink-2);
-  border-radius: var(--r);
-  padding: 6px var(--sp-3);
-  font-weight: 500;
+  border: 1px solid var(--line-strong);
+  background: var(--surface);
+  color: var(--ink);
+  border-radius: var(--r-sm);
+  padding: 7px var(--sp-3);
+  font-weight: 600;
   white-space: nowrap;
-  transition:
-    border-color var(--motion),
-    color var(--motion);
+  transition: background var(--motion), border-color var(--motion);
 }
 .ghost:hover:not(:disabled) {
-  border-color: var(--line-strong);
-  color: var(--ink);
+  background: var(--surface-3);
 }
 .ghost--sm {
-  padding: 3px var(--sp-2);
+  padding: 4px var(--sp-2);
   font-size: var(--t-meta);
 }
 
-/* ---- the commit gate: approve (arm) -> Enter (commit); committed seal ---- */
+/* ---- the commit gate: approve (primary) -> committed seal ---- */
 .approve {
-  background: var(--surface-3);
-  color: var(--ink);
-  border: 1px solid var(--line-strong);
-  border-radius: var(--r);
-  padding: 6px var(--sp-5);
+  background: var(--brand);
+  color: #fff;
+  border: 1px solid var(--brand);
+  border-radius: var(--r-sm);
+  padding: 7px var(--sp-5);
   font-weight: 600;
-  transition:
-    border-color var(--motion),
-    background var(--motion);
+  transition: background var(--motion), border-color var(--motion);
 }
 .approve:hover:not(:disabled) {
-  border-color: var(--ink-3);
+  background: var(--brand-strong);
+  border-color: var(--brand-strong);
 }
 .approve:disabled {
   opacity: 0.5;
   cursor: default;
 }
-.approve--armed {
-  border-color: var(--uncertain);
-  color: var(--uncertain-ink);
-  background: color-mix(in srgb, var(--uncertain) 12%, var(--surface-2));
-}
-.approve__arm-hint {
-  font-family: var(--font-mono);
-  font-size: var(--t-micro);
-  color: var(--uncertain-ink);
-  letter-spacing: 0.02em;
-  white-space: nowrap;
-}
 .seal {
   display: inline-flex;
   align-items: center;
   gap: var(--sp-2);
-  font-family: var(--font-mono);
   font-size: var(--t-meta);
-  font-weight: 500;
+  font-weight: 600;
   color: var(--committed);
-  padding: 3px var(--sp-3);
-  border: 1px solid color-mix(in srgb, var(--committed) 34%, transparent);
-  border-radius: var(--r);
-  background: color-mix(in srgb, var(--committed) 12%, var(--surface));
+  padding: 5px var(--sp-3);
+  border: 1px solid var(--committed-line);
+  border-radius: var(--r-sm);
+  background: var(--committed-wash);
 }
 .seal--fail {
   color: var(--alarm);
-  border-color: color-mix(in srgb, var(--alarm) 34%, transparent);
-  background: color-mix(in srgb, var(--alarm) 12%, var(--surface));
+  border-color: var(--alarm-line);
+  background: var(--alarm-wash);
 }
 .seal__dot {
-  width: 7px;
-  height: 7px;
+  width: 8px;
+  height: 8px;
   border-radius: 50%;
   background: var(--committed);
-  box-shadow: 0 0 6px color-mix(in srgb, var(--committed) 60%, transparent);
 }
 .badge--sm {
-  font-family: var(--font-mono);
   font-size: var(--t-micro);
-  font-weight: 500;
+  font-weight: 600;
   color: var(--committed);
   margin-left: auto;
   white-space: nowrap;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--committed-wash);
+  border: 1px solid var(--committed-line);
 }
 .badge--fail {
-  font-family: var(--font-mono);
   font-size: var(--t-micro);
-  font-weight: 600;
+  font-weight: 700;
   color: var(--alarm);
   margin-left: auto;
   white-space: nowrap;
@@ -1081,10 +1135,10 @@ button {
 /* ---- JSON dump ---- */
 .json {
   margin-top: var(--sp-4);
-  background: var(--bg);
+  background: var(--surface-2);
   color: var(--ink-2);
   border: 1px solid var(--line);
-  border-radius: var(--r);
+  border-radius: var(--r-sm);
   padding: var(--sp-3);
   font-family: var(--font-mono);
   font-size: var(--t-meta);
@@ -1096,22 +1150,21 @@ button {
 .modal {
   position: fixed;
   inset: 0;
-  background: rgba(4, 6, 9, 0.66);
+  background: rgba(0, 0, 0, 0.4);
   display: flex;
   align-items: center;
   justify-content: center;
   z-index: 60;
   padding: var(--sp-5);
-  backdrop-filter: blur(2px);
 }
 .modal__card {
-  background: var(--surface-2);
-  border: 1px solid var(--line-strong);
+  background: var(--surface);
+  border: 1px solid var(--line);
   border-radius: var(--r);
   padding: var(--sp-6);
   width: 560px;
   max-width: 100%;
-  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.6);
+  box-shadow: var(--shadow-16);
 }
 .modal__card h3 {
   margin: 0 0 var(--sp-2);
@@ -1127,10 +1180,10 @@ button {
 .modal__text,
 .modal__type,
 .modal__file {
-  background: var(--bg);
+  background: var(--surface);
   color: var(--ink);
-  border: 1px solid var(--line);
-  border-radius: var(--r);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-sm);
   font: inherit;
 }
 .modal__text {
@@ -1142,8 +1195,8 @@ button {
 .modal__text:focus-visible,
 .modal__type:focus-visible {
   outline: none;
-  border-color: var(--line-strong);
-  box-shadow: 0 0 0 2px var(--surface-3);
+  border-color: var(--brand);
+  box-shadow: 0 0 0 1px var(--brand);
 }
 .modal__file {
   margin-top: var(--sp-3);
@@ -1160,7 +1213,7 @@ button {
   color: var(--ink-2);
 }
 .modal__type {
-  padding: 5px var(--sp-3);
+  padding: 6px var(--sp-3);
   width: 160px;
   font-family: var(--font-mono);
 }
@@ -1172,15 +1225,15 @@ button {
 .obj-result {
   margin-top: var(--sp-3);
   padding: var(--sp-3);
-  background: color-mix(in srgb, var(--committed) 10%, var(--surface));
-  border: 1px solid color-mix(in srgb, var(--committed) 28%, var(--line));
-  border-radius: var(--r);
+  background: var(--committed-wash);
+  border: 1px solid var(--committed-line);
+  border-radius: var(--r-sm);
   font-size: var(--t-meta);
   color: var(--ink);
   line-height: 1.6;
 }
 
-/* ---- intake pipeline indicator: show the pipeline working, not a spinner (DESIGN.md §6) ---- */
+/* ---- intake pipeline indicator: show the pipeline working, not a spinner ---- */
 .pipeline {
   margin: var(--sp-4) 0 0;
   display: flex;
@@ -1197,38 +1250,38 @@ button {
 }
 .pipeline__row--active {
   color: var(--ink);
+  font-weight: 600;
 }
 .pipeline__row--done {
   color: var(--ink-2);
 }
 .pipeline__dot {
-  width: 8px;
-  height: 8px;
+  width: 9px;
+  height: 9px;
   border-radius: 50%;
   border: 1px solid var(--line-strong);
   flex: none;
 }
 .pipeline__row--active .pipeline__dot {
-  background: var(--uncertain);
-  border-color: var(--uncertain);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--uncertain) 22%, transparent);
+  background: var(--brand);
+  border-color: var(--brand);
+  box-shadow: 0 0 0 3px var(--brand-wash);
   animation: pulse 1.1s ease-in-out infinite;
 }
 .pipeline__row--done .pipeline__dot {
-  background: var(--committed-dim);
-  border-color: var(--committed-dim);
+  background: var(--committed);
+  border-color: var(--committed);
 }
 .pipeline__label {
-  font-family: var(--font-mono);
-  letter-spacing: 0.02em;
+  letter-spacing: 0;
 }
 @keyframes pulse {
   0%,
   100% {
-    box-shadow: 0 0 0 3px color-mix(in srgb, var(--uncertain) 22%, transparent);
+    box-shadow: 0 0 0 3px var(--brand-wash);
   }
   50% {
-    box-shadow: 0 0 0 5px color-mix(in srgb, var(--uncertain) 8%, transparent);
+    box-shadow: 0 0 0 6px color-mix(in srgb, var(--brand) 8%, transparent);
   }
 }
 
@@ -1236,28 +1289,25 @@ button {
 .help {
   position: fixed;
   inset: 0;
-  background: rgba(4, 6, 9, 0.66);
+  background: rgba(0, 0, 0, 0.4);
   display: flex;
   align-items: center;
   justify-content: center;
   z-index: 50;
-  backdrop-filter: blur(2px);
 }
 .help__card {
-  background: var(--surface-2);
-  border: 1px solid var(--line-strong);
+  background: var(--surface);
+  border: 1px solid var(--line);
   border-radius: var(--r);
   padding: var(--sp-5) var(--sp-6);
-  min-width: 300px;
-  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.6);
+  min-width: 320px;
+  box-shadow: var(--shadow-16);
 }
 .help__card h3 {
   margin: 0 0 var(--sp-3);
   font-size: var(--t-ui);
   font-weight: 600;
-  color: var(--ink-2);
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
+  color: var(--ink);
 }
 .help__card dl {
   display: grid;
@@ -1268,8 +1318,8 @@ button {
 }
 .help__card dt {
   font-family: var(--font-mono);
-  font-weight: 500;
-  color: var(--uncertain-ink);
+  font-weight: 600;
+  color: var(--brand);
 }
 .help__card dd {
   margin: 0;
@@ -1280,6 +1330,7 @@ kbd {
   font-size: var(--t-micro);
   background: var(--surface-3);
   border: 1px solid var(--line-strong);
+  border-bottom-width: 2px;
   border-radius: var(--r-sm);
   padding: 1px 5px;
   color: var(--ink);
@@ -1287,7 +1338,7 @@ kbd {
 
 /* ---- focus visibility (keyboard-first: focus must always be legible) ---- */
 :focus-visible {
-  outline: 2px solid var(--ink-3);
+  outline: 2px solid var(--brand);
   outline-offset: 1px;
 }
 .field:focus-visible,
@@ -1296,16 +1347,16 @@ kbd {
   outline-offset: -2px;
 }
 
-/* ---- responsive: stack below tablet width ---- */
+/* ---- responsive ---- */
 @media (max-width: 1320px) {
   .case__body {
     grid-template-columns: 1fr 300px;
   }
   .layout {
-    grid-template-columns: 260px 1fr;
+    grid-template-columns: 268px 1fr;
   }
 }
-@media (max-width: 900px) {
+@media (max-width: 980px) {
   .topbar {
     height: auto;
     flex-direction: column;
@@ -1328,14 +1379,13 @@ kbd {
   .register {
     border-right: 0;
     border-bottom: 1px solid var(--line);
-    max-height: 300px;
+    max-height: 320px;
+  }
+  .case {
+    padding: var(--sp-4);
   }
   .case__body {
     grid-template-columns: 1fr;
-  }
-  .case__right {
-    border-left: 0;
-    border-top: 1px solid var(--line);
   }
   .decision__why {
     max-width: 100%;
@@ -1344,7 +1394,7 @@ kbd {
   }
 }
 
-/* ---- review-time HUD: the ≤30s gate, visible while working (winning-condition §4) ---- */
+/* ---- review-time HUD: the <=30s gate, visible while working ---- */
 .hud {
   display: inline-flex;
   align-items: baseline;
@@ -1353,17 +1403,21 @@ kbd {
   font-size: var(--t-meta);
   font-variant-numeric: tabular-nums;
   color: var(--ink-2);
-  padding: 3px var(--sp-3);
+  padding: 5px var(--sp-3);
   border: 1px solid var(--line);
-  border-radius: var(--r);
+  border-radius: var(--r-sm);
   background: var(--surface-2);
   white-space: nowrap;
 }
+.hud--over {
+  border-color: var(--uncertain-line);
+  background: var(--uncertain-wash);
+}
 .hud--over .hud__now {
-  color: var(--uncertain-ink); /* over the ≤30s gate → the one loud colour */
+  color: var(--uncertain-ink);
 }
 .hud__now {
-  font-weight: 600;
+  font-weight: 700;
   color: var(--ink);
 }
 .hud__sep {
@@ -1379,62 +1433,61 @@ kbd {
   align-items: center;
   justify-content: space-between;
   gap: var(--sp-4);
-  margin: var(--sp-3) var(--sp-6) 0;
-  padding: var(--sp-2) var(--sp-4);
+  padding: var(--sp-3) var(--sp-4);
   font-size: var(--t-ui);
-  color: var(--committed);
-  border: 1px solid color-mix(in srgb, var(--committed) 34%, transparent);
+  color: var(--committed-strong);
+  border: 1px solid var(--committed-line);
   border-radius: var(--r);
-  background: color-mix(in srgb, var(--committed) 10%, var(--surface));
+  background: var(--committed-wash);
+  box-shadow: var(--shadow-2);
 }
 .undo-toast__btn {
   font-family: var(--font-mono);
   font-size: var(--t-meta);
-  font-weight: 600;
-  color: var(--ink);
-  background: var(--surface-3);
-  border: 1px solid var(--line-strong);
+  font-weight: 700;
+  color: #fff;
+  background: var(--committed);
+  border: 1px solid var(--committed);
   border-radius: var(--r-sm);
-  padding: 3px var(--sp-3);
+  padding: 4px var(--sp-3);
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
 }
 .undo-toast__btn:hover:not(:disabled) {
-  border-color: var(--ink-3);
+  background: var(--committed-strong);
 }
 .undo-toast__btn:disabled {
   opacity: 0.5;
   cursor: default;
 }
 
-/* ---- triage: clear the high-reliability band in one act ---- */
+/* ---- triage: clear the "nothing flagged" band in one act ---- */
 .triage {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: var(--sp-3);
-  padding: var(--sp-2) var(--sp-4);
+  padding: var(--sp-3) var(--sp-4);
   border-bottom: 1px solid var(--line);
-  background: color-mix(in srgb, var(--committed) 7%, var(--bg));
+  background: var(--committed-wash);
 }
 .triage__count {
-  font-size: var(--t-micro);
+  font-size: var(--t-meta);
   color: var(--ink-2);
-  letter-spacing: 0.01em;
+  letter-spacing: 0;
 }
 .triage__btn {
-  font-family: var(--font-mono);
-  font-size: var(--t-micro);
+  font-size: var(--t-meta);
   font-weight: 600;
-  color: var(--committed);
-  background: color-mix(in srgb, var(--committed) 12%, var(--surface));
-  border: 1px solid color-mix(in srgb, var(--committed) 34%, transparent);
+  color: #fff;
+  background: var(--committed);
+  border: 1px solid var(--committed);
   border-radius: var(--r-sm);
-  padding: 3px var(--sp-3);
+  padding: 5px var(--sp-3);
   white-space: nowrap;
 }
 .triage__btn:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--committed) 20%, var(--surface));
+  background: var(--committed-strong);
 }
 .triage__btn:disabled {
   opacity: 0.5;
@@ -1446,15 +1499,15 @@ kbd {
   margin: var(--sp-3) 0 var(--sp-4);
   padding: var(--sp-3);
   border: 1px solid var(--line);
-  border-radius: var(--r);
+  border-radius: var(--r-sm);
   background: var(--surface-2);
 }
 .picks__label {
   font-size: var(--t-micro);
   text-transform: uppercase;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.03em;
   color: var(--ink-3);
-  font-weight: 600;
+  font-weight: 700;
   margin-bottom: var(--sp-2);
 }
 .picks__row {
@@ -1468,66 +1521,66 @@ kbd {
   gap: var(--sp-2);
   font-size: var(--t-meta);
   color: var(--ink);
-  background: var(--surface-3);
+  background: var(--surface);
   border: 1px solid var(--line-strong);
   border-radius: var(--r-sm);
-  padding: 3px var(--sp-2) 3px 3px;
-  transition: border-color var(--motion);
+  padding: 4px var(--sp-2) 4px 4px;
+  transition: background var(--motion), border-color var(--motion);
 }
 .pick:hover {
-  border-color: var(--ink-3);
+  background: var(--brand-wash);
+  border-color: var(--brand-line);
 }
 .pick__key {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 16px;
-  height: 16px;
+  min-width: 18px;
+  height: 18px;
   font-family: var(--font-mono);
   font-size: var(--t-micro);
-  font-weight: 600;
-  color: var(--ink-2);
-  background: var(--bg);
-  border: 1px solid var(--line);
+  font-weight: 700;
+  color: var(--brand);
+  background: var(--brand-wash);
+  border: 1px solid var(--brand-line);
   border-radius: var(--r-sm);
 }
 
-/* ---- diff-on-return: a field that changed since this reviewer last looked ---- */
+/* ---- diff-on-return: a field that changed since this reviewer last looked (info, not uncertainty) ---- */
 .field--changed {
-  border-left-color: var(--uncertain);
+  border-left-color: var(--brand);
 }
 .field__changed {
-  font-family: var(--font-mono);
-  font-size: 9px;
-  font-weight: 600;
+  font-size: 10px;
+  font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: var(--uncertain-ink);
-  background: color-mix(in srgb, var(--uncertain) 14%, transparent);
-  border-radius: var(--r-sm);
-  padding: 0 4px;
+  letter-spacing: 0.03em;
+  color: var(--brand);
+  background: var(--brand-wash);
+  border: 1px solid var(--brand-line);
+  border-radius: 999px;
+  padding: 0 6px;
   margin-left: var(--sp-2);
 }
 
-/* ---- feedback to the model: the feedback loop, made visible ---- */
+/* ---- feedback to the model: the feedback loop, made visible (a self-contained card) ---- */
 .feedback {
-  margin-top: var(--sp-5);
-  padding: var(--sp-4);
+  padding: var(--sp-4) var(--sp-5);
+  background: var(--surface);
   border: 1px solid var(--line);
   border-radius: var(--r);
-  background: var(--surface-2);
+  box-shadow: var(--shadow-2);
 }
 .feedback__head {
   display: flex;
   align-items: baseline;
   gap: var(--sp-2);
   margin-bottom: var(--sp-3);
+  flex-wrap: wrap;
 }
 .feedback__title {
-  font-size: var(--t-micro);
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: var(--ink-2);
+  font-size: var(--t-ui);
+  color: var(--ink);
   font-weight: 600;
 }
 .feedback__sub {
@@ -1546,18 +1599,16 @@ kbd {
   flex: 1;
   justify-content: center;
   font-size: var(--t-meta);
+  font-weight: 600;
   color: var(--ink-2);
-  background: var(--surface-3);
+  background: var(--surface);
   border: 1px solid var(--line-strong);
   border-radius: var(--r-sm);
-  padding: 5px var(--sp-2);
-  transition:
-    border-color var(--motion),
-    color var(--motion),
-    background var(--motion);
+  padding: 7px var(--sp-2);
+  transition: border-color var(--motion), color var(--motion), background var(--motion);
 }
 .verdict:hover:not(:disabled) {
-  border-color: var(--ink-3);
+  background: var(--surface-3);
 }
 .verdict__glyph {
   font-family: var(--font-mono);
@@ -1566,27 +1617,27 @@ kbd {
 .verdict--accurate:hover:not(:disabled),
 .verdict--accurate.verdict--on {
   color: var(--committed);
-  border-color: color-mix(in srgb, var(--committed) 45%, transparent);
-  background: color-mix(in srgb, var(--committed) 12%, var(--surface));
+  border-color: var(--committed-line);
+  background: var(--committed-wash);
 }
 .verdict--partial:hover:not(:disabled),
 .verdict--partial.verdict--on {
   color: var(--uncertain-ink);
-  border-color: color-mix(in srgb, var(--uncertain) 45%, transparent);
-  background: color-mix(in srgb, var(--uncertain) 12%, var(--surface));
+  border-color: var(--uncertain-line);
+  background: var(--uncertain-wash);
 }
 .verdict--inaccurate:hover:not(:disabled),
 .verdict--inaccurate.verdict--on {
   color: var(--alarm);
-  border-color: color-mix(in srgb, var(--alarm) 45%, transparent);
-  background: color-mix(in srgb, var(--alarm) 12%, var(--surface));
+  border-color: var(--alarm-line);
+  background: var(--alarm-wash);
 }
 .feedback__note {
   width: 100%;
   font-family: var(--font-sans);
   font-size: var(--t-ui);
   color: var(--ink);
-  background: var(--bg);
+  background: var(--surface);
   border: 1px solid var(--line-strong);
   border-radius: var(--r-sm);
   padding: var(--sp-2);
@@ -1595,7 +1646,8 @@ kbd {
 }
 .feedback__note:focus {
   outline: none;
-  border-color: var(--ink-3);
+  border-color: var(--brand);
+  box-shadow: 0 0 0 1px var(--brand);
 }
 .feedback__loop {
   margin: var(--sp-2) 0 0;
@@ -1620,27 +1672,29 @@ kbd {
   font-size: var(--t-meta);
 }
 .feedback__verdict-tag {
-  font-family: var(--font-mono);
   font-size: var(--t-micro);
-  font-weight: 600;
+  font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.03em;
-  padding: 1px 6px;
-  border-radius: var(--r-sm);
+  letter-spacing: 0.02em;
+  padding: 1px 8px;
+  border-radius: 999px;
   color: var(--ink-2);
   border: 1px solid var(--line-strong);
 }
 .feedback__item--accurate .feedback__verdict-tag {
   color: var(--committed);
-  border-color: color-mix(in srgb, var(--committed) 40%, transparent);
+  border-color: var(--committed-line);
+  background: var(--committed-wash);
 }
 .feedback__item--partial .feedback__verdict-tag {
   color: var(--uncertain-ink);
-  border-color: color-mix(in srgb, var(--uncertain) 40%, transparent);
+  border-color: var(--uncertain-line);
+  background: var(--uncertain-wash);
 }
 .feedback__item--inaccurate .feedback__verdict-tag {
   color: var(--alarm);
-  border-color: color-mix(in srgb, var(--alarm) 40%, transparent);
+  border-color: var(--alarm-line);
+  background: var(--alarm-wash);
 }
 .feedback__comment {
   color: var(--ink);
@@ -1654,7 +1708,7 @@ kbd {
 
 /* ---- tuning digest: the feedback loop's actionable end (what to fix next) ---- */
 .modal__card--wide {
-  width: 720px;
+  width: 760px;
   max-height: 86vh;
   overflow-y: auto;
 }
@@ -1681,7 +1735,7 @@ kbd {
   padding: var(--sp-3) var(--sp-4);
   border: 1px solid var(--line);
   border-radius: var(--r);
-  background: var(--surface-3);
+  background: var(--surface-2);
   margin-bottom: var(--sp-5);
 }
 .digest__stat {
@@ -1700,23 +1754,26 @@ kbd {
 .digest__vtag {
   font-family: var(--font-mono);
   font-size: var(--t-micro);
-  font-weight: 600;
-  padding: 2px 7px;
-  border-radius: var(--r-sm);
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 999px;
   border: 1px solid var(--line-strong);
   color: var(--ink-2);
 }
 .digest__vtag--accurate {
   color: var(--committed);
-  border-color: color-mix(in srgb, var(--committed) 40%, transparent);
+  border-color: var(--committed-line);
+  background: var(--committed-wash);
 }
 .digest__vtag--partial {
   color: var(--uncertain-ink);
-  border-color: color-mix(in srgb, var(--uncertain) 40%, transparent);
+  border-color: var(--uncertain-line);
+  background: var(--uncertain-wash);
 }
 .digest__vtag--inaccurate {
   color: var(--alarm);
-  border-color: color-mix(in srgb, var(--alarm) 40%, transparent);
+  border-color: var(--alarm-line);
+  background: var(--alarm-wash);
 }
 .digest__section {
   margin-bottom: var(--sp-5);
@@ -1727,16 +1784,16 @@ kbd {
   gap: var(--sp-3);
   flex-wrap: wrap;
   margin: 0 0 var(--sp-3);
-  font-size: var(--t-micro);
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: var(--ink-2);
+  font-size: var(--t-ui);
+  letter-spacing: 0;
+  color: var(--ink);
   font-weight: 600;
 }
 .digest__hint {
   text-transform: none;
   letter-spacing: 0;
   font-weight: 400;
+  font-size: var(--t-meta);
   color: var(--ink-3);
 }
 .digest__transitions {
@@ -1750,11 +1807,11 @@ kbd {
 .transition {
   display: flex;
   align-items: center;
-  flex-wrap: wrap; /* narrow screens: let "from → to" fall to the next line instead of clipping */
+  flex-wrap: wrap;
   gap: var(--sp-2) var(--sp-3);
   padding: var(--sp-2) var(--sp-3);
   border: 1px solid var(--line);
-  border-left: 2px solid var(--uncertain);
+  border-left: 3px solid var(--uncertain-solid);
   border-radius: var(--r-sm);
   background: var(--surface);
   font-size: var(--t-value);
@@ -1771,7 +1828,7 @@ kbd {
   font-size: var(--t-meta);
   color: var(--ink-3);
   min-width: 110px;
-  flex: 1 1 auto; /* takes the slack on desktop so from→to sits at the right; wraps on mobile */
+  flex: 1 1 auto;
 }
 .transition__from,
 .transition__to {
@@ -1786,7 +1843,7 @@ kbd {
 }
 .transition__to {
   color: var(--ink);
-  font-weight: 600;
+  font-weight: 700;
 }
 .digest__edits {
   width: 100%;
@@ -1794,7 +1851,7 @@ kbd {
   font-size: var(--t-meta);
 }
 .digest__edits td {
-  padding: 5px var(--sp-3);
+  padding: var(--sp-2) var(--sp-3);
   border-bottom: 1px solid var(--line);
 }
 .digest__feedback {
@@ -1814,7 +1871,7 @@ kbd {
 .digest__vtag2 {
   font-family: var(--font-mono);
   font-size: var(--t-micro);
-  font-weight: 600;
+  font-weight: 700;
   text-transform: uppercase;
   color: var(--ink-3);
   min-width: 76px;
@@ -1854,10 +1911,10 @@ kbd {
   margin: 0;
 }
 .draft {
-  border: 1px solid var(--line-strong);
-  border-left: 2px solid var(--committed);
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--committed);
   border-radius: var(--r);
-  background: var(--surface);
+  background: var(--surface-2);
   padding: var(--sp-4);
 }
 .draft__title {
@@ -1881,15 +1938,15 @@ kbd {
   justify-content: space-between;
   font-size: var(--t-micro);
   text-transform: uppercase;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.03em;
   color: var(--ink-3);
-  font-weight: 600;
+  font-weight: 700;
   margin-bottom: var(--sp-2);
 }
 .draft__delta {
   margin: 0 0 var(--sp-3);
   padding: var(--sp-3);
-  background: var(--bg);
+  background: var(--surface);
   border: 1px solid var(--line);
   border-radius: var(--r-sm);
   font-family: var(--font-mono);
@@ -1914,18 +1971,18 @@ kbd {
 .draft__basis-label {
   font-size: var(--t-micro);
   text-transform: uppercase;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.03em;
   color: var(--ink-3);
-  font-weight: 600;
+  font-weight: 700;
 }
 .draft__chip {
   font-family: var(--font-mono);
   font-size: var(--t-micro);
   color: var(--ink-2);
-  background: var(--surface-3);
+  background: var(--surface);
   border: 1px solid var(--line-strong);
-  border-radius: var(--r-sm);
-  padding: 1px 7px;
+  border-radius: 999px;
+  padding: 1px 8px;
 }
 .draft__caveats {
   list-style: none;
@@ -1941,7 +1998,7 @@ kbd {
   color: var(--ink-3);
   line-height: 1.5;
   padding-left: var(--sp-3);
-  border-left: 2px solid var(--uncertain);
+  border-left: 2px solid var(--uncertain-solid);
 }
 
 /* ---- open-as-PR command in the draft card ---- */
@@ -1953,12 +2010,12 @@ kbd {
 .draft__cmd {
   margin: 0 0 var(--sp-2);
   padding: var(--sp-2) var(--sp-3);
-  background: var(--bg);
-  border: 1px solid var(--line);
+  background: var(--ink);
+  border: 1px solid var(--ink);
   border-radius: var(--r-sm);
   font-family: var(--font-mono);
   font-size: var(--t-meta);
-  color: var(--committed);
+  color: #7fd88a;
   white-space: pre-wrap;
   word-break: break-all;
 }

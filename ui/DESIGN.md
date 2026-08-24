@@ -7,6 +7,49 @@ only — no API, engine, or data changes; every field/number/state that renders 
 
 ---
 
+## ⚠ DIRECTION SUPERSEDED 2026-08-24 — LIGHT "Fluent / Power Platform", owner-directed pivot
+
+**The dark "Instrument" direction below (§1–§7) is retired as the active skin.** Owner directive this
+session: *"make it sexy, make it easy to use, follow best standards of design — currently it looks so
+complex when it is actually so simple; I like how Dynamics 365 and Power Platform look, take some
+ideas."* That explicitly overrides the earlier owner-blessed dark contract (which had *rejected* light);
+logged here as a visible decision, not silent drift (CLAUDE.md §10).
+
+**What changed (skin + information architecture only — zero API/engine/data change; `App.test.tsx`
+passes unmodified; tsc + vitest + production build all green):**
+- **Light Fluent palette.** Near-white canvas (`--bg #f0f0f0`), white cards with soft elevation
+  shadows (`--shadow-2/8/16`), Fluent neutral ramp, **communication-blue brand** (`--brand #0f6cbd`)
+  as the single interactive accent (primary buttons, selection, links, keycaps). Every colour is a
+  `:root` token — flipping the neutrals + brand restores a dark theme with no other change.
+- **Segoe UI / system-sans is the interface voice** (the Power Platform register); **mono is now
+  reserved for genuine machine data only** (case ids, confidence %, timestamps, doc-ids, JSON, kbd).
+  The IBM Plex **Sans + Serif** families were dropped (main.tsx); only **Plex Mono** is still
+  self-hosted for the machine voice. The serif "human's verbatim words" idea (§2) is retired — the
+  source panel is now a clean readable sans quote card.
+- **The case is a stack of clean white cards** (record-style, à la D365 model-driven forms): header ·
+  rules/decision strip · the human-readable summary (the analysis headline reads as the record title) ·
+  **Extracted details** (was "governed core") · **Other details found** (was "emergent attributes") ·
+  **What the customer sent** (was "source text") · a right rail with the field-detail/provenance card +
+  the feedback card. Friendlier section labels; sentence/Title case, not uppercase-mono micro-labels.
+- **Rounded corners (`--r 8px`/`--r-sm 4px`), generous whitespace, pill badges, soft message bars**
+  (discrepancy = red bar, next-step = blue bar) — the approachable business-app feel.
+
+**What is UNCHANGED and non-negotiable (the trust mechanics — see §8; all re-verified on pixels):**
+uncertainty is still **the one loud signal** (amber confidence spine + amber `needs review` pill + amber
+%, findable across the room — verified on a genuinely flagged 25% field); every value is click-to-trace
+to its exact source; **"not stated" is a first-class quiet state**; the commit gate + undo window is
+explicit; the whole keyboard flow (`j/k n/p e 1–9 c u r ?`) is untouched; priority stays a neutral
+intensity ramp so it never competes with the amber. Confidence remains a **per-class** signal (register
+ordering copy unchanged — no per-case difficulty implied).
+
+**Verified:** `nabu-ui-test` desktop 1440 + mobile 390, 0 console errors, no horizontal overflow, on a
+populated tenant incl. a flagged case, the one-key correction picker, provenance, and the tuning modal.
+
+*The dark "Instrument" contract is preserved verbatim below as the design history + the token
+structure it established (which the light theme reuses one-for-one).*
+
+---
+
 ## 0. What this screen is
 
 A **verification instrument**, not a dashboard. A reviewer sits in it for hours and clears a case in

@@ -808,7 +808,7 @@ function CaseDetail({
   return (
     <section className={`case${committed ? " case--committed" : ""}${failed ? " case--failed" : ""}`}>
       <header className="case__header">
-        <div>
+        <div className="case__headline-wrap">
           <span className="case__id">case {review.case_id.slice(0, 8)}</span>
           <span className="case__meta">
             {review.channel} · {failed ? "processing failed" : review.case_state} · first contact{" "}
@@ -887,73 +887,81 @@ function CaseDetail({
 
       <div className="case__body">
         <div className="case__left">
-          <h2 className="section-title">governed core</h2>
-          <div className="fields">
-            {GOVERNED_ORDER.map((path) => (
-              <GovernedField
-                key={path}
-                path={path}
-                field={byPath.get(path)}
-                active={selected === path}
-                changed={changed.has(path)}
-                onSelect={() => setSelected(path)}
-              />
-            ))}
+          <div className="panel">
+            <h2 className="section-title">Extracted details</h2>
+            <div className="fields">
+              {GOVERNED_ORDER.map((path) => (
+                <GovernedField
+                  key={path}
+                  path={path}
+                  field={byPath.get(path)}
+                  active={selected === path}
+                  changed={changed.has(path)}
+                  onSelect={() => setSelected(path)}
+                />
+              ))}
+            </div>
           </div>
 
-          <h2 className="section-title">
-            emergent attributes <span className="count">{emergent.length}</span>
-          </h2>
-          {emergent.length === 0 ? (
-            <p className="empty">none extracted</p>
-          ) : (
-            <table className="attrs">
-              <thead>
-                <tr>
-                  <th>head</th>
-                  <th>qualifier</th>
-                  <th>value</th>
-                  <th>src</th>
-                </tr>
-              </thead>
-              <tbody>
-                {emergent.map((f) => (
-                  <tr
-                    key={f.field_path}
-                    className={selected === f.field_path ? "attrs__row--active" : ""}
-                    onClick={() => setSelected(f.field_path)}
-                  >
-                    <td className="mono-cell">{f.head}</td>
-                    <td className="muted">{f.qualifier ?? "—"}</td>
-                    <td>{formatValue(f.value)}</td>
-                    <td className="muted mono-cell">{f.provenance.length}</td>
+          <div className="panel">
+            <h2 className="section-title">
+              Other details found <span className="count">{emergent.length}</span>
+            </h2>
+            {emergent.length === 0 ? (
+              <p className="empty">none extracted</p>
+            ) : (
+              <table className="attrs">
+                <thead>
+                  <tr>
+                    <th>head</th>
+                    <th>qualifier</th>
+                    <th>value</th>
+                    <th>src</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
+                </thead>
+                <tbody>
+                  {emergent.map((f) => (
+                    <tr
+                      key={f.field_path}
+                      className={selected === f.field_path ? "attrs__row--active" : ""}
+                      onClick={() => setSelected(f.field_path)}
+                    >
+                      <td className="mono-cell">{f.head}</td>
+                      <td className="muted">{f.qualifier ?? "—"}</td>
+                      <td>{formatValue(f.value)}</td>
+                      <td className="muted mono-cell">{f.provenance.length}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
 
-          <h2 className="section-title">source text</h2>
-          <div className="source">
-            <SourceText text={review.normalised_text} spans={textSpans} />
+          <div className="panel">
+            <h2 className="section-title">What the customer sent</h2>
+            <div className="source">
+              <SourceText text={review.normalised_text} spans={textSpans} />
+            </div>
           </div>
         </div>
 
         <aside className="case__right">
-          {selectedField ? (
-            <FieldDetail
-              field={selectedField}
-              docs={docs}
-              editable={!committed && !busy}
-              options={fieldOptions[selectedField.field_path]}
-              onCorrect={correct}
-            />
-          ) : (
-            <div className="detail detail--hint">
-              Select a field (or press <kbd>j</kbd>) to trace its source — the exact sentence, audio
-              segment, or image region it was read from.
-            </div>
-          )}
+          <div className="panel">
+            {selectedField ? (
+              <FieldDetail
+                field={selectedField}
+                docs={docs}
+                editable={!committed && !busy}
+                options={fieldOptions[selectedField.field_path]}
+                onCorrect={correct}
+              />
+            ) : (
+              <div className="detail detail--hint">
+                Select a field (or press <kbd>j</kbd>) to trace its source — the exact sentence, audio
+                segment, or image region it was read from.
+              </div>
+            )}
+          </div>
           {!failed && (
             <FeedbackPanel
               caseId={review.case_id}
