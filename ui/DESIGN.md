@@ -216,6 +216,17 @@ policy fixes. $0, human-driven; no data leaves"* (never online fine-tuning, Dire
 loop output is `GET /api/feedback` (verdict tally + recent). This answers "where is the feedback loop" — it
 was previously only the invisible correction log; now it's a first-class, visible action.
 
+**Tuning digest — the feedback loop's actionable end (new 2026-08-24).** A `tuning` topbar button opens an
+owner/engineer view (not reviewer-facing) that clusters the accumulated signal into "what to fix next": the
+headline review median + verdict tally; **"boundaries reviewers keep re-drawing"** — recurring `from → to`
+correction transitions on the closed-vocab governed fields, ranked (a repeated `delivery_fulfilment →
+service_fault` names the exact boundary to fix, top of the backlog); "where the editing effort goes"
+(per-field corrections · cases · median review time); and recent feedback notes. `GET /api/tuning-digest`.
+Honest by construction: it *surfaces* signal for a human — nothing auto-applied — and labels a transition
+as a *reviewer correction*, real signal with an independent reviewer but possibly a label-off on
+self-authored gold (the label-ceiling caveat, stated inline). This closes the loop's second half: capturing
+feedback was step one; this is where it becomes a decision.
+
 **Triage + batch approve (new 2026-08-23).** The register splits into a "nothing flagged for review" band
 (every governed field above the 0.5 flag line) and the needs-you remainder; `approve all N clean` clears
 the whole band in one act (still a per-case human approval, §3). Honest: "nothing flagged" is a class-level

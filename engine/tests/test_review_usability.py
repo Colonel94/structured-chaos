@@ -366,6 +366,59 @@ async def test_feedback_loop_is_tenant_isolated(
         app.dependency_overrides.clear()
 
 
+async def test_tuning_digest_clusters_transitions_edits_and_feedback(
+    admin_session: Session, app_factory: sessionmaker[Session]
+) -> None:
+    """The digest surfaces the actionable signal: a recurring category flip (same prev→new across two
+    cases) ranks as a transition, corrected fields show edit pressure, and feedback + review time appear.
+    """
+    tenant = api.create_tenant(admin_session, "Digest-Co")
+    admin_session.commit()
+    c1 = await _seed_case(tenant, app_factory, marker="D1", sender="+97160001")
+    c2 = await _seed_case(tenant, app_factory, marker="D2", sender="+97160002")
+    headers = {"X-Tenant-Id": str(tenant)}
+    try:
+        client = _client(app_factory)
+        # Both cases: the reviewer re-draws the SAME boundary product_fault → service_fault (a recurring
+        # transition — exactly what should float to the top of the backlog).
+        for cid in (c1, c2):
+            client.post(
+                f"/api/cases/{cid}/corrections",
+                headers=headers,
+                json={
+                    "field_path": "category",
+                    "new_value": "service_fault",
+                    "reviewer_id": "r1",
+                },
+            )
+            client.post(
+                f"/api/cases/{cid}/commit",
+                headers=headers,
+                json={"reviewer_id": "r1", "review_ms": 40000, "fields_edited": 1},
+            )
+        client.post(
+            f"/api/cases/{c1}/feedback",
+            headers=headers,
+            json={"reviewer_id": "r1", "verdict": "inaccurate", "comment": "category boundary"},
+        )
+
+        digest = client.get("/api/tuning-digest", headers=headers).json()
+        # The recurring flip is the top transition, counted twice.
+        top = digest["correction_transitions"][0]
+        assert top["field_path"] == "category"
+        assert top["from"] == "product_fault" and top["to"] == "service_fault"
+        assert top["count"] == 2
+        # Edit pressure names the field and ties in the review time.
+        cat_edit = next(e for e in digest["field_edits"] if e["field_path"] == "category")
+        assert cat_edit["corrections"] == 2 and cat_edit["cases"] == 2
+        assert cat_edit["median_ms"] == 40000.0
+        # Feedback + headline review time ride along.
+        assert digest["feedback"]["counts"] == {"inaccurate": 1}
+        assert digest["review"]["count"] == 2
+    finally:
+        app.dependency_overrides.clear()
+
+
 def test_field_options_match_the_extraction_schema(
     app_factory: sessionmaker[Session],
 ) -> None:

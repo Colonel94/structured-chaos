@@ -365,6 +365,17 @@ def get_feedback(x_tenant_id: TenantHeader, factory: FactoryDep) -> dict[str, An
         return api.recent_feedback(s)
 
 
+@router.get("/tuning-digest")
+def get_tuning_digest(x_tenant_id: TenantHeader, factory: FactoryDep) -> dict[str, Any]:
+    """The feedback loop's ACTIONABLE end — recurring correction transitions (which boundary reviewers keep
+    re-drawing), per-field edit pressure + time, the feedback tally/notes, and the headline review median,
+    in one view. Turns the accumulated signal into 'what to fix next' so the next prompt fix picks itself
+    (surfaced for a human — never auto-applied). See ``api.tuning_digest`` for the honest caveats.
+    """
+    with tenant_session(_tenant(x_tenant_id), factory=factory) as s:
+        return api.tuning_digest(s)
+
+
 @router.get("/review-stats")
 def get_review_stats(x_tenant_id: TenantHeader, factory: FactoryDep) -> dict[str, Any]:
     """The tenant's review-time aggregates — count, median/p90 ms, avg fields edited. The load-bearing

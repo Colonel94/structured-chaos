@@ -23,7 +23,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import text
+from sqlalchemy import bindparam, text
 from sqlalchemy.orm import Session
 
 # A JSON-serialisable value stored in a jsonb column. `object` keeps mypy strict honest at
@@ -1868,6 +1868,68 @@ def recent_feedback(session: Session, *, limit: int = 100) -> dict[str, JsonValu
                 "created_at": r[4].isoformat(),
             }
             for r in rows
+        ],
+    }
+
+
+_ENUM_GOVERNED_FIELDS = ("category", "desired_outcome", "emotion_signal", "severity_signal")
+
+
+def tuning_digest(session: Session, *, limit: int = 20) -> dict[str, JsonValue]:
+    """The feedback loop's ACTIONABLE end — one view that turns accumulated reviewer signal into 'what to
+    fix next', so the next prompt/policy change picks itself ($0, human-driven — never auto-applied).
+    Composes three clusters for the current tenant (RLS-scoped):
+
+    - ``correction_transitions``: recurring ``prev → new`` flips on the closed-vocab governed fields — the
+      single strongest signal, because a repeated ``service_fault → access_availability`` says EXACTLY which
+      boundary reviewers keep re-drawing → a targeted category-prompt fix. Honest framing: these are
+      *reviewer corrections* (what a human changed), not proven 'extractor errors' — on self-authored gold
+      a flip can mean the label was off, not the model (the label-ceiling caveat); with an INDEPENDENT
+      reviewer it is genuine signal. Read it as "where reviewers disagree with the model most", ranked.
+    - ``field_edits``: per corrected field, how many corrections / distinct cases, and the median review
+      time of those cases — where the editing effort (and thus the review-time cost) concentrates.
+    - ``feedback``: the qualitative verdict tally + recent notes (the 'why' behind the numbers).
+
+    Plus ``review`` (the headline ≤30s gate) so the digest ties the cost to its drivers in one place.
+    """
+    transitions = session.execute(
+        text("""
+            SELECT field_path, prev_value #>> '{}', new_value #>> '{}', count(*) AS n
+            FROM field_correction
+            WHERE prev_value IS NOT NULL AND new_value IS NOT NULL
+              AND prev_value <> new_value
+              AND field_path IN :enum_fields
+            GROUP BY field_path, prev_value, new_value
+            ORDER BY n DESC, field_path
+            LIMIT :limit
+            """).bindparams(bindparam("enum_fields", expanding=True)),
+        {"enum_fields": list(_ENUM_GOVERNED_FIELDS), "limit": limit},
+    ).all()
+    edits = session.execute(text("""
+            SELECT fc.field_path,
+                   count(*) AS corrections,
+                   count(DISTINCT fc.case_id) AS cases,
+                   percentile_cont(0.5) WITHIN GROUP (ORDER BY re.review_ms) AS median_ms
+            FROM field_correction fc
+            LEFT JOIN review_event re
+                   ON re.case_id = fc.case_id AND re.review_ms IS NOT NULL
+            GROUP BY fc.field_path
+            ORDER BY corrections DESC, fc.field_path
+            """)).all()
+    return {
+        "review": review_stats(session),
+        "feedback": recent_feedback(session, limit=limit),
+        "correction_transitions": [
+            {"field_path": r[0], "from": r[1], "to": r[2], "count": int(r[3])} for r in transitions
+        ],
+        "field_edits": [
+            {
+                "field_path": r[0],
+                "corrections": int(r[1]),
+                "cases": int(r[2]),
+                "median_ms": float(r[3]) if r[3] is not None else None,
+            }
+            for r in edits
         ],
     }
 

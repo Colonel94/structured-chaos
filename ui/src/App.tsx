@@ -12,6 +12,7 @@ import {
   getReviewerId,
   getReviewStats,
   getTenantId,
+  getTuningDigest,
   ingestCase,
   listCases,
   postFeedback,
@@ -34,6 +35,7 @@ import {
   type ReviewField,
   type ReviewStats,
   type SourceDocument,
+  type TuningDigest,
 } from "./types";
 
 // The line above which a case is "clean" — i.e. the system flagged NOTHING on it for review. This is the
@@ -1167,6 +1169,144 @@ function ObjectStoreModal({ onClose }: { onClose: () => void }) {
   );
 }
 
+/** The tuning digest — the feedback loop's ACTIONABLE end, for the owner/engineer (not the reviewer): it
+ * clusters accumulated signal into "what to fix next" so the next prompt/policy change picks itself. The
+ * recurring correction transitions are the headline — a repeated `from → to` names the exact boundary
+ * reviewers keep re-drawing. Honest: it SURFACES the signal for a human; nothing is auto-applied, and on
+ * self-authored gold a transition can mean the label was off, not the model (labelled inline). */
+function TuningDigestModal({ onClose }: { onClose: () => void }) {
+  const [digest, setDigest] = useState<TuningDigest | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    getTuningDigest()
+      .then(setDigest)
+      .catch((e) => setError((e as Error).message));
+  }, []);
+
+  const fb = digest?.feedback;
+  const empty =
+    digest &&
+    digest.correction_transitions.length === 0 &&
+    digest.field_edits.length === 0 &&
+    (!fb || fb.recent.length === 0);
+
+  return (
+    <div className="modal" onClick={onClose}>
+      <div className="modal__card modal__card--wide" onClick={(e) => e.stopPropagation()}>
+        <div className="digest__head">
+          <h3>Tuning digest</h3>
+          <span className="digest__sub">
+            what to fix next — clustered from reviewer corrections + feedback
+          </span>
+        </div>
+        {error && <div className="banner banner--error">{error}</div>}
+        {!digest && !error && <p className="empty">loading…</p>}
+        {empty && (
+          <p className="empty">
+            No corrections or feedback yet. As reviewers work, recurring corrections and their notes
+            cluster here into the next prompt/policy fix.
+          </p>
+        )}
+        {digest && !empty && (
+          <>
+            <div className="digest__headline">
+              <span className="digest__stat">
+                <b>{fmtDuration(digest.review.median_ms)}</b> median review time
+                {digest.review.count > 0 ? ` · ${digest.review.count} approved` : ""}
+              </span>
+              {fb && Object.keys(fb.counts).length > 0 && (
+                <span className="digest__verdicts">
+                  {(["accurate", "partial", "inaccurate"] as const).map((v) =>
+                    fb.counts[v] ? (
+                      <span key={v} className={`digest__vtag digest__vtag--${v}`}>
+                        {fb.counts[v]} {v}
+                      </span>
+                    ) : null,
+                  )}
+                </span>
+              )}
+            </div>
+
+            {digest.correction_transitions.length > 0 && (
+              <section className="digest__section">
+                <h4 className="digest__title">
+                  boundaries reviewers keep re-drawing
+                  <span className="digest__hint">most-repeated correction, top of the backlog</span>
+                </h4>
+                <ul className="digest__transitions">
+                  {digest.correction_transitions.map((t, i) => (
+                    <li key={i} className="transition">
+                      <span className="transition__count">×{t.count}</span>
+                      <span className="transition__field">{t.field_path}</span>
+                      <span className="transition__from">{t.from.replace(/_/g, " ")}</span>
+                      <span className="transition__arrow">→</span>
+                      <span className="transition__to">{t.to.replace(/_/g, " ")}</span>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            )}
+
+            {digest.field_edits.length > 0 && (
+              <section className="digest__section">
+                <h4 className="digest__title">
+                  where the editing effort goes
+                  <span className="digest__hint">corrections · cases · median review time</span>
+                </h4>
+                <table className="digest__edits">
+                  <tbody>
+                    {digest.field_edits.map((e) => (
+                      <tr key={e.field_path}>
+                        <td className="mono-cell">{e.field_path}</td>
+                        <td>
+                          {e.corrections} correction{e.corrections === 1 ? "" : "s"}
+                        </td>
+                        <td className="muted">
+                          {e.cases} case{e.cases === 1 ? "" : "s"}
+                        </td>
+                        <td className="muted mono-cell">{fmtDuration(e.median_ms)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </section>
+            )}
+
+            {fb && fb.recent.length > 0 && (
+              <section className="digest__section">
+                <h4 className="digest__title">recent feedback</h4>
+                <ul className="digest__feedback">
+                  {fb.recent
+                    .filter((f) => f.comment)
+                    .slice(0, 12)
+                    .map((f, i) => (
+                      <li key={i} className={`digest__fb digest__fb--${f.verdict}`}>
+                        <span className="digest__vtag2">{f.verdict}</span>
+                        <span className="digest__fbtext">{f.comment}</span>
+                      </li>
+                    ))}
+                </ul>
+              </section>
+            )}
+
+            <p className="digest__caveat">
+              Surfaced for a human — nothing is auto-applied. A transition is a <em>reviewer
+              correction</em> (what a person changed), not a proven model error: with an independent
+              reviewer it’s real signal; on self-authored labels a flip can mean the label was off.
+            </p>
+          </>
+        )}
+        <div className="modal__actions">
+          <button type="button" className="ghost" onClick={onClose}>
+            close
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 const params = new URLSearchParams(window.location.search);
 const INITIAL_TENANT = params.get("tenant") ?? getTenantId();
 const INITIAL_CASE = params.get("case");
@@ -1181,6 +1321,7 @@ export default function App() {
   const [showHelp, setShowHelp] = useState(false);
   const [showNew, setShowNew] = useState(false);
   const [showObjects, setShowObjects] = useState(false);
+  const [showTuning, setShowTuning] = useState(false);
   const [fieldOptions, setFieldOptions] = useState<FieldOptions>({});
   const [reviewStats, setReviewStats] = useState<ReviewStats | null>(null);
   const [batchBusy, setBatchBusy] = useState(false);
@@ -1365,6 +1506,15 @@ export default function App() {
           >
             connect data
           </button>
+          <button
+            type="button"
+            className="ghost"
+            onClick={() => setShowTuning(true)}
+            disabled={!getTenantId()}
+            title={getTenantId() ? "what to fix next — the feedback loop digest" : "set a tenant id first"}
+          >
+            tuning
+          </button>
           <button type="button" className="ghost" onClick={() => setShowHelp((v) => !v)}>
             ? keys
           </button>
@@ -1507,6 +1657,7 @@ export default function App() {
 
       {showNew && <NewCaseModal onClose={() => setShowNew(false)} onCreated={onCreated} />}
       {showObjects && <ObjectStoreModal onClose={() => setShowObjects(false)} />}
+      {showTuning && <TuningDigestModal onClose={() => setShowTuning(false)} />}
 
       {showHelp && (
         <div className="help" onClick={() => setShowHelp(false)}>

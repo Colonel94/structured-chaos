@@ -9,6 +9,7 @@ import type {
   FeedbackVerdict,
   FieldOptions,
   ReviewStats,
+  TuningDigest,
 } from "./types";
 
 const TENANT_KEY = "adaptive-intake.tenant-id";
@@ -170,6 +171,12 @@ export function uncommitCase(caseId: string, reviewerId: string): Promise<{ unco
 /** The tenant's review-time aggregates — the ≤30s gate the whole review UI is optimised against. */
 export function getReviewStats(): Promise<ReviewStats> {
   return get<ReviewStats>("/api/review-stats");
+}
+
+/** The tuning digest — the feedback loop's actionable end: recurring correction transitions, per-field
+ *  edit pressure + time, feedback tally/notes, and the headline review median. "What to fix next." */
+export function getTuningDigest(): Promise<TuningDigest> {
+  return get<TuningDigest>("/api/tuning-digest");
 }
 
 /** Give feedback on the model's extraction for a case (the feedback loop) — a verdict + optional note,

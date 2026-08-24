@@ -1651,3 +1651,189 @@ kbd {
   font-size: var(--t-micro);
   color: var(--ink-3);
 }
+
+/* ---- tuning digest: the feedback loop's actionable end (what to fix next) ---- */
+.modal__card--wide {
+  width: 720px;
+  max-height: 86vh;
+  overflow-y: auto;
+}
+.digest__head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--sp-3);
+  flex-wrap: wrap;
+  margin-bottom: var(--sp-4);
+}
+.digest__head h3 {
+  margin: 0;
+}
+.digest__sub {
+  font-size: var(--t-meta);
+  color: var(--ink-3);
+}
+.digest__headline {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  flex-wrap: wrap;
+  padding: var(--sp-3) var(--sp-4);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  background: var(--surface-3);
+  margin-bottom: var(--sp-5);
+}
+.digest__stat {
+  font-size: var(--t-ui);
+  color: var(--ink-2);
+}
+.digest__stat b {
+  color: var(--ink);
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+.digest__verdicts {
+  display: flex;
+  gap: var(--sp-2);
+}
+.digest__vtag {
+  font-family: var(--font-mono);
+  font-size: var(--t-micro);
+  font-weight: 600;
+  padding: 2px 7px;
+  border-radius: var(--r-sm);
+  border: 1px solid var(--line-strong);
+  color: var(--ink-2);
+}
+.digest__vtag--accurate {
+  color: var(--committed);
+  border-color: color-mix(in srgb, var(--committed) 40%, transparent);
+}
+.digest__vtag--partial {
+  color: var(--uncertain-ink);
+  border-color: color-mix(in srgb, var(--uncertain) 40%, transparent);
+}
+.digest__vtag--inaccurate {
+  color: var(--alarm);
+  border-color: color-mix(in srgb, var(--alarm) 40%, transparent);
+}
+.digest__section {
+  margin-bottom: var(--sp-5);
+}
+.digest__title {
+  display: flex;
+  align-items: baseline;
+  gap: var(--sp-3);
+  flex-wrap: wrap;
+  margin: 0 0 var(--sp-3);
+  font-size: var(--t-micro);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--ink-2);
+  font-weight: 600;
+}
+.digest__hint {
+  text-transform: none;
+  letter-spacing: 0;
+  font-weight: 400;
+  color: var(--ink-3);
+}
+.digest__transitions {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+.transition {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap; /* narrow screens: let "from → to" fall to the next line instead of clipping */
+  gap: var(--sp-2) var(--sp-3);
+  padding: var(--sp-2) var(--sp-3);
+  border: 1px solid var(--line);
+  border-left: 2px solid var(--uncertain);
+  border-radius: var(--r-sm);
+  background: var(--surface);
+  font-size: var(--t-value);
+}
+.transition__count {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  color: var(--uncertain-ink);
+  font-variant-numeric: tabular-nums;
+  min-width: 34px;
+}
+.transition__field {
+  font-family: var(--font-mono);
+  font-size: var(--t-meta);
+  color: var(--ink-3);
+  min-width: 110px;
+  flex: 1 1 auto; /* takes the slack on desktop so from→to sits at the right; wraps on mobile */
+}
+.transition__from,
+.transition__to {
+  white-space: nowrap;
+}
+.transition__from {
+  color: var(--ink-2);
+}
+.transition__arrow {
+  color: var(--ink-3);
+  font-family: var(--font-mono);
+}
+.transition__to {
+  color: var(--ink);
+  font-weight: 600;
+}
+.digest__edits {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--t-meta);
+}
+.digest__edits td {
+  padding: 5px var(--sp-3);
+  border-bottom: 1px solid var(--line);
+}
+.digest__feedback {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+.digest__fb {
+  display: flex;
+  align-items: baseline;
+  gap: var(--sp-2);
+  font-size: var(--t-meta);
+}
+.digest__vtag2 {
+  font-family: var(--font-mono);
+  font-size: var(--t-micro);
+  font-weight: 600;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  min-width: 76px;
+}
+.digest__fb--accurate .digest__vtag2 {
+  color: var(--committed);
+}
+.digest__fb--partial .digest__vtag2 {
+  color: var(--uncertain-ink);
+}
+.digest__fb--inaccurate .digest__vtag2 {
+  color: var(--alarm);
+}
+.digest__fbtext {
+  color: var(--ink);
+}
+.digest__caveat {
+  margin: var(--sp-4) 0 0;
+  font-size: var(--t-micro);
+  color: var(--ink-3);
+  line-height: 1.55;
+}

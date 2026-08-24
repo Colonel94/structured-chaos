@@ -112,6 +112,26 @@ export interface ReviewStats {
 // correction picks. Sourced from the extraction schema so they never drift from what the model emits.
 export type FieldOptions = Record<string, string[]>;
 
+// The tuning digest (GET /api/tuning-digest) — the feedback loop's actionable end: what to fix next.
+export interface CorrectionTransition {
+  field_path: string;
+  from: string;
+  to: string;
+  count: number;
+}
+export interface FieldEdit {
+  field_path: string;
+  corrections: number;
+  cases: number;
+  median_ms: number | null;
+}
+export interface TuningDigest {
+  review: ReviewStats;
+  feedback: { counts: Record<string, number>; recent: FeedbackEntry[] };
+  correction_transitions: CorrectionTransition[];
+  field_edits: FieldEdit[];
+}
+
 // The governed core in review order — the small, stable, human-controlled layer (CLAUDE.md §4).
 // A governed field absent from the payload is a refuse-to-guess absence (the customer never stated
 // it), rendered explicitly rather than silently filled.
