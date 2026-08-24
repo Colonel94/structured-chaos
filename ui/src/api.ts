@@ -8,6 +8,7 @@ import type {
   FeedbackEntry,
   FeedbackVerdict,
   FieldOptions,
+  PromptDraft,
   ReviewStats,
   TuningDigest,
 } from "./types";
@@ -177,6 +178,12 @@ export function getReviewStats(): Promise<ReviewStats> {
  *  edit pressure + time, feedback tally/notes, and the headline review median. "What to fix next." */
 export function getTuningDigest(): Promise<TuningDigest> {
   return get<TuningDigest>("/api/tuning-digest");
+}
+
+/** Ask the local model to pre-draft a prompt-delta from the digest signal — a DRAFT for review, never
+ *  applied. Slow (a local model call). */
+export function draftPromptDelta(): Promise<PromptDraft> {
+  return post<PromptDraft>("/api/tuning-digest/draft", {});
 }
 
 /** Give feedback on the model's extraction for a case (the feedback loop) — a verdict + optional note,

@@ -419,6 +419,88 @@ async def test_tuning_digest_clusters_transitions_edits_and_feedback(
         app.dependency_overrides.clear()
 
 
+class _DraftLLM:
+    """A scripted LLM for the prompt-delta drafter: records the prompt it saw, returns a fixed draft."""
+
+    def __init__(self, payload: str) -> None:
+        self.seen_prompt = ""
+        self._payload = payload
+
+    async def complete(self, prompt: str, *, schema: dict[str, object] | None = None) -> str:
+        self.seen_prompt = prompt
+        return self._payload
+
+
+async def test_draft_prompt_delta_grounds_in_signal_and_carries_caveats() -> None:
+    """Given a digest with a recurring transition + a feedback note, the drafter returns a delta grounded
+    in exactly that signal (in the prompt and in based_on) and always attaches the honest caveats.
+    """
+    from app.extract.prompt_tuning import draft_prompt_delta
+
+    digest = {
+        "correction_transitions": [
+            {
+                "field_path": "category",
+                "from": "delivery_fulfilment",
+                "to": "service_fault",
+                "count": 3,
+            }
+        ],
+        "feedback": {
+            "recent": [
+                {"verdict": "inaccurate", "comment": "tighten the delivery vs service boundary"},
+                {"verdict": "accurate", "comment": None},  # no comment → not used as a note
+            ]
+        },
+    }
+    llm = _DraftLLM(
+        json.dumps(
+            {
+                "title": "Delivery vs service boundary",
+                "delta": "Prefer service_fault only when the grievance is about handling, not a late/failed delivery.",
+                "rationale": "Reviewers kept re-drawing this line.",
+            }
+        )
+    )
+    result = await draft_prompt_delta(digest, llm=llm)
+
+    assert result["draft"]["title"] == "Delivery vs service boundary"
+    assert "service_fault" in result["draft"]["delta"]
+    assert "category" in result["draft"]["target"]
+    # Grounded: the transition + the commented note are in based_on; the comment-less entry is not.
+    assert "category: delivery_fulfilment → service_fault (×3)" in result["based_on"]
+    assert any("tighten the delivery vs service" in b for b in result["based_on"])
+    assert len(result["based_on"]) == 2
+    # The signal reached the model prompt; the caveats (project law) are always present.
+    assert "delivery_fulfilment -> service_fault (3x)" in llm.seen_prompt
+    assert len(result["caveats"]) == 3
+    assert any("re-run the eval" in c for c in result["caveats"])
+
+
+async def test_draft_prompt_delta_no_signal_and_bad_output() -> None:
+    """No corrections/feedback → no draft (with a reason), no model call. Unparseable model output →
+    no draft (with a reason), never a crash. Caveats travel in both cases."""
+    from app.extract.prompt_tuning import draft_prompt_delta
+
+    empty = await draft_prompt_delta(
+        {"correction_transitions": [], "feedback": {"recent": []}}, llm=_DraftLLM("{}")
+    )
+    assert empty["draft"] is None and "Not enough signal" in empty["reason"]
+    assert empty["caveats"]
+
+    bad = await draft_prompt_delta(
+        {
+            "correction_transitions": [
+                {"field_path": "category", "from": "a", "to": "b", "count": 2}
+            ],
+            "feedback": {"recent": []},
+        },
+        llm=_DraftLLM("not json at all"),
+    )
+    assert bad["draft"] is None and "usable draft" in bad["reason"]
+    assert bad["based_on"] == ["category: a → b (×2)"]
+
+
 def test_field_options_match_the_extraction_schema(
     app_factory: sessionmaker[Session],
 ) -> None:

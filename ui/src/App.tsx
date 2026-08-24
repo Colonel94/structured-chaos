@@ -6,6 +6,7 @@ import {
   commitBatch,
   commitCase,
   docUrl,
+  draftPromptDelta,
   fetchBlobUrl,
   getCase,
   getFieldOptions,
@@ -32,6 +33,7 @@ import {
   type Citation,
   type FeedbackVerdict,
   type FieldOptions,
+  type PromptDraft,
   type ReviewField,
   type ReviewStats,
   type SourceDocument,
@@ -1177,6 +1179,9 @@ function ObjectStoreModal({ onClose }: { onClose: () => void }) {
 function TuningDigestModal({ onClose }: { onClose: () => void }) {
   const [digest, setDigest] = useState<TuningDigest | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [draft, setDraft] = useState<PromptDraft | null>(null);
+  const [drafting, setDrafting] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     getTuningDigest()
@@ -1185,11 +1190,28 @@ function TuningDigestModal({ onClose }: { onClose: () => void }) {
   }, []);
 
   const fb = digest?.feedback;
+  const hasSignal =
+    !!digest &&
+    (digest.correction_transitions.length > 0 ||
+      (fb?.recent.some((f) => f.comment) ?? false));
   const empty =
     digest &&
     digest.correction_transitions.length === 0 &&
     digest.field_edits.length === 0 &&
     (!fb || fb.recent.length === 0);
+
+  async function makeDraft() {
+    setDrafting(true);
+    setError(null);
+    setCopied(false);
+    try {
+      setDraft(await draftPromptDelta());
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setDrafting(false);
+    }
+  }
 
   return (
     <div className="modal" onClick={onClose}>
@@ -1295,6 +1317,67 @@ function TuningDigestModal({ onClose }: { onClose: () => void }) {
               correction</em> (what a person changed), not a proven model error: with an independent
               reviewer it’s real signal; on self-authored labels a flip can mean the label was off.
             </p>
+
+            {hasSignal && (
+              <section className="digest__section digest__draftbox">
+                <div className="digest__drafthead">
+                  <h4 className="digest__title">draft a prompt fix</h4>
+                  <button
+                    type="button"
+                    className="primary primary--sm"
+                    onClick={() => void makeDraft()}
+                    disabled={drafting}
+                  >
+                    {drafting ? "drafting… (local model)" : draft ? "re-draft" : "draft from this signal"}
+                  </button>
+                </div>
+                {draft?.draft ? (
+                  <div className="draft">
+                    <div className="draft__title">{draft.draft.title}</div>
+                    <div className="draft__target">
+                      target: <code>{draft.draft.target}</code>
+                    </div>
+                    <div className="draft__deltahead">
+                      <span>proposed addition</span>
+                      <button
+                        type="button"
+                        className="ghost ghost--sm"
+                        onClick={() => {
+                          void navigator.clipboard?.writeText(draft.draft?.delta ?? "");
+                          setCopied(true);
+                        }}
+                      >
+                        {copied ? "copied" : "copy"}
+                      </button>
+                    </div>
+                    <pre className="draft__delta">{draft.draft.delta}</pre>
+                    <div className="draft__rationale">{draft.draft.rationale}</div>
+                    {draft.based_on.length > 0 && (
+                      <div className="draft__basis">
+                        <span className="draft__basis-label">grounded in</span>
+                        {draft.based_on.map((b, i) => (
+                          <span key={i} className="draft__chip">
+                            {b}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                    <ul className="draft__caveats">
+                      {draft.caveats.map((c, i) => (
+                        <li key={i}>{c}</li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : draft?.reason ? (
+                  <p className="empty">{draft.reason}</p>
+                ) : (
+                  <p className="digest__caveat">
+                    The local model proposes an additive clarification to the extraction prompt from the
+                    signal above — a draft to review, never applied.
+                  </p>
+                )}
+              </section>
+            )}
           </>
         )}
         <div className="modal__actions">

@@ -376,6 +376,20 @@ def get_tuning_digest(x_tenant_id: TenantHeader, factory: FactoryDep) -> dict[st
         return api.tuning_digest(s)
 
 
+@router.post("/tuning-digest/draft")
+async def post_tuning_draft(x_tenant_id: TenantHeader, factory: FactoryDep) -> dict[str, Any]:
+    """Pre-draft a reviewable prompt-delta from the tuning digest, using the LOCAL model ($0). The digest
+    is read in-transaction; the (slow) model call runs outside it. Always returns the honest caveats; the
+    ``draft`` is None when there is no signal yet or the model output was unusable. NEVER applies anything —
+    shipping a prompt change is a human editing prompt.py + re-running the eval (CLAUDE.md §10)."""
+    from ..backends.registry import get_llm
+    from ..extract.prompt_tuning import draft_prompt_delta
+
+    with tenant_session(_tenant(x_tenant_id), factory=factory) as s:
+        digest = api.tuning_digest(s)
+    return await draft_prompt_delta(digest, llm=get_llm())
+
+
 @router.get("/review-stats")
 def get_review_stats(x_tenant_id: TenantHeader, factory: FactoryDep) -> dict[str, Any]:
     """The tenant's review-time aggregates — count, median/p90 ms, avg fields edited. The load-bearing

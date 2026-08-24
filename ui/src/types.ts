@@ -132,6 +132,15 @@ export interface TuningDigest {
   field_edits: FieldEdit[];
 }
 
+// A pre-drafted prompt-delta (POST /api/tuning-digest/draft) — the local model's proposed additive
+// clarification, grounded in the digest signal. A DRAFT for human review; never applied.
+export interface PromptDraft {
+  draft: { title: string; delta: string; rationale: string; target: string } | null;
+  based_on: string[];
+  caveats: string[];
+  reason?: string;
+}
+
 // The governed core in review order — the small, stable, human-controlled layer (CLAUDE.md §4).
 // A governed field absent from the payload is a refuse-to-guess absence (the customer never stated
 // it), rendered explicitly rather than silently filled.

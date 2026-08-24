@@ -227,6 +227,16 @@ as a *reviewer correction*, real signal with an independent reviewer but possibl
 self-authored gold (the label-ceiling caveat, stated inline). This closes the loop's second half: capturing
 feedback was step one; this is where it becomes a decision.
 
+**Pre-drafted prompt-delta (new 2026-08-24).** Inside the digest, `draft from this signal` asks the LOCAL
+model ($0) to propose ONE targeted, additive clarification to the extraction prompt's definitions, grounded
+in the recurring transitions + feedback (`POST /api/tuning-digest/draft`). It renders as a green-edged
+proposal: title, `target` (which prompt/fields), the **proposed addition** in a copyable mono block, the
+rationale, `grounded in` chips (the exact signal used), and three fixed guardrail caveats. It is a **DRAFT
+for review** — never applied: shipping means a human edits `prompt.py`, bumps `PROMPT_VERSION`, and re-runs
+the eval first (§10), and on self-authored corrections it's self-grading (earns trust with an independent
+reviewer). This is the loop's last mile — from "what to fix" to a concrete starting point — with the human
+firmly in the seat.
+
 **Triage + batch approve (new 2026-08-23).** The register splits into a "nothing flagged for review" band
 (every governed field above the 0.5 flag line) and the needs-you remainder; `approve all N clean` clears
 the whole band in one act (still a per-case human approval, §3). Honest: "nothing flagged" is a class-level
