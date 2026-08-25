@@ -12,9 +12,15 @@ Two modes:
   score — the real "did the delta help" number. Needs Ollama + the local stack ($0), which is why CI must
   use a self-hosted runner (GitHub-hosted has no GPU/Ollama).
 
+HELD-OUT BY DEFAULT (CLAUDE.md §10): the merge gate scores the ``heldout`` slice (~30% of the set),
+DISJOINT from the ``tune`` slice a delta's signal is drawn from — otherwise a delta drafted to fix errors
+on the set scores better on that same set by construction, and the gate is decorative. ``--split all``
+gives the full-set scorecard number but is NOT a valid merge gate.
+
 Run:
-    uv run python scripts/tuning_eval.py                 # score-only, print
-    uv run python scripts/tuning_eval.py --reextract     # full re-score (~30 min)
+    uv run python scripts/tuning_eval.py                 # score-only on the HELD-OUT slice (the gate)
+    uv run python scripts/tuning_eval.py --reextract     # full re-score on held-out (~30 min)
+    uv run python scripts/tuning_eval.py --split all      # full-set number (diagnostic, not a gate)
     uv run python scripts/tuning_eval.py --post 42       # score-only + comment on PR #42
 """
 
@@ -28,11 +34,16 @@ from pathlib import Path
 _ENGINE = Path(__file__).resolve().parent.parent  # engine/
 
 
-def _run_capture(cmd: list[str], *, env_dataset: str) -> str:
+def _run_capture(cmd: list[str], *, env_dataset: str, env_split: str = "all") -> str:
     """Run an eval script, streaming nothing but capturing stdout+stderr for the PR comment."""
     import os
 
-    env = {**os.environ, "EVAL_DATASET": env_dataset, "PYTHONIOENCODING": "utf-8"}
+    env = {
+        **os.environ,
+        "EVAL_DATASET": env_dataset,
+        "EVAL_SPLIT": env_split,
+        "PYTHONIOENCODING": "utf-8",
+    }
     # The child emits UTF-8 (PYTHONIOENCODING above); decode it as UTF-8 too — else Windows' cp1252 default
     # mangles the em-dashes/≤ in score.py's output into mojibake in the posted PR comment.
     p = subprocess.run(
@@ -63,6 +74,14 @@ def main() -> int:
     ap = argparse.ArgumentParser(description="Re-score the eval for a tuning PR.")
     ap.add_argument("--dataset", default="cfpb", help="cfpb | multidomain")
     ap.add_argument(
+        "--split",
+        default="heldout",
+        choices=["heldout", "tune", "all"],
+        help="which slice to SCORE. Default 'heldout' — the tuning gate MUST score the held-out slice, "
+        "disjoint from the tune slice a delta's signal came from (§10). 'all' = the full-set scorecard "
+        "number (not a merge gate).",
+    )
+    ap.add_argument(
         "--reextract",
         action="store_true",
         help="re-run extraction with THIS branch's prompt first (~30 min, needs Ollama). Default: "
@@ -87,17 +106,23 @@ def main() -> int:
         )
         print(extract_log)
 
-    score = _run_capture(["uv", "run", "python", "eval/score.py"], env_dataset=args.dataset)
+    score = _run_capture(
+        ["uv", "run", "python", "eval/score.py"], env_dataset=args.dataset, env_split=args.split
+    )
     print(score)
 
-    comment = _format_comment(args.dataset, version, mode, score, reextracted=args.reextract)
+    comment = _format_comment(
+        args.dataset, version, mode, score, reextracted=args.reextract, split=args.split
+    )
     if args.post:
         _post(args.post, comment)
         print(f"\nposted to PR #{args.post}")
     return 0
 
 
-def _format_comment(dataset: str, version: str, mode: str, score: str, *, reextracted: bool) -> str:
+def _format_comment(
+    dataset: str, version: str, mode: str, score: str, *, reextracted: bool, split: str
+) -> str:
     warn = (
         ""
         if reextracted
@@ -107,13 +132,27 @@ def _format_comment(dataset: str, version: str, mode: str, score: str, *, reextr
             "self-hosted runner) for the real after-delta number.\n"
         )
     )
+    split_note = (
+        (
+            "\n> ✅ **held-out scoring** — this is scored on the held-out slice (~30% of the set), "
+            "DISJOINT from the tune slice a delta's signal is drawn from, so an improvement can't be "
+            "by-construction (§10). It's a small-n regression check, not a high-confidence gate.\n"
+        )
+        if split == "heldout"
+        else (
+            f"\n> ⚠️ **split=`{split}`** — NOT the held-out slice. This is not a valid merge gate: a tuning "
+            "delta scored on the same data its signal came from improves by construction (§10). Use the "
+            "default `--split heldout`.\n"
+        )
+    )
     return (
-        f"### Tuning eval — `{version}` on `{dataset}`\n"
-        f"_mode: {mode}_\n{warn}\n"
+        f"### Tuning eval — `{version}` on `{dataset}` (split=`{split}`)\n"
+        f"_mode: {mode}_\n{warn}{split_note}\n"
         f"```\n{score}\n```\n"
-        "**Merge rule (CLAUDE.md §10):** merge only if category (and the other governed metrics) did **not** "
-        "regress vs main's scorecard (`eval/PHASE8_SCORECARD.md`). On self-authored gold this is self-grading "
-        "— the binding lever for category stays an independent labelled slice, not a prompt version."
+        "**Merge rule (CLAUDE.md §10):** merge only if the governed metrics did **not** regress on the "
+        "**held-out** slice vs main. Never merge a delta scored on its own signal set. On self-authored "
+        "gold even the held-out number is self-grading — the binding lever for category stays an "
+        "INDEPENDENT labelled slice (`holdout_labels.csv`, owner-blocked), not a prompt version."
     )
 
 

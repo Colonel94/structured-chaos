@@ -21,6 +21,8 @@ from collections import Counter
 
 from _dataset import EXTRACTIONS as _EXTRACTIONS
 from _dataset import LABELS as _SHEET
+from _dataset import SPLIT as _SPLIT
+from _dataset import in_active_split as _in_active_split
 
 _TOKEN = re.compile(r"[a-z0-9]+")
 _GOVERNED = ["category", "desired_outcome", "severity_signal", "emotion_signal"]
@@ -94,6 +96,10 @@ def main() -> int:
     kf_hit_case = 0
 
     for row in gold_rows:
+        # Tune/held-out split: under EVAL_SPLIT=heldout (the tuning gate) score ONLY the reserved slice,
+        # disjoint from any set a tuning delta's signal came from (§10). Default 'all' scores everything.
+        if not _in_active_split(row["id"]):
+            continue
         pred = preds.get(str(row["id"]))
         if pred is None or str(row["id"]) in failed_ids:
             continue  # unscored: no prediction, or a swallowed extraction failure (excluded above)
@@ -136,8 +142,15 @@ def main() -> int:
                     kf_hit_case += 1
         labeled_any += int(row_labeled)
 
+    in_split_rows = sum(1 for r in gold_rows if _in_active_split(r["id"]))
     print("===== GOVERNED-CORE ACCURACY (human-labeled slice) =====")
-    print(f"labeled rows scored : {labeled_any}/{len(gold_rows)}")
+    if _SPLIT != "all":
+        print(
+            f"eval split          : {_SPLIT}  ({in_split_rows} of {len(gold_rows)} rows) — the TUNING GATE "
+            f"scores the held-out slice ONLY, disjoint from tuning signal (§10). Small n: not a "
+            f"high-confidence gate, a regression check."
+        )
+    print(f"labeled rows scored : {labeled_any}/{in_split_rows}")
     if labeled_any == 0:
         print("\nNo gold labels filled yet — fill cfpb_labels.csv (see the INSTRUCTIONS.md).")
         return 0

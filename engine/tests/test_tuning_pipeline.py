@@ -80,12 +80,52 @@ def test_eval_comment_flags_score_only() -> None:
     """A score-only comment must say it does NOT reflect the delta; a full re-score must not carry that warning.
     Both carry the version and the §10 merge rule."""
     score_only = tuning_eval._format_comment(
-        "cfpb", "extract-v20+t1", "score-only …", "category: 82%", reextracted=False
+        "cfpb",
+        "extract-v20+t1",
+        "score-only …",
+        "category: 82%",
+        reextracted=False,
+        split="heldout",
     )
     assert "does NOT yet reflect" in score_only
     assert "extract-v20+t1" in score_only and "regress" in score_only
 
     full = tuning_eval._format_comment(
-        "cfpb", "extract-v20+t1", "full …", "category: 84%", reextracted=True
+        "cfpb", "extract-v20+t1", "full …", "category: 84%", reextracted=True, split="heldout"
     )
     assert "does NOT yet reflect" not in full
+
+
+def test_eval_comment_flags_the_split_as_the_merge_gate() -> None:
+    """§10: the merge gate must score the HELD-OUT slice (disjoint from tuning signal). A held-out comment
+    reads as a valid gate; a full-set ('all') comment must be flagged as NOT a valid gate — the whole point
+    of the train/test split (a delta scored on its own signal set improves by construction)."""
+    heldout = tuning_eval._format_comment(
+        "cfpb", "extract-v20+t1", "score-only …", "category: 68%", reextracted=True, split="heldout"
+    )
+    assert "held-out" in heldout and "by-construction" in heldout
+    assert "split=`heldout`" in heldout
+
+    full_set = tuning_eval._format_comment(
+        "cfpb", "extract-v20+t1", "score-only …", "category: 82%", reextracted=True, split="all"
+    )
+    assert "NOT the held-out slice" in full_set and "not a valid merge gate" in full_set
+
+
+def test_tune_and_heldout_splits_are_disjoint_and_deterministic() -> None:
+    """The split that makes the gate honest: every id is in exactly one of tune/heldout, and the assignment
+    is stable across calls (a data-file-free, reproducible partition — §10 no-self-grading)."""
+    import importlib
+
+    _EVAL = Path(__file__).resolve().parent.parent / "eval"
+    if str(_EVAL) not in sys.path:
+        sys.path.insert(0, str(_EVAL))
+    ds = importlib.import_module("_dataset")
+
+    ids = [f"case-{i}" for i in range(400)]
+    labels = {i: ds.split_of(i) for i in ids}
+    assert set(labels.values()) == {"tune", "heldout"}  # both slices are populated
+    assert all(ds.split_of(i) == labels[i] for i in ids)  # deterministic
+    heldout = [i for i in ids if labels[i] == "heldout"]
+    # ~30% reserved as held-out (loose bounds — the point is a real disjoint slice, not an exact ratio).
+    assert 0.15 < len(heldout) / len(ids) < 0.45

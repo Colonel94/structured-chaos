@@ -321,6 +321,23 @@ be built cheaply or expensively and the cheap one looks equivalent, that resembl
 claim almost always requires the expensive one; verify against the source doc and default to it.**
 Backfill *re-extracts*; convergence is measured at the *field* level; proof runs on data I did not author.
 
+**No tuning PR merges while the scoring set and the signal set are the same data.** (Owner directive,
+learned 2026-08-25 — the tuning loop's structural gap.) A prompt-delta drafted from the digest is fit to
+the errors on the eval set; re-scoring that delta on the *same* set shows an improvement **by
+construction**, so a merge gate that scores the full set is decorative — a warning in the PR template
+loses to the default of a green number. The gate must score a slice the signal did **not** come from:
+the eval set is split into a **tune** slice (the only source of tuning signal) and a disjoint **held-out**
+slice (the only thing the gate scores). This is a *train/test* discipline, the same family as no-self-
+grading (§10-Q3) and proof-on-data-I-didn't-author — the improvement only means something if it
+generalises to cases the delta never saw. *(Built 2026-08-25: `eval/_dataset.py` `split_of()` — a
+deterministic ~30%/70% split by stable id-hash; `EVAL_SPLIT=heldout` in `score.py`; `tuning_eval.py`
+defaults to `--split heldout`, and the PR comment flags any non-held-out score as an invalid gate. The
+full-set `all` number stays the §8 scorecard, unchanged.)* Even the held-out number is still
+self-grading on **self-authored** gold — so when the **independent** holdout labels land
+(`eval/fixtures/holdout_labels.csv`, owner-blocked) they become the stronger gate; the split is the
+usable-now break, not the ceiling. Corollary: any future "score it to prove it helped" step inherits this
+rule — never let the thing being tuned and the thing scoring it be the same data.
+
 **Report metrics as a PAIR, and don't mistake small-n zero-error for a gate.** (Owner directive, learned
 2026-08-18 on the entity-resolution spike; see memory [[report-metric-pairs-and-n]].) A gain-metric alone
 is gameable by abstention — a resolver that refuses on any ambiguity scores 100% *accuracy* / 0% *rate*
