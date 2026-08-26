@@ -7,6 +7,8 @@
 
 # --- Python ---
 .venv/
+.venv-check/
+.uv-cache/
 __pycache__/
 *.py[cod]
 .pytest_cache/
@@ -19,6 +21,7 @@ build/
 # --- Node / UI ---
 node_modules/
 ui/dist/
+.pnpm-store/
 *.tsbuildinfo
 
 # --- Data & artifacts (originals live in object storage, never git) ---

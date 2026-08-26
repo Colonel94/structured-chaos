@@ -7,7 +7,7 @@ only — no API, engine, or data changes; every field/number/state that renders 
 
 ---
 
-## ⚠ DIRECTION SUPERSEDED 2026-08-24 — LIGHT "Fluent / Power Platform", owner-directed pivot
+## Active direction — light Fluent-style review workspace
 
 **The dark "Instrument" direction below (§1–§7) is retired as the active skin.** Owner directive this
 session: *"make it sexy, make it easy to use, follow best standards of design — currently it looks so
@@ -51,12 +51,23 @@ ordering copy unchanged — no per-case difficulty implied).
 **Verified:** `nabu-ui-test` desktop 1440 + mobile 390, 0 console errors, no horizontal overflow, on a
 populated tenant incl. a flagged case, the one-key correction picker, provenance, and the tuning modal.
 
-*The dark "Instrument" contract is preserved verbatim below as the design history + the token
-structure it established (which the light theme reuses one-for-one).*
+The active experience must also explain the workflow without relying on keyboard knowledge: the empty
+state identifies the workspace prerequisite, in-product help explains the four-step review flow, and
+shortcuts remain an accelerator rather than the only documentation. See `docs/USER-GUIDE.md` for the
+operator contract and `docs/MARKET-READINESS.md` for gaps that visual polish cannot solve.
+
+**First-run contract (shipped 2026-08-26):** users without a saved workspace see the product promise,
+the capture→structure→review→approve workflow, service readiness, named reviewer identity, and a focused
+pilot-access card. They do not see an empty register or tenant terminology. The active workspace shows
+processing health, concise navigation, honest loading/failure states, and a queue overview before a case
+is selected. New intake is disabled when the worker is unavailable; review remains usable.
+
+*The dark "Instrument" contract is preserved below only as design history and token rationale. It is
+not implementation direction.*
 
 ---
 
-## 0. What this screen is
+## Archived direction — 0. What this screen is
 
 A **verification instrument**, not a dashboard. A reviewer sits in it for hours and clears a case in
 under 30 seconds — deciding whether a machine read a human correctly. So the whole design has one job:

@@ -16,6 +16,24 @@ import type {
 const TENANT_KEY = "adaptive-intake.tenant-id";
 const REVIEWER_KEY = "adaptive-intake.reviewer-id";
 
+export interface SystemHealth {
+  status: string;
+  env: string;
+  worker: {
+    status: "alive" | "down" | "unknown";
+    detail?: string;
+    last_beat_age_seconds?: number;
+  };
+}
+
+/** Public operational readiness. This endpoint carries no tenant data and is used to keep the
+ * first-run experience honest when intake processing is unavailable. */
+export async function getSystemHealth(): Promise<SystemHealth> {
+  const res = await fetch("/health");
+  if (!res.ok) throw new Error(`Health check failed (${res.status})`);
+  return (await res.json()) as SystemHealth;
+}
+
 export function getTenantId(): string {
   return localStorage.getItem(TENANT_KEY) ?? "";
 }

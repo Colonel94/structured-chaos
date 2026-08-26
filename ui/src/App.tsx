@@ -12,6 +12,7 @@ import {
   getFieldOptions,
   getReviewerId,
   getReviewStats,
+  getSystemHealth,
   getTenantId,
   getTuningDigest,
   ingestCase,
@@ -25,6 +26,7 @@ import {
   uncommitCase,
   uploadObjects,
   type ObjectUploadResult,
+  type SystemHealth,
 } from "./api";
 import {
   GOVERNED_ORDER,
@@ -1423,8 +1425,293 @@ function TuningDigestModal({ onClose }: { onClose: () => void }) {
   );
 }
 
+function ProductMark() {
+  return (
+    <span className="product-mark" aria-hidden="true">
+      <span />
+      <span />
+      <span />
+    </span>
+  );
+}
+
+function QueueOverview({
+  cases,
+  loading,
+  processingReady,
+  onCreate,
+}: {
+  cases: CaseSummary[];
+  loading: boolean;
+  processingReady: boolean;
+  onCreate: () => void;
+}) {
+  const approved = cases.filter((item) => Boolean(item.committed_at)).length;
+  const attention = cases.filter(
+    (item) =>
+      !item.committed_at &&
+      (item.case_state === "processing_failed" ||
+        item.min_governed_confidence === null ||
+        item.min_governed_confidence <= CLEAN_BAND_FLOOR),
+  ).length;
+
+  return (
+    <section className="queue-overview" aria-labelledby="queue-overview-title">
+      <div className="queue-overview__mark" aria-hidden="true">
+        <ProductMark />
+      </div>
+      <span className="eyebrow">Review workspace</span>
+      <h2 id="queue-overview-title">
+        {loading ? "Loading your cases" : cases.length ? "Choose a case to begin" : "Your queue is clear"}
+      </h2>
+      <p>
+        {cases.length
+          ? "Start with cases marked for attention. Select any field to trace it back to the customer’s exact source."
+          : "New customer cases will appear here, ordered so uncertainty gets reviewed first."}
+      </p>
+      {!loading && cases.length > 0 && (
+        <div className="queue-overview__stats">
+          <div>
+            <strong>{attention}</strong>
+            <span>Need attention</span>
+          </div>
+          <div>
+            <strong>{cases.length - approved - attention}</strong>
+            <span>Ready to check</span>
+          </div>
+          <div>
+            <strong>{approved}</strong>
+            <span>Approved</span>
+          </div>
+        </div>
+      )}
+      {!loading && cases.length === 0 && (
+        <button
+          type="button"
+          className="primary"
+          onClick={onCreate}
+          disabled={!processingReady}
+          title={processingReady ? "Submit a new case" : "New case processing is paused"}
+        >
+          Submit the first case
+        </button>
+      )}
+      <div className="queue-overview__tip">
+        <span>Tip</span>
+        Press <kbd>?</kbd> at any time for the review workflow and keyboard shortcuts.
+      </div>
+    </section>
+  );
+}
+
+function ReviewHelp({ onClose }: { onClose: () => void }) {
+  return (
+    <div className="help" onClick={onClose}>
+      <div
+        className="help__card"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="review-help-title"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div className="help__head">
+          <div>
+            <span className="eyebrow">Reviewer guide</span>
+            <h3 id="review-help-title">How review works</h3>
+          </div>
+          <button type="button" className="ghost ghost--sm" onClick={onClose} aria-label="close help">
+            close
+          </button>
+        </div>
+        <ol className="help__steps">
+          <li>Open a case. Amber fields need your attention first.</li>
+          <li>Select a field to compare it with the customer’s exact source.</li>
+          <li>Correct anything wrong, then approve only when the case matches the source.</li>
+          <li>Download the report after approval. “Not stated” means the system did not guess.</li>
+        </ol>
+        <h3>Keyboard shortcuts</h3>
+        <dl>
+          <dt>j / k</dt>
+          <dd>next / previous field</dd>
+          <dt>n / p</dt>
+          <dd>next / previous case</dd>
+          <dt>1 – 9</dt>
+          <dd>correct the selected field to a listed value (one key, no typing)</dd>
+          <dt>e</dt>
+          <dd>edit (correct) the selected field as free text</dd>
+          <dt>c</dt>
+          <dd>approve the case (undoable for a few seconds)</dd>
+          <dt>u</dt>
+          <dd>undo a just-made approval (within the window)</dd>
+          <dt>r</dt>
+          <dd>download the report (approved cases)</dd>
+          <dt>?</dt>
+          <dd>toggle this help</dd>
+        </dl>
+      </div>
+    </div>
+  );
+}
+
+function WorkspaceWelcome({
+  workspace,
+  reviewer,
+  theme,
+  error,
+  health,
+  healthFailed,
+  onWorkspaceChange,
+  onReviewerChange,
+  onContinue,
+  onThemeChange,
+  onHelp,
+}: {
+  workspace: string;
+  reviewer: string;
+  theme: Theme;
+  error: string | null;
+  health: SystemHealth | null;
+  healthFailed: boolean;
+  onWorkspaceChange: (value: string) => void;
+  onReviewerChange: (value: string) => void;
+  onContinue: () => void;
+  onThemeChange: () => void;
+  onHelp: () => void;
+}) {
+  const ready = health?.status === "ok" && health.worker.status === "alive";
+  const statusLabel = healthFailed
+    ? "Service unavailable"
+    : health === null
+      ? "Checking service"
+      : ready
+        ? "Ready to process cases"
+        : "Review available · new processing paused";
+
+  return (
+    <div className="welcome-shell">
+      <header className="welcome-nav">
+        <a className="welcome-brand" href="/" aria-label="Adaptive Intake home">
+          <ProductMark />
+          <span>Adaptive Intake</span>
+        </a>
+        <div className="welcome-nav__actions">
+          <button type="button" className="welcome-link" onClick={onHelp}>
+            How it works
+          </button>
+          <button
+            type="button"
+            className="theme-button"
+            onClick={onThemeChange}
+            aria-label={theme === "dark" ? "switch to light theme" : "switch to dark theme"}
+          >
+            {theme === "dark" ? "Light" : "Dark"}
+          </button>
+        </div>
+      </header>
+
+      <main className="welcome-main">
+        <section className="welcome-hero" aria-labelledby="welcome-title">
+          <span className="eyebrow">Human-verified case intelligence</span>
+          <h1 id="welcome-title">
+            Turn every customer message into a case your team can act on.
+          </h1>
+          <p className="welcome-lede">
+            Adaptive Intake reads unstructured messages and files, structures the facts, shows the
+            evidence, and keeps a person in control before anything is approved.
+          </p>
+          <div className="value-row" aria-label="Product principles">
+            <span>No forms for customers</span>
+            <span>Every field traceable</span>
+            <span>Human approval required</span>
+          </div>
+        </section>
+
+        <aside className="access-card" aria-labelledby="access-title">
+          <div className="access-card__head">
+            <div>
+              <span className="eyebrow">Pilot workspace</span>
+              <h2 id="access-title">Open your review queue</h2>
+            </div>
+            <span className={`service-status${ready ? " service-status--ready" : ""}`}>
+              <span className="service-status__dot" />
+              {statusLabel}
+            </span>
+          </div>
+          <p className="access-card__copy">
+            Use the workspace ID from your administrator. Your identity is recorded on corrections
+            and approvals.
+          </p>
+          {error && <div className="access-error">{error}</div>}
+          <label className="access-field">
+            <span>Your name</span>
+            <input
+              value={reviewer}
+              onChange={(event) => onReviewerChange(event.target.value)}
+              autoComplete="name"
+              placeholder="e.g. Maya"
+            />
+          </label>
+          <label className="access-field">
+            <span>Workspace ID</span>
+            <input
+              value={workspace}
+              onChange={(event) => onWorkspaceChange(event.target.value)}
+              onKeyDown={(event) => event.key === "Enter" && onContinue()}
+              inputMode="text"
+              autoComplete="off"
+              placeholder="00000000-0000-0000-0000-000000000000"
+            />
+          </label>
+          <button type="button" className="access-submit" onClick={onContinue}>
+            Continue to workspace <span aria-hidden="true">→</span>
+          </button>
+          <p className="access-note">
+            Pilot access only. Production authentication and workspace invitations are a tracked
+            launch gate.
+          </p>
+        </aside>
+
+        <section className="workflow" aria-labelledby="workflow-title">
+          <div className="section-heading">
+            <span className="eyebrow">One clear workflow</span>
+            <h2 id="workflow-title">From messy message to trusted decision</h2>
+          </div>
+          <div className="workflow-grid">
+            <article>
+              <span className="workflow-step">01</span>
+              <h3>Capture naturally</h3>
+              <p>Customers send text, documents, images, or voice without completing a rigid form.</p>
+            </article>
+            <article>
+              <span className="workflow-step">02</span>
+              <h3>Structure with evidence</h3>
+              <p>The engine extracts the case, links business records, and preserves source citations.</p>
+            </article>
+            <article>
+              <span className="workflow-step">03</span>
+              <h3>Review what matters</h3>
+              <p>Uncertain fields rise to the top so reviewers spend time where judgment is needed.</p>
+            </article>
+            <article>
+              <span className="workflow-step">04</span>
+              <h3>Approve and act</h3>
+              <p>Only a human-approved case can produce the final report and operational record.</p>
+            </article>
+          </div>
+        </section>
+      </main>
+
+      <footer className="welcome-footer">
+        <span>Adaptive Intake</span>
+        <span>Traceable by design · Human-controlled by default</span>
+      </footer>
+    </div>
+  );
+}
+
 const params = new URLSearchParams(window.location.search);
-const INITIAL_TENANT = params.get("tenant") ?? getTenantId();
+const WORKSPACE_ID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const INITIAL_TENANT = (params.get("tenant") ?? getTenantId()).trim();
 const INITIAL_CASE = params.get("case");
 
 // Theme — a light (Fluent / Power Platform) default with a dark swap; persisted, and honouring the OS
@@ -1447,8 +1734,10 @@ if (typeof document !== "undefined") document.documentElement.setAttribute("data
 
 export default function App() {
   const [tenant, setTenant] = useState(INITIAL_TENANT);
+  const [workspaceReady, setWorkspaceReady] = useState(WORKSPACE_ID_RE.test(INITIAL_TENANT));
   const [reviewer, setReviewer] = useState(getReviewerId());
   const [cases, setCases] = useState<CaseSummary[] | null>(null);
+  const [loadingCases, setLoadingCases] = useState(WORKSPACE_ID_RE.test(INITIAL_TENANT));
   const [review, setReview] = useState<CaseReview | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(INITIAL_CASE);
   const [error, setError] = useState<string | null>(null);
@@ -1460,6 +1749,8 @@ export default function App() {
   const [reviewStats, setReviewStats] = useState<ReviewStats | null>(null);
   const [batchBusy, setBatchBusy] = useState(false);
   const [theme, setTheme] = useState<Theme>(initialTheme);
+  const [systemHealth, setSystemHealth] = useState<SystemHealth | null>(null);
+  const [healthFailed, setHealthFailed] = useState(false);
 
   // Reflect the theme onto <html> (flips the CSS token set) and remember the choice.
   useEffect(() => {
@@ -1471,7 +1762,27 @@ export default function App() {
     }
   }, [theme]);
 
+  useEffect(() => {
+    let live = true;
+    const check = () => {
+      void getSystemHealth()
+        .then((result) => {
+          if (!live) return;
+          setSystemHealth(result);
+          setHealthFailed(false);
+        })
+        .catch(() => live && setHealthFailed(true));
+    };
+    check();
+    const timer = window.setInterval(check, 15_000);
+    return () => {
+      live = false;
+      window.clearInterval(timer);
+    };
+  }, []);
+
   const ordered = useMemo(() => (cases ? reviewOrder(cases) : null), [cases]);
+  const processingReady = systemHealth?.status === "ok" && systemHealth.worker.status === "alive";
 
   // The triage split (the plan's frontend #3): CLEAN = an unapproved, non-failed case with NO field
   // flagged for review (every governed field above the 0.5 flag line) — the system raised no uncertainty
@@ -1506,6 +1817,7 @@ export default function App() {
   }, []);
 
   const refresh = useCallback(async () => {
+    setLoadingCases(true);
     setError(null);
     try {
       const data = await listCases();
@@ -1513,6 +1825,8 @@ export default function App() {
     } catch (e) {
       setCases(null);
       setError((e as Error).message);
+    } finally {
+      setLoadingCases(false);
     }
   }, []);
 
@@ -1549,8 +1863,8 @@ export default function App() {
   }, [clean, batchBusy, reviewer, refresh, refreshStats]);
 
   useEffect(() => {
-    if (INITIAL_TENANT) setTenantId(INITIAL_TENANT);
-    if (getTenantId()) {
+    if (WORKSPACE_ID_RE.test(INITIAL_TENANT)) {
+      setTenantId(INITIAL_TENANT);
       void refresh();
       refreshStats();
     }
@@ -1589,8 +1903,15 @@ export default function App() {
   useHotkeys("escape", () => setShowHelp(false));
 
   function applyTenant() {
-    setTenantId(tenant);
+    const workspaceId = tenant.trim();
+    if (!WORKSPACE_ID_RE.test(workspaceId)) {
+      setError("Enter the complete workspace ID supplied by your administrator.");
+      return;
+    }
+    setError(null);
+    setTenantId(workspaceId);
     setReviewerId(reviewer);
+    setWorkspaceReady(true);
     setSelectedId(null);
     setReview(null);
     batchStartRef.current = Date.now(); // the triage clock for this queue starts now
@@ -1599,6 +1920,16 @@ export default function App() {
     void getFieldOptions()
       .then(setFieldOptions)
       .catch(() => setFieldOptions({}));
+  }
+
+  function leaveWorkspace() {
+    setTenantId("");
+    setWorkspaceReady(false);
+    setLoadingCases(false);
+    setCases(null);
+    setReview(null);
+    setSelectedId(null);
+    setError(null);
   }
 
   async function exportCsv() {
@@ -1614,16 +1945,52 @@ export default function App() {
     }
   }
 
+  if (!workspaceReady) {
+    return (
+      <>
+        <WorkspaceWelcome
+          workspace={tenant}
+          reviewer={reviewer}
+          theme={theme}
+          error={error}
+          health={systemHealth}
+          healthFailed={healthFailed}
+          onWorkspaceChange={(value) => {
+            setTenant(value);
+            setError(null);
+          }}
+          onReviewerChange={setReviewer}
+          onContinue={applyTenant}
+          onThemeChange={() => setTheme((current) => (current === "dark" ? "light" : "dark"))}
+          onHelp={() => setShowHelp(true)}
+        />
+        {showHelp && <ReviewHelp onClose={() => setShowHelp(false)} />}
+      </>
+    );
+  }
+
   return (
     <div className="app">
       <header className="topbar">
         <div className="topbar__brand">
-          <span className="topbar__mark mono" aria-hidden="true">
-            ▚
-          </span>
-          <h1>Adaptive Intake — Review</h1>
+          <ProductMark />
+          <div>
+            <h1>Adaptive Intake</h1>
+            <span className="topbar__context">Review workspace</span>
+          </div>
         </div>
         <div className="tenant">
+          <span
+            className={`topbar-status${processingReady ? " topbar-status--ready" : ""}`}
+            title={
+              processingReady
+                ? "Intake worker is ready"
+                : "Review is available, but new case processing is paused"
+            }
+          >
+            <span />
+            {processingReady ? "Processing ready" : "Processing paused"}
+          </span>
           <input
             aria-label="reviewer id"
             className="tenant__reviewer"
@@ -1632,15 +1999,15 @@ export default function App() {
             onChange={(e) => setReviewer(e.target.value)}
             onBlur={() => setReviewerId(reviewer)}
           />
-          <input
-            aria-label="tenant id"
-            placeholder="tenant id (UUID)"
-            value={tenant}
-            onChange={(e) => setTenant(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && applyTenant()}
-          />
-          <button type="button" className="load" onClick={applyTenant}>
-            load
+          <button
+            type="button"
+            className="workspace-chip"
+            onClick={leaveWorkspace}
+            title="Switch workspace"
+          >
+            <span className="workspace-chip__dot" />
+            <span className="mono">{tenant.slice(0, 8)}</span>
+            <span aria-hidden="true">⌄</span>
           </button>
           <button
             type="button"
@@ -1649,7 +2016,7 @@ export default function App() {
             disabled={!getTenantId()}
             title={getTenantId() ? "connect your orders/bookings" : "set a tenant id first"}
           >
-            connect data
+            Data sources
           </button>
           <button
             type="button"
@@ -1658,7 +2025,7 @@ export default function App() {
             disabled={!getTenantId()}
             title={getTenantId() ? "what to fix next — the feedback loop digest" : "set a tenant id first"}
           >
-            tuning
+            Quality
           </button>
           <button
             type="button"
@@ -1670,7 +2037,7 @@ export default function App() {
             {theme === "dark" ? "☀ light" : "☾ dark"}
           </button>
           <button type="button" className="ghost" onClick={() => setShowHelp((v) => !v)}>
-            ? keys
+            Help
           </button>
         </div>
       </header>
@@ -1680,16 +2047,22 @@ export default function App() {
       <div className="layout">
         <nav className="register">
           <div className="register__head">
-            <span>review queue</span>
+            <span>Cases</span>
             <div className="register__head-actions">
               <button
                 type="button"
                 className="primary primary--sm"
                 onClick={() => setShowNew(true)}
-                disabled={!getTenantId()}
-                title={getTenantId() ? "" : "set a tenant id first"}
+                disabled={!getTenantId() || !processingReady}
+                title={
+                  !getTenantId()
+                    ? "Load a workspace first"
+                    : !processingReady
+                      ? "New processing is paused until the intake worker is available"
+                      : "Submit a new case"
+                }
               >
-                + new case
+                + New case
               </button>
               <button type="button" className="ghost ghost--sm" onClick={() => void exportCsv()}>
                 CSV
@@ -1701,7 +2074,7 @@ export default function App() {
           </div>
           {ordered && ordered.length > 0 && (
             <p className="register__basis">
-              ordered by class reliability — least-reliable predicted class first
+              Needs review first · lowest confidence at the top
             </p>
           )}
           {/* Triage: clear the high-reliability band in one act so a reviewer only ever opens cases that
@@ -1722,10 +2095,21 @@ export default function App() {
               </button>
             </div>
           )}
-          {ordered === null ? (
+          {loadingCases ? (
+            <div className="register__empty register__empty--loading">
+              <span className="loading-line" />
+              <span className="loading-line loading-line--short" />
+              <p>Loading cases…</p>
+            </div>
+          ) : ordered === null ? (
             <div className="register__empty">
-              <h4>No tenant loaded</h4>
-              <p>Set a tenant id to load cases.</p>
+              <h4>Workspace unavailable</h4>
+              <p>
+                We couldn’t load this workspace. Check the ID or service status, then try again.
+              </p>
+              <button type="button" className="ghost ghost--sm" onClick={leaveWorkspace}>
+                Change workspace
+              </button>
             </div>
           ) : ordered.length === 0 ? (
             <div className="register__empty">
@@ -1734,7 +2118,13 @@ export default function App() {
                 This is where cases land for review — least-reliable first, each traceable to its
                 source and approved by you. Nothing has come in yet.
               </p>
-              <button type="button" className="primary primary--sm" onClick={() => setShowNew(true)}>
+              <button
+                type="button"
+                className="primary primary--sm"
+                onClick={() => setShowNew(true)}
+                disabled={!processingReady}
+                title={processingReady ? "Submit a new case" : "New case processing is paused"}
+              >
                 + submit your first case
               </button>
             </div>
@@ -1804,7 +2194,12 @@ export default function App() {
               onCommitted={reloadCase}
             />
           ) : (
-            <div className="placeholder">Select a case to review.</div>
+            <QueueOverview
+              cases={ordered ?? []}
+              loading={loadingCases}
+              processingReady={processingReady}
+              onCreate={() => setShowNew(true)}
+            />
           )}
         </main>
       </div>
@@ -1813,31 +2208,7 @@ export default function App() {
       {showObjects && <ObjectStoreModal onClose={() => setShowObjects(false)} />}
       {showTuning && <TuningDigestModal onClose={() => setShowTuning(false)} />}
 
-      {showHelp && (
-        <div className="help" onClick={() => setShowHelp(false)}>
-          <div className="help__card" onClick={(e) => e.stopPropagation()}>
-            <h3>keyboard</h3>
-            <dl>
-              <dt>j / k</dt>
-              <dd>next / previous field</dd>
-              <dt>n / p</dt>
-              <dd>next / previous case</dd>
-              <dt>1 – 9</dt>
-              <dd>correct the selected field to a listed value (one key, no typing)</dd>
-              <dt>e</dt>
-              <dd>edit (correct) the selected field as free text</dd>
-              <dt>c</dt>
-              <dd>approve the case (undoable for a few seconds)</dd>
-              <dt>u</dt>
-              <dd>undo a just-made approval (within the window)</dd>
-              <dt>r</dt>
-              <dd>download the report (approved cases)</dd>
-              <dt>?</dt>
-              <dd>toggle this help</dd>
-            </dl>
-          </div>
-        </div>
-      )}
+      {showHelp && <ReviewHelp onClose={() => setShowHelp(false)} />}
     </div>
   );
 }
