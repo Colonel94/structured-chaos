@@ -84,12 +84,14 @@ live-testing (voice/image/text) → turn each failing case into a prompt/policy 
 >   CSV with rows in it" — the product self-instruments (`review_event` → `/api/review-stats`
 >   count/median/p90; `field_correction` → `/api/review-breakdown`; the eval scorer). `review_event`
 >   count=0/median=null = **nobody has cleared cases**, not an unfilled form; the moment one reviewer
->   uses it for 20 min the number appears. Deleted the redundant `evidence/reviewer-session-template.csv`
->   + `evidence/voice-pair-template.csv` (voice parity is scored by the harness against gold, not
->   hand-counted); rewrote `docs/EVIDENCE-RUNBOOK.md` to read the numbers off the API + a 3-field sticky
->   note (help_requests/abandoned/observer). Kept `stranger-session-template.csv` (reactions + price
->   questions aren't instrumentable). Rule saved: [[dont-recapture-instrumented-data]]. **The real Gate-6
->   blocker is the absence of a reviewer, not a spreadsheet.**
+>   uses it for 20 min the number appears. Deleted **all three** session-capture templates
+>   (`reviewer-session-`, `voice-pair-`, `stranger-session-template.csv`) and the now-empty `evidence/`
+>   dir: a person using the self-instrumenting product never needs a capture form — a **stranger runs the
+>   same product a reviewer does**, so the session instruments itself; the few external observations
+>   (reaction, price question, help, abandonment) are a free-text note. Voice parity is scored by the eval
+>   harness against gold, not hand-counted. Rewrote `docs/EVIDENCE-RUNBOOK.md` accordingly. Rule saved:
+>   [[dont-recapture-instrumented-data]]. **The real Gate-6 blocker is the absence of a reviewer, not a
+>   spreadsheet.** (Independent GOLD labels in `holdout_labels.csv` are separate and still valid.)
 > - **RUN IT:** DB+MinIO via `docker compose -f deploy/docker-compose.yml up -d db minio`; backend
 >   `cd engine && ./.venv/Scripts/python.exe -m uvicorn app.main:app --port 8000` (use `-m uvicorn`, not
 >   the console script, so `uv sync` never locks it); worker from repo root

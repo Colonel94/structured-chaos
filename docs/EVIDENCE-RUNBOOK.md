@@ -2,8 +2,10 @@
 
 This pack makes pilot-learning and general-availability evidence repeatable without pretending it has
 already passed. Independent labels and unassisted stranger sessions are not controlled-pilot entry gates
-under winning-condition v0.2; they remain required before broad quality/onboarding claims. Copy templates
-into a dated evidence directory and freeze the commit, model, policy, inputs and thresholds before a run.
+under winning-condition v0.2; they remain required before broad quality/onboarding claims. Freeze the
+commit, model, policy, inputs and thresholds before a run. There are **no session-capture spreadsheets**:
+a person using the product is measured by the product (see the last section); the only labelling artifact
+is `engine/eval/fixtures/holdout_labels.csv`.
 
 ## Independent holdout
 
@@ -37,10 +39,14 @@ capture those three on a sticky note.
 
 ## Unassisted onboarding study
 
-For each person: use their own messy input, provide no walkthrough, keep the builder silent, and record
-time to first value plus exact unsolicited reactions in `evidence/stranger-session-template.csv`. Treat
-price questions and feature requests as discovery signals, not pass/fail software criteria. Consent to
-record and retention/deletion must be settled before the session.
+For each person: use their own messy input, provide no walkthrough, keep the builder silent. **They use
+the same product a reviewer does, so the session instruments itself** — the case lifecycle records intake
+→ review → approval → report and `review_event` records the time; read it off the API the same way (`GET
+/api/review-stats`, the case record), not a spreadsheet. The only things worth capturing by hand are the
+conversational signals the software cannot see — an unsolicited reaction, a price or feature question,
+whether they needed help or gave up — and those are a free-text note. Treat price questions and feature
+requests as discovery signals, not pass/fail software criteria. Consent to record and retention/deletion
+must be settled before the session.
 
 ## What the system already measures (do not re-capture by hand)
 
@@ -48,12 +54,12 @@ Before adding any capture template, check whether the product already instrument
 of this: `review_event` + `GET /api/review-stats` give count/median/p90 review time and average fields
 edited; the append-only `field_correction` log + `GET /api/review-breakdown` give per-field correction
 pressure; the eval scorer gives field/category accuracy against gold. **A reviewer using the product is
-the measurement.** Only genuinely external observations justify manual capture — reactions, price
-questions, help requests, abandonment, observer notes — and those are a sticky note, not a 14-column
-spreadsheet. (The former `reviewer-session-template.csv` and `voice-pair-template.csv` were removed for
-exactly this reason: they re-typed instrumented data into a form, the thing this product exists to kill.
-Only `stranger-session-template.csv` remains, because reactions and price questions are not
-instrumentable.)
+the measurement** — and so is a stranger onboarding, because they run the same product. Only genuinely
+external observations justify manual capture — reactions, price questions, help requests, abandonment,
+observer notes — and those are a free-text note, not a spreadsheet. (All three session templates —
+`reviewer-session-template.csv`, `voice-pair-template.csv` and `stranger-session-template.csv` — were
+removed for exactly this reason: a person using the self-instrumenting product never needs a structured
+capture form. The mechanical parts are in the API; the handful of external observations are a note.)
 
 ## Evidence integrity
 
