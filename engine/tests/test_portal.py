@@ -47,9 +47,7 @@ class _ScriptedLLM:
     """Returns a fixed extraction. ``outcome`` toggles whether desired_outcome is present (→ actionable)
     or null (→ the elicit stage asks the outcome drill, with options)."""
 
-    def __init__(
-        self, *, outcome: str | None = "refund", anchor: str | None = None
-    ) -> None:
+    def __init__(self, *, outcome: str | None = "refund", anchor: str | None = None) -> None:
         self.last_usage = {"wall_ms": 5.0, "tokens_in": 100.0, "tokens_out": 40.0}
         self._payload = json.dumps(
             {
@@ -63,9 +61,7 @@ class _ScriptedLLM:
             }
         )
 
-    async def complete(
-        self, prompt: str, *, schema: dict[str, object] | None = None
-    ) -> str:
+    async def complete(self, prompt: str, *, schema: dict[str, object] | None = None) -> str:
         return self._payload
 
 
@@ -110,22 +106,16 @@ def _process(app_factory: sessionmaker[Session], token: str) -> None:
     assert resolved is not None
     tenant_id, case_id = resolved
     with app_factory() as s:
-        s.execute(
-            text("SELECT set_config('app.tenant_id', :t, true)"), {"t": str(tenant_id)}
-        )
+        s.execute(text("SELECT set_config('app.tenant_id', :t, true)"), {"t": str(tenant_id)})
         sdids = api.list_case_source_documents(s, case_id)
     blob, llm = get_blob(), get_llm()
 
     async def _go() -> None:
         for sdid in sdids:
-            await normalise_source_document(
-                str(tenant_id), sdid, blob=blob, factory=app_factory
-            )
+            await normalise_source_document(str(tenant_id), sdid, blob=blob, factory=app_factory)
         await extract_case(str(tenant_id), case_id, llm=llm, factory=app_factory)
         decide_case(str(tenant_id), case_id, factory=app_factory)
-        await elicit_case(
-            str(tenant_id), case_id, llm=llm, blob=blob, factory=app_factory
-        )
+        await elicit_case(str(tenant_id), case_id, llm=llm, blob=blob, factory=app_factory)
 
     asyncio.run(_go())
 
@@ -151,14 +141,10 @@ def test_submit_ignores_client_tenant_header(
         assert r.status_code == 200
         # The case must belong to A (the key's tenant), never B (the header's).
         with app_factory() as s:
-            s.execute(
-                text("SELECT set_config('app.tenant_id', :t, true)"), {"t": tenant_a}
-            )
+            s.execute(text("SELECT set_config('app.tenant_id', :t, true)"), {"t": tenant_a})
             in_a = s.execute(text("SELECT count(*) FROM case_record")).scalar()
         with app_factory() as s:
-            s.execute(
-                text("SELECT set_config('app.tenant_id', :t, true)"), {"t": tenant_b}
-            )
+            s.execute(text("SELECT set_config('app.tenant_id', :t, true)"), {"t": tenant_b})
             in_b = s.execute(text("SELECT count(*) FROM case_record")).scalar()
         assert in_a == 1 and in_b == 0
     finally:
@@ -177,9 +163,7 @@ def test_case_token_does_not_grant_cross_origin_read_access(
             "/p/submit", data={"key": "EK_cors", "text": "my parcel arrived smashed"}
         )
         token = created.json()["token"]
-        blocked = client.get(
-            f"/p/case/{token}", headers={"Origin": "https://malicious.example"}
-        )
+        blocked = client.get(f"/p/case/{token}", headers={"Origin": "https://malicious.example"})
         assert blocked.status_code == 403
         assert "Access-Control-Allow-Origin" not in blocked.headers
     finally:
@@ -196,20 +180,14 @@ def test_case_token_cannot_read_another_tenants_case(
     client = _wire(monkeypatch, app_factory, _ScriptedLLM())
     try:
         # A real case in tenant B.
-        rb = client.post(
-            "/p/submit", data={"key": "EK_tb", "text": "B's private complaint"}
-        )
+        rb = client.post("/p/submit", data={"key": "EK_tb", "text": "B's private complaint"})
         token_b = rb.json()["token"]
         case_b = token_b  # opaque; we need B's case_id to forge an A-scoped token
         # Recover B's case id (admin) and forge a token binding it to tenant A.
         with app_factory() as s:
-            s.execute(
-                text("SELECT set_config('app.tenant_id', :t, true)"), {"t": tenant_b}
-            )
+            s.execute(text("SELECT set_config('app.tenant_id', :t, true)"), {"t": tenant_b})
             case_b_id = s.execute(text("SELECT id FROM case_record LIMIT 1")).scalar()
-        forged = sign_case_token(
-            tenant_a, case_b_id
-        )  # signed, but points A's GUC at B's case
+        forged = sign_case_token(tenant_a, case_b_id)  # signed, but points A's GUC at B's case
         # RLS: A cannot see B's case → 404, never a leak.
         assert client.get(f"/p/case/{forged}").status_code == 404
         # A tampered signature is rejected outright.
@@ -232,9 +210,9 @@ def test_status_leaks_no_internal_state(
     _mint_tenant(admin_session, "Leak-Co", "EK_leak")
     client = _wire(monkeypatch, app_factory, _ScriptedLLM())
     try:
-        token = client.post(
-            "/p/submit", data={"key": "EK_leak", "text": "late parcel"}
-        ).json()["token"]
+        token = client.post("/p/submit", data={"key": "EK_leak", "text": "late parcel"}).json()[
+            "token"
+        ]
         _process(app_factory, token)
         body = client.get(f"/p/case/{token}").json()
         blob = json.dumps(body).lower()
@@ -262,13 +240,8 @@ def test_unknown_key_is_404(
 ) -> None:
     client = _wire(monkeypatch, app_factory, _ScriptedLLM())
     try:
-        assert (
-            client.post("/p/submit", data={"key": "nope", "text": "hi"}).status_code
-            == 404
-        )
-        assert (
-            client.post("/p/submit", data={"key": "", "text": "hi"}).status_code == 404
-        )
+        assert client.post("/p/submit", data={"key": "nope", "text": "hi"}).status_code == 404
+        assert client.post("/p/submit", data={"key": "", "text": "hi"}).status_code == 404
     finally:
         app.dependency_overrides.clear()
 
@@ -318,9 +291,7 @@ def test_status_surfaces_shared_options_when_policy_asks_outcome(
     _mint_tenant(admin_session, "Opt-Co", "EK_opt")
     # outcome=None + an anchor present → has_anchor is True, so the drill skips the anchor and asks the
     # OUTCOME drill, which carries the shared options.
-    client = _wire(
-        monkeypatch, app_factory, _ScriptedLLM(outcome=None, anchor="ORD-99")
-    )
+    client = _wire(monkeypatch, app_factory, _ScriptedLLM(outcome=None, anchor="ORD-99"))
     try:
         # the anchor must appear in the text (closed-world grounding drops ungrounded values)
         token = client.post(
@@ -352,17 +323,15 @@ def test_status_shows_honest_failure_not_empty_case(
     tenant = _mint_tenant(admin_session, "Fail-Co", "EK_fail")
     client = _wire(monkeypatch, app_factory, _ScriptedLLM())
     try:
-        token = client.post(
-            "/p/submit", data={"key": "EK_fail", "text": "late parcel"}
-        ).json()["token"]
+        token = client.post("/p/submit", data={"key": "EK_fail", "text": "late parcel"}).json()[
+            "token"
+        ]
         # Simulate the worker stamping the case failed after its retries were exhausted.
         resolved = verify_case_token(token)
         assert resolved is not None
         _, case_id = resolved
         with app_factory() as s:
-            s.execute(
-                text("SELECT set_config('app.tenant_id', :t, true)"), {"t": tenant}
-            )
+            s.execute(text("SELECT set_config('app.tenant_id', :t, true)"), {"t": tenant})
             assert api.fail_case_processing(s, case_id) is True
             s.commit()
         body = client.get(f"/p/case/{token}").json()
@@ -400,9 +369,7 @@ def test_fail_case_processing_only_marks_inflight_cases(
 
     def _state() -> str:
         with app_factory() as s:
-            s.execute(
-                text("SELECT set_config('app.tenant_id', :t, true)"), {"t": tenant}
-            )
+            s.execute(text("SELECT set_config('app.tenant_id', :t, true)"), {"t": tenant})
             return str(
                 s.execute(
                     text("SELECT case_state FROM case_record WHERE id = :c"),
@@ -412,9 +379,7 @@ def test_fail_case_processing_only_marks_inflight_cases(
 
     def _set(state: str) -> None:
         with app_factory() as s:
-            s.execute(
-                text("SELECT set_config('app.tenant_id', :t, true)"), {"t": tenant}
-            )
+            s.execute(text("SELECT set_config('app.tenant_id', :t, true)"), {"t": tenant})
             s.execute(
                 text("UPDATE case_record SET case_state = :st WHERE id = :c"),
                 {"st": state, "c": case_id},
@@ -438,9 +403,7 @@ def test_fail_case_processing_only_marks_inflight_cases(
     for done in ("actionable", "in_review", "committed"):
         _set(done)
         with app_factory() as s:
-            s.execute(
-                text("SELECT set_config('app.tenant_id', :t, true)"), {"t": tenant}
-            )
+            s.execute(text("SELECT set_config('app.tenant_id', :t, true)"), {"t": tenant})
             assert api.fail_case_processing(s, case_id) is False
             s.commit()
         assert _state() == done
@@ -493,17 +456,13 @@ def test_status_shows_processing_while_a_reply_is_in_flight(
     with app_factory() as s:
         s.execute(text("SELECT set_config('app.tenant_id', :t, true)"), {"t": tenant})
         st = public_status(s, cid, stall_seconds=3600)
-        assert (
-            st is not None and st["processing"] is True
-        )  # reply in flight → working on it
+        assert st is not None and st["processing"] is True  # reply in flight → working on it
         # The stale question is NOT served while reprocessing.
         assert st.get("question") is None
 
         # Elicit re-runs and stamps processed_at past the reply → the case is ready again. (Same
         # transaction — no commit, which would reset the transaction-local tenant GUC and blind RLS.)
-        api.touch_elicit_processed(
-            s, cid, at_iso=(t0 + timedelta(minutes=2)).isoformat()
-        )
+        api.touch_elicit_processed(s, cid, at_iso=(t0 + timedelta(minutes=2)).isoformat())
         st2 = public_status(s, cid, stall_seconds=3600)
         assert st2 is not None and st2.get("processing") is False
 
@@ -522,9 +481,7 @@ def test_worker_down_switches_to_honest_handoff(
     tenant = _mint_tenant(admin_session, "WorkerDown-Co", "EK_wdown")
     with app_factory() as s:
         s.execute(text("SELECT set_config('app.tenant_id', :t, true)"), {"t": tenant})
-        cid = api.create_case(
-            s, channel="web", first_contact_at=datetime.now(UTC)
-        )  # 'created'
+        cid = api.create_case(s, channel="web", first_contact_at=datetime.now(UTC))  # 'created'
         s.commit()
 
     # (1) No heartbeat row at all → NOT down (cold-start fallback) → normal processing copy.
@@ -550,18 +507,12 @@ def test_worker_down_switches_to_honest_handoff(
         s.execute(text("SELECT set_config('app.tenant_id', :t, true)"), {"t": tenant})
         assert worker_down(s, liveness_seconds=60) is True
         st = public_status(s, cid, stall_seconds=3600, worker_liveness_seconds=60)
-        assert (
-            st is not None
-            and "snag" in st["headline"].lower()
-            and st["stalled"] is True
-        )
+        assert st is not None and "snag" in st["headline"].lower() and st["stalled"] is True
 
     # (3) A FRESH heartbeat → recovered → back to normal processing copy.
     with app_factory() as s:
         s.execute(text("SELECT set_config('app.tenant_id', :t, true)"), {"t": tenant})
-        s.execute(
-            text("UPDATE worker_heartbeat SET beat_at = now() WHERE queue='default'")
-        )
+        s.execute(text("UPDATE worker_heartbeat SET beat_at = now() WHERE queue='default'"))
         s.commit()
     with app_factory() as s:
         s.execute(text("SELECT set_config('app.tenant_id', :t, true)"), {"t": tenant})

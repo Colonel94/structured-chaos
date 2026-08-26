@@ -59,9 +59,7 @@ _ALLOWED_MIME = {
 
 def _mime_ok(mime: str) -> bool:
     mime = (mime or "").split(";")[0].strip().lower()
-    return mime in _ALLOWED_MIME or any(
-        mime.startswith(p) for p in _ALLOWED_MIME_PREFIXES
-    )
+    return mime in _ALLOWED_MIME or any(mime.startswith(p) for p in _ALLOWED_MIME_PREFIXES)
 
 
 # --------------------------------------------------------------------------- rate limiting (in-memory)
@@ -122,9 +120,7 @@ def _enforce_origin(request: Request, allowed: list[str]) -> str | None:
         return None
     if _same_origin(request, origin) or origin in allowed:
         return origin
-    raise HTTPException(
-        status_code=403, detail="This site is not authorised to submit here."
-    )
+    raise HTTPException(status_code=403, detail="This site is not authorised to submit here.")
 
 
 def _cors(resp: Response, origin: str | None) -> Response:
@@ -189,9 +185,7 @@ async def submit(
             settings.portal_max_request_bytes - total,
         )
         if remaining <= 0:
-            raise HTTPException(
-                status_code=413, detail="Too much submitted (max 25 MB total)."
-            )
+            raise HTTPException(status_code=413, detail="Too much submitted (max 25 MB total).")
         # Read only one byte past the applicable limit. ``UploadFile.read()`` without a bound can
         # otherwise allocate an arbitrarily large chunked request before either size check runs.
         data = await f.read(remaining + 1)
@@ -200,24 +194,16 @@ async def submit(
         name = f.filename or "upload"
         mime = f.content_type or guess_mime(name)
         if not _mime_ok(mime):
-            raise HTTPException(
-                status_code=415, detail=f"Unsupported file type: {mime}"
-            )
+            raise HTTPException(status_code=415, detail=f"Unsupported file type: {mime}")
         if len(data) > settings.portal_max_file_bytes:
-            raise HTTPException(
-                status_code=413, detail="A file is too large (max 10 MB)."
-            )
+            raise HTTPException(status_code=413, detail="A file is too large (max 10 MB).")
         if len(data) > remaining:
-            raise HTTPException(
-                status_code=413, detail="Too much submitted (max 25 MB total)."
-            )
+            raise HTTPException(status_code=413, detail="Too much submitted (max 25 MB total).")
         total += len(data)
         attachments.append(InboundAttachment(filename=name, mime=mime, data=data))
         voice_meta.append((name, mime, len(data)))
     if not body and not attachments:
-        raise HTTPException(
-            status_code=400, detail="Tell us what went wrong, or attach a file."
-        )
+        raise HTTPException(status_code=400, detail="Tell us what went wrong, or attach a file.")
     _log_voice(voice_meta)
 
     from ..backends.registry import get_blob
@@ -241,9 +227,7 @@ async def submit(
         raise HTTPException(status_code=500, detail="Could not create the case.")
     case_id = ing.case_ids[0]
     token = sign_case_token(tenant_id, case_id)
-    return _cors(
-        JSONResponse({"ref": store._reference(case_id), "token": token}), origin
-    )
+    return _cors(JSONResponse({"ref": store._reference(case_id), "token": token}), origin)
 
 
 def _token_or_404(token: str) -> tuple[UUID, UUID]:
@@ -286,9 +270,7 @@ async def answer(
     _rate_limit(request, tenant_id)
     body = answer.strip()
     if not body:
-        raise HTTPException(
-            status_code=400, detail="Type your answer, or tap one of the options."
-        )
+        raise HTTPException(status_code=400, detail="Type your answer, or tap one of the options.")
 
     from ..backends.registry import get_blob
     from ..intake.ingest import ingest_messages

@@ -53,9 +53,7 @@ def test_reaper_releases_only_orphaned_doing_jobs_on_its_queues() -> None:
         done_default = _insert_job(conn, queue="default", status="succeeded")
 
         reaped = reap_orphaned_jobs(conn, ["default"])
-        assert reaped == [
-            doing_default
-        ]  # exactly the orphaned doing job on THIS queue-set
+        assert reaped == [doing_default]  # exactly the orphaned doing job on THIS queue-set
 
         def state(jid: int) -> tuple[str, object]:
             r = conn.execute(
@@ -73,9 +71,7 @@ def test_reaper_releases_only_orphaned_doing_jobs_on_its_queues() -> None:
             state(doing_backfill)[0] == "doing"
         )  # another queue-set (a live sibling) is untouched
         assert state(todo_default)[0] == "todo"  # a waiting job is untouched
-        assert (
-            state(done_default)[0] == "succeeded"
-        )  # a finished job is never resurrected
+        assert state(done_default)[0] == "succeeded"  # a finished job is never resurrected
     finally:
         conn.close()
 

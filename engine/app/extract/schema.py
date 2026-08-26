@@ -67,13 +67,15 @@ GOVERNED_KEYS: tuple[str, ...] = (
     "anchor_value",
 )
 
+
 # The JSON schema Ollama constrains the output to (llama.cpp GBNF). Guarantees valid, typed JSON so
 # "refuse to guess" is a null, never a malformed field (EDD §5 — grammar-constrained decoding).
 def build_extraction_schema(heads: Sequence[str] = HEAD_NOUNS) -> dict[str, object]:
     """The extraction JSON schema for a given head vocabulary. ``heads`` is the tenant's EFFECTIVE head
     set = seed ``HEAD_NOUNS`` + any minted heads (head-minting) — so once a tenant mints a ``regulation``
     column the grammar lets the model emit it directly. Defaults to the seed so every existing caller is
-    unchanged. The head enum is what enforces the closed-then-emergent column space in code, not prose."""
+    unchanged. The head enum is what enforces the closed-then-emergent column space in code, not prose.
+    """
     return {
         "type": "object",
         "properties": {

@@ -32,8 +32,12 @@ def test_agreement_counts_only_co_labelled_rows() -> None:
 
 def test_blank_outcome_is_null_when_column_used_but_skip_when_not() -> None:
     # Source A USED the column (has null_ok) → its blank is the real label 'null'.
-    a = _src("a", {"1": {"desired_outcome": ""}, "2": {"desired_outcome": "refund"}}, {"desired_outcome"})
-    b = _src("b", {"1": {"desired_outcome": ""}, "2": {"desired_outcome": "refund"}}, {"desired_outcome"})
+    a = _src(
+        "a", {"1": {"desired_outcome": ""}, "2": {"desired_outcome": "refund"}}, {"desired_outcome"}
+    )
+    b = _src(
+        "b", {"1": {"desired_outcome": ""}, "2": {"desired_outcome": "refund"}}, {"desired_outcome"}
+    )
     assert _agreement(a, b, "desired_outcome") == (2, 2)  # null==null and refund==refund
 
     # Source C did NOT use the column (no null_ok) → its blank is an unlabelled skip, not scored.
