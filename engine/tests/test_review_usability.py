@@ -31,6 +31,7 @@ from app.intake.ingest import ingest_messages
 from app.intake.models import InboundMessage
 from app.main import app
 from app.pipeline import normalise_source_document
+from app.rules.stage import decide_case
 from app.store import api
 
 pytestmark = pytest.mark.usefixtures("pg")
@@ -71,6 +72,10 @@ async def _seed_case(
     for sdid in res.source_document_ids:
         await normalise_source_document(tenant, sdid, blob=blob, factory=app_factory)
     await extract_case(tenant, res.case_ids[0], llm=_ScriptedLLM(), factory=app_factory)
+    # Run the deterministic rules stage so the case has a decision — the commit gate refuses a case
+    # whose processing is not complete (get_case_decision is None → 409, a §2 trust control), so a
+    # committable case must have been decided first.
+    decide_case(tenant, res.case_ids[0], factory=app_factory)
     return res.case_ids[0]
 
 
