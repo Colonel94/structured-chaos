@@ -1,8 +1,9 @@
-# Winning-condition evidence runbook
+# Product-evidence runbook
 
-This pack makes the remaining human/data gates repeatable without pretending they have already passed.
-Copy the CSV templates into a dated evidence directory; never edit the blank masters. Freeze the commit,
-model, policy, input set and thresholds before a run.
+This pack makes pilot-learning and general-availability evidence repeatable without pretending it has
+already passed. Independent labels and unassisted stranger sessions are not controlled-pilot entry gates
+under winning-condition v0.2; they remain required before broad quality/onboarding claims. Copy templates
+into a dated evidence directory and freeze the commit, model, policy, inputs and thresholds before a run.
 
 ## Independent holdout
 
@@ -26,15 +27,16 @@ Pass only if the representative-case median is at most 30 seconds; report p90 an
   and a natural voice version. Include real phone containers/codecs/noise. Score governed fields using
   `evidence/voice-pair-template.csv`; the absolute field-accuracy gap must be at most five percentage points.
 
-## Three-stranger gate
+## Unassisted onboarding study
 
 For each person: use their own messy input, provide no walkthrough, keep the builder silent, and record
-time to first value plus exact unsolicited reactions in `evidence/stranger-session-template.csv`. Passing
-requires all contract outcomes, including at least one price question before a feature request. Consent to
+time to first value plus exact unsolicited reactions in `evidence/stranger-session-template.csv`. Treat
+price questions and feature requests as discovery signals, not pass/fail software criteria. Consent to
 record and retention/deletion must be settled before the session.
 
 ## Evidence integrity
 
 Every result records UTC date, commit SHA, environment, model/version, dataset hash, observer, participant
 relationship, raw artifact links, exclusions and failures. A blank, coached, self-labelled, synthetic or
-post-tuning holdout row is not ship evidence.
+post-tuning holdout row is not independent GA evidence; it may still be clearly labelled engineering or
+pilot-learning evidence.

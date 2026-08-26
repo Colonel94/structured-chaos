@@ -5,11 +5,11 @@ prioritised case that a human can verify against its source before anything is a
 
 ## Current status
 
-This is a working proof of concept, **not a production-ready product**. The trust spine, review flow,
-customer portal, object-store matching, authenticated reviewer workspace, and local deployment path are
-implemented. The current measured accuracy gates, independent validation, team invitations, and external
-onboarding gates are not complete.
-See [Market readiness](docs/MARKET-READINESS.md) for the evidence-based launch decision.
+The product is **engineering-ready and at 3/6 controlled-pilot entry gates**. The trust spine, review
+flow, customer portal, object-store matching, authenticated reviewer workspace, and local deployment path
+are implemented. A named pilot, approved policy/data terms, recovery/security evidence and one operator
+acceptance run are still required before real customer data. Independent quality and repeatable operations
+remain general-availability work. See [Market readiness](docs/MARKET-READINESS.md).
 
 ## Choose your path
 

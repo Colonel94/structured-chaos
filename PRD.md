@@ -193,9 +193,10 @@ tier is a hard prerequisite before any health/clinic tenant** (built with the lo
 ---
 
 ## 7. Non-functional requirements
-Setup is zero-configuration for the customer's *schema/categories* (FR-14), needs **no documentation
-to complete the first case**, and the customer is **not in the room** — the only setup inputs are the
-object-store connection (FR-13) and optional written policy text.
+The GA onboarding target is zero-configuration for the customer's *schema/categories* (FR-14), no
+developer intervention for the first case, and only the object-store connection (FR-13) plus approved
+policy inputs. A controlled design-partner pilot may include documented onboarding and bounded support;
+recurring engineer intervention after setup is still a product failure.
 Latency: message → case ready ≤ 60s. Idempotent pipeline (replay → no dupes/loss). No customer data
 in logs. Immutable originals; append-only corrections. Deployable on RTX 4070-class hardware fully
 local. $0 stack (OSS + local models; metered LLM only in cents for the eval). Residency: default to the
@@ -203,33 +204,30 @@ strict UAE reading (health/payment data must stay in-country; DIFC/ADGM are sepa
 
 ---
 
-## 8. The winning condition (acceptance) — the ship gate
+## 8. The winning condition (acceptance) — staged release gates
 
-Ship only when **all six** are clean (winning-condition §9):
+The owner-authorised `winning-condition.md` v0.2 correction separates four decisions:
 
-1. **Setup gate** — every box in winning-condition §2 (binary, no partial credit).
-2. **Seven wow moments** (§3), each without prompting: nothing was typed · it knew something it was
-   never told · it asked then already knew · the schema grew and backfilled visibly · it refused to
-   guess · the report was already done · Arabic was not a downgrade.
-3. **Quantitative thresholds** (§10 below) met on the ground-truth set.
-4. **Trust gates** — every box (winning-condition §5 / EDD §7).
-5. **No red flags** (winning-condition §7) — above all: *nothing requires you to touch a DB, config or
-   prompt to make a customer's case work.*
-6. **External gate** — 3 strangers, no walkthrough, own messy inputs: all three complete a case
-   without asking you a question; ≥ 2 ask *how* it did something; ≥ 1 asks if they can use it for
-   something you hadn't thought of; none asks for a feature before price; **≥ 1 asks what it costs.**
+1. **Engineering readiness:** the complete assisted workflow and non-negotiable trust controls pass.
+2. **Controlled-pilot entry:** one named, bounded, human-reviewed pilot has approved policy/data terms,
+   operational evidence and one non-builder operator acceptance run.
+3. **Paid continuation:** the partner’s pre-agreed time, reliability, safety and value targets pass.
+4. **General availability:** independent representative quality evidence, multi-user administration,
+   repeatable operations, legal/commercial readiness and developer-independent onboarding pass.
 
-> **The actual winning condition:** a stranger asks the price before asking for a feature.
+The product is a traceable case-drafting and human-review system. Independent benchmarks and external
+usability remain required before broad claims/GA, but do not block the first controlled learning pilot.
+A price question is useful discovery evidence, not the acceptance condition.
 
 ---
 
-## 9. Success metrics (ground-truth set: ≥100 cases, ≥30 Arabic/code-switched, ≥20 too-sparse)
+## 9. Success metrics
 
-Full table in `winning-condition.md` §4 and `longterm_context.md` §6. The load-bearing ones:
-governed-core accuracy ≥ 95% · auto-routed accuracy ≥ 98% · ambiguous-correctly-flagged ≥ 90% (the
-trust metric — weight highest) · questions after anchor median ≤ 2 · asked-for-already-stated 0% ·
-silent object-match accuracy ≥ 99% · duplicate fields after 200 cases < 5% · new-field rate clearly
-declining · backfill correctness 100% · message→ready ≤ 60s.
+Pilot continuation is measured against the partner’s frozen manual baseline and targets in
+`winning-condition.md` §5. General-availability objectives and independent evaluation requirements are
+in §6. The always-load-bearing safety measures are: zero tenant/approval/provenance incidents, no fourth
+question, no unapproved consequential output, and accurate silent object matching. Zero-edit and
+auto-route rates are diagnostics while every case remains human-reviewed.
 
 ---
 
@@ -239,22 +237,19 @@ declining · backfill correctness 100% · message→ready ≤ 60s.
 promise. They must NOT appear in buyer material, a pitch deck, or as a target/threshold in the winning
 condition.**
 
-- **Δ1 — Arabic metric re-anchored to field-level extraction accuracy, not transcript WER.** WER parity
-  "within 5 points" is unachievable and irrelevant: best-in-class open ASR is ~26% WER on hard
-  conversational Arabic (Cohere 25.87 / OmniASR-LLM-7B 28.32 / Whisper Large V3 36.86 — ~1 word in 4
-  wrong), yet a 26% WER transcript still yields ~95% correct *fields* because the anchor supplied most.
-  **Winning-condition §4 row updated** to field-level parity backed by mandatory audio provenance. This
-  makes the promise both honest and *more favourable*. Wow Moment 7 is measured at the case level.
+- **Δ1 — If Arabic returns to the supported scope, measure field accuracy, not transcript WER.** WER
+  parity is both unrealistic and irrelevant to a structured-case outcome. Arabic is paused for the
+  current pilot scope; no Arabic claim appears in the staged winning condition. A future supported claim
+  requires representative field-level evidence and mandatory audio provenance.
 - **Δ2 — "~200 attributes @ 0.95 precision" is feasibility evidence from KG schema-induction research,
   not a target.** Internally cite **AutoSchemaKG 92%** / **AutoPKG WKE 0.953**; keep "0.90–0.95 field
   precision" and "<5% duplicates" as **internal SLOs only**.
 - **Δ3 — Any cloud LLM/ASR call is a cross-border transfer**, categorically prohibited for
   health-/payment-adjacent tenants. Those tenants run the LOCAL backend end-to-end. The dual-mode
   design exists for exactly this.
-- **Δ4 — Accuracy thresholds are PER-DEPLOYMENT, not one number (new, v1.1).** A local 14B is not
-  Claude; the local stack extracts materially worse. The winning-condition thresholds are validated on
-  the **cloud path** (the PoC deployment); the local deployment needs its **own eval run and its own,
-  lower bar** — built at clinic #1 (EDD §16.9). One number across both is a promise met on only one.
+- **Δ4 — Quality evidence is PER-DEPLOYMENT, not one number.** A local 14B is not a cloud model. Each
+  supported deployment mode needs its own frozen GA evaluation and published scope; a result from one
+  backend cannot be used to market another.
 
 ---
 
@@ -279,8 +274,8 @@ local+cloud · both intake channels · Python + React/Vite. The v1.1 review's op
    faster-whisper), with **segment-level as the accepted fallback** (EDD §4).
 2. **Spec deltas — ACCEPTED, with a hard rule. RESOLVED.** Neither the ASR-WER nor the 200@0.95 figure
    is ours; both are feasibility evidence and **must never appear in buyer material or as a winning-
-   condition target**. Arabic re-anchored to field-level extraction accuracy (winning-condition §4
-   updated). See §10.
+   condition target**. Arabic remains paused; if it returns, measure structured-field accuracy rather
+   than transcript WER. See §10.
 3. **"1.5M AED" — none of contract/budget/valuation. RESOLVED.** It was a scoped opportunity that died
    before contract (RFP change). Internal quality bar + demand-shape evidence only; the sole approved
    external line is *"scoped a seven-figure government LLM proposal that didn't proceed after an RFP

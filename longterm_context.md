@@ -49,6 +49,21 @@ live-testing (voice/image/text) → turn each failing case into a prompt/policy 
 
 ## 0. Current state & next actions  ← read this first every session; keep it current
 
+> ## ✅ 2026-08-26 WINNING-CONDITION v0.2 — OWNER-AUTHORISED PRODUCT CORRECTION
+> - The owner explicitly reconsidered the old 1/6 all-or-nothing contract. It mixed engineering safety,
+>   controlled-pilot entry, GA evidence and market reactions, making safe learning with one design partner
+>   impossible. `winning-condition.md` v0.2 now separates Gate A engineering readiness, Gate B controlled
+>   pilot entry, Gate C paid continuation and Gate D general availability.
+> - **Current truth:** engineering readiness **PASS**; controlled-pilot entry **3/6 CLEAN** (workflow,
+>   mandatory human control, trust/tenant boundary). Before real data: name/bound the pilot + approve
+>   policy/data terms; run restore/security evidence and assign operating owners; complete one non-builder
+>   operator acceptance case.
+> - Independent labels, cold timing, sparse/voice sets and unassisted stranger studies remain important
+>   pilot-learning/GA evidence. They no longer block the first bounded, human-approved pilot. Existing low
+>   self-authored accuracy/convergence results are preserved and still block broad claims.
+> - The commercial win is an explicit continue/pay/purchase decision against pre-agreed partner targets,
+>   not the theatrical proxy of someone asking the price before requesting a feature.
+
 > ## ✅ 2026-08-26 ADVERSARIAL MARKET-READINESS UPDATE
 > - **Lifecycle fixed:** `/api/ingest` no longer runs a duplicate inline pipeline. It commits case +
 >   originals + durable job and returns 202; the UI polls the selected case. A case with no decision is

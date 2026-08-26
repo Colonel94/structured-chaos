@@ -209,20 +209,23 @@ regression, and the phase is not complete until the earlier suite is green again
 
 ---
 
-## 7. Definition of done — the scorecard (do not fill in optimistically)
+## 7. Definition of done — staged, never optimistic
 
-Ship only when **all six** are clean:
+The owner-authorised `winning-condition.md` v0.2 correction (2026-08-26) retires the old all-six binary
+gate. Never collapse these distinct decisions again:
 
-| Gate | Source |
+| Decision | Required evidence |
 |---|---|
-| Setup gate — every box (zero-config, < 10 min to first value, empty DB, no per-customer tuning, you are not in the room, object store self-serve inside the 10 min) | winning-condition §2 |
-| The seven wow moments, each without prompting | winning-condition §3 |
-| Quantitative thresholds met on the ground-truth set | winning-condition §4 |
-| Trust gates — every box (this file §3) | winning-condition §5 |
-| No red flags present | winning-condition §7 |
-| External gate: 3 strangers, no walkthrough, complete a case without asking you a question | winning-condition §8 |
+| Engineering readiness | Coherent end-to-end workflow, non-negotiable trust controls and green release verification. |
+| Controlled-pilot entry | Engineering readiness plus a named bounded pilot, approved tenant/data policy, operational evidence and one non-builder operator acceptance run. |
+| Paid continuation | Value measured against targets frozen with the partner before live use. |
+| General availability | Independent representative quality evidence, repeatable multi-user operations, support/legal/commercial readiness and developer-independent onboarding. |
 
-**The actual winning condition:** a stranger asks what it costs *before* asking for a feature.
+Safety is never deferred to a pilot: tenant isolation, provenance, immutable originals, append-only
+corrections, approval gating, deterministic policy, bounded questions, idempotency and log privacy block
+all real-data use if they regress. Independent labels and unassisted stranger sessions remain important,
+but they are GA/pilot-learning evidence rather than prerequisites to the first bounded human-reviewed
+engagement. A price question is discovery evidence, not a software acceptance test.
 
 ---
 
@@ -233,9 +236,10 @@ you want to say "it usually handles that better" · the tester looks for the for
 fourth question · it asks for something already said or already in the record · elicitation reads
 like a survey · an angry incomplete case gets interrogated instead of handed off · synonym fields
 keep appearing · you can't trace a value in 5s · the review screen is slower than typing the case ·
-it's a different product in Arabic · **anything requires you to touch a DB, config or prompt to make
-a customer's case work.** That last one disqualifies the product entirely — it means a service
-business wearing a product costume.
+**a supported case requires an engineer to touch the database, config or prompt after the tenant's
+approved pilot setup.** That means the supported workflow is not repeatable. Deliberate tenant-policy
+configuration and bounded design-partner support are allowed at pilot entry; hiding recurring
+implementation work is not.
 
 ---
 
@@ -247,9 +251,9 @@ customer portal; integrations; resolution suggestions; a *learned* drill tree (h
 but the budget and the anchor are not optional); polished visuals (a fast review screen is);
 behind-the-scenes manual tenant onboarding.
 
-**Never ship without** anything in winning-condition §2 (setup gate), §3 (wow moments) or §5 (trust
-gates). Do not ship on the wow moments alone — §4/§5/§7 are what stop it falling apart in week two in
-front of the person who was going to pay.
+**Never process real customer data without** every non-negotiable gate in winning-condition §2 and every
+pilot-entry control in §4. Experimental differentiators and GA metrics may remain unproven only when the
+pilot scope and customer promise explicitly exclude them.
 
 ---
 
@@ -290,7 +294,9 @@ under the moat is a real risk. Licences change across versions — pin the versi
 WeasyPrint, and every future dep).
 
 **Never move the goalposts to pass. Redefining a winning-condition metric is an owner decision,
-logged.** (Standing rule, learned 2026-08-14 — the second fork where the tempting shortcut was to
+logged.** The owner-authorised v0.2 rewrite on 2026-08-26 is such a decision: it corrected a category
+error in the launch model, did not relabel failed evidence as passing, and preserved the old metric results
+as GA/experimental-claim evidence. (Standing rule, learned 2026-08-14 — the second fork where the tempting shortcut was to
 move a threshold.) When a pre-committed metric (convergence <5% dup + declining new-field rate; the
 anchor+2 question budget; the quantitative thresholds in winning-condition §4; any trust-gate number)
 comes back failing, the instinct to *redefine what it measures* — "measure at concept level instead

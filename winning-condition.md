@@ -1,239 +1,192 @@
 # The Winning Condition
 
-*Acceptance criteria and ship gate for the Adaptive Intake PoC.*
-*Version 0.1 — August 2026.*
+*Staged acceptance criteria for Adaptive Intake.*
+*Version 0.2 — owner-authorised correction, 26 August 2026.*
 
----
+## Why this contract changed
 
-## Purpose of this document
+Version 0.1 combined four different questions into one binary gate:
 
-This is written **before** the build, deliberately, so that "ready" is defined by evidence rather than by how tired you are of building.
+1. Is the system technically safe?
+2. Can one organisation use it in a controlled pilot?
+3. Is quality proven well enough for a broad launch?
+4. Has the market shown buying intent?
 
-The PoC is not a demo. It must behave as an MVP: something a real organisation could start using on Monday, with no implementation project, no consultant, and no phone call to you.
+Those are not the same decision. Requiring independent benchmark labels, three strangers, every “wow”
+reaction, legal sign-off, and mature operations before learning with one bounded design partner prevents
+the evidence the product needs. Conversely, passing a demo reaction must never excuse a security or
+human-control failure.
 
-Read this document once before you start building, and once when you think you are finished. If the second reading is uncomfortable, you are not finished.
+The corrected contract uses staged gates. It does not erase failed metrics; it places them at the stage
+where they are decision-relevant.
 
----
+## 1. Product outcome
 
-## 1. The one-sentence test
+> **A complaint-handling team can turn messy customer evidence into a traceable case draft, review it
+> faster than creating the case manually, and approve it without surrendering human control.**
 
-> **A stranger signs up, sends the messiest real case they have, and within a minute sees a complete, correctly structured, correctly prioritised case they did not type — and cannot immediately name a field the system got wrong.**
+The product is an assisted complaint-management system. It is not sold as autonomous adjudication,
+perfect extraction, or a self-running replacement for complaint staff.
 
-And the inverse, which is the harder half:
+The customer promise is:
 
-> **The same stranger sends four useless words, and the system closes the gap in two questions without once asking for something it could have looked up.**
+- customers can communicate naturally instead of completing a rigid form;
+- the system creates a useful draft and shows exactly where each value came from;
+- uncertainty and discrepancies remain visible;
+- a person corrects and approves the record before a report or operational hand-off;
+- corrections become measured improvement signals, not silent overwrites.
 
-Everything below is that sentence, made measurable.
+## 2. Non-negotiable safety gates
 
----
+These block every environment that contains real customer data. No pilot scope, disclaimer, or human
+evaluation can waive them.
 
-## 2. Plug and play — the setup gate
+- [x] Every extracted field can be traced to source evidence.
+- [x] Originals are immutable and corrections are append-only.
+- [x] The case exists and its SLA clock starts at first contact.
+- [x] The question budget is enforced in code: anchor plus two, then human hand-off.
+- [x] Reports and other consequential outputs require explicit per-case human approval.
+- [x] Still-processing and failed cases cannot be approved.
+- [x] Priority and SLA decisions are deterministic and explainable.
+- [x] Tenant isolation is enforced by RLS and tested using a non-bypass runtime role.
+- [x] Authentication secrets and live sessions are not bulk-readable by the runtime role.
+- [x] Pipeline stages and outbound actions are idempotent.
+- [x] Customer data is redacted from logs.
+- [x] Public inputs are origin-, type-, rate-, and size-bounded.
+- [x] Tenant deletion removes tenant data and orphaned reviewer identities.
 
-The product is plug and play only if all of the following are true. These are binary. There is no partial credit.
+Any regression here is a release blocker.
 
-- [ ] **Zero configuration to first value.** From account creation to a fully structured case, with no settings touched, no schema defined, no category list built.
-- [ ] **Under 10 minutes** from signup to first processed case, measured with a timer, by someone who has never seen it.
-- [ ] **No historical data required.** The system works on an empty database.
-- [ ] **No training, tuning or model work** per customer.
-- [ ] **No documentation needed** to complete the first case.
-- [ ] **You are not in the room.** If you have to explain anything, it is not plug and play — it is a demo with a salesperson attached.
-- [ ] Connecting the object store — orders, bookings, assets, customers — is **self-serve and inside the 10 minutes**, by file upload or API key. Extraction must work without it; short elicitation will not.
+## 3. Gate A — engineering readiness
 
-If any box is unticked, stop. Nothing in section 3 matters yet.
+Gate A answers: “Is there a coherent product to put into a controlled evaluation?”
 
----
+- [x] A reviewer can create a workspace and sign in.
+- [x] Text and supported files create a durable case without model work inside the HTTP request.
+- [x] Processing progress and failure are represented honestly.
+- [x] A reviewer can inspect evidence, correct fields, approve, undo briefly, and produce outputs.
+- [x] Object data can be uploaded without defining a schema; exact and guarded fuzzy resolution are wired.
+- [x] Health checks, worker liveness, migrations, deployment configuration, and security scanning exist.
+- [x] Automated backend, frontend, type, lint, build, migration, and browser checks pass for the release.
 
-## 3. The wow moments
+**Current status: PASS.** Gate A permits synthetic/redacted evaluation and pilot preparation. It is not
+permission to process real customer data without Gate B.
 
-These are the specific, observable events during a live test that produce the reaction you are looking for. Each must happen without prompting, explanation or apology.
+## 4. Gate B — controlled design-partner pilot
 
-### Moment 1 — Nothing was typed
-A messy nine-message thread, containing a voice note in Gulf Arabic and two photographs, becomes a complete structured case. No form was filled. No category was chosen. No type was picked.
+Gate B answers: “Can one named organisation use this safely within a deliberately narrow envelope?”
 
-**Watch for:** the tester scrolling back to check they really did not enter anything.
-
-### Moment 2 — It knew something it was never told
-The case contains a field the tester never configured and never expected — pulled from the body of the complaint and placed correctly.
-
-**Watch for:** *"How did it know that?"*
-
-### Moment 3 — It asked, then it already knew
-A four-word complaint with nothing in it. The system asks one anchor question — order number, or the phone used to order — and then, instead of asking what went wrong in detail, states what it found: *"delivered 6:42pm against a 5:00pm slot. Was it the delay, the condition, or something else?"*
-
-Two more exchanges and the case is complete, including the desired outcome.
-
-**Watch for:** the tester noticing it never asked for anything it could have looked up — and never asked twice for something they had already said. The number they should not be able to fault is the count of questions.
-
-### Moment 4 — The schema grew, visibly
-A second case reuses an attribute first seen in an earlier case. It is promoted into the real schema, typed, and — critically — **backfilled onto the earlier cases**.
-
-**Watch for:** the tester realising the system got better while they watched, without anyone configuring anything.
-
-### Moment 5 — It refused to guess
-A genuinely ambiguous field is flagged low-confidence and routed for review, instead of being confidently filled with something wrong.
-
-This moment matters more than the four above it. Confident wrongness destroys trust permanently; visible uncertainty builds it. **A system that never says "I'm not sure" has already failed.**
-
-### Moment 6 — The report was already done
-A manager-facing report or register is produced with every field populated, every value traceable to its source, and no mandatory field ever having been imposed on anyone.
-
-**Watch for:** *"So nobody had to fill anything in, and the report is still complete?"* That is the sentence that closes the sale.
-
-### Moment 7 — Arabic was not a downgrade
-A code-switched Gulf Arabic voice note produces output of the same quality as the English equivalent.
-
-**Watch for:** nothing. The absence of a wince is the pass condition.
-
----
-
-## 4. Quantitative thresholds
-
-Measured against a hand-labelled ground-truth set of **at least 100 real or realistically messy cases**, ~~at least 30 of them Arabic or code-switched~~ *(suspended with Arabic — see the decision note under the table)*, and at least 20 of them too sparse to act on without elicitation, before any claim of readiness.
-
-| Measure | Ship threshold | Why this number |
+| Pilot-entry gate | Status | Definition |
 |---|---|---|
-| Governed-core field accuracy | **≥ 95%** | These drive SLA, routing and reports. Errors here are expensive |
-| Emergent attribute accuracy | ≥ 85% | Lower stakes; reviewable before promotion |
-| Category classification accuracy | ≥ 90% | Below this the fulfiller stops trusting routing |
-| Accuracy on auto-routed cases only | **≥ 98%** | Anything the system routes without asking must be near-certain |
-| Ambiguous cases correctly flagged rather than guessed | ≥ 90% | The trust metric. Weight it highest |
-| Cases requiring zero human edits | ≥ 70% | Below this it feels like proofreading, not automation |
-| Complaints matched to the right object without asking | ≥ 60% | The sender's number should usually be enough. Every match is a question saved |
-| Object match accuracy when matched silently | **≥ 99%** | Acting on the wrong order is worse than asking |
-| Discrepancies between complaint and record surfaced to the agent | 100% | Never argued with the customer, never silently ignored |
-| Questions asked per case (median) | **≤ 2 after the anchor** | The line between a drill-down and a form in chat |
-| Cases where the system asked for something already stated | **0%** | Unforgivable. One occurrence in a demo loses the room |
-| Cases where it asked for something derivable from the anchor | ≤ 5% | Asking what you could look up is the tell of a dumb system |
-| Sparse complaints reaching actionable state | ≥ 80% | Elicitation has to actually close the gap, not just try |
-| Elicitation abandonment (customer stops replying) | ≤ 20% | Above this the drill is too long or too dull |
-| Desired outcome captured | ≥ 90% | The one fact that can never be inferred |
-| Median review time per case | ≤ 30 seconds | The fulfiller must feel faster, not busier |
-| Time from message received to case ready | ≤ 60 seconds | Slower and it stops feeling live |
-| **Voice-vs-text extraction parity** | field accuracy within **5 points**, voice note vs typed | The claim a voice-first product actually makes — and the one a buyer will test: the **same case** submitted as a voice note vs typed must yield the **same structured fields**. Measured on the structured case, **not** transcript WER (a ~26% WER note can still yield ~95% correct fields because the anchor supplies most). Raw ASR WER is never a ship metric and never appears in buyer material. *(Replaces the retired Arabic-parity row — see the decision note below.)* |
-| Duplicate or synonym fields after 200 cases | **< 5%** of promoted fields | This is the convergence proof — the core claim of the design |
-| New-field creation rate, cases 1–50 versus 151–200 | clearly declining | If it is flat, the schema is sprawling, not converging |
-| Backfill correctness after promotion | 100% | No exceptions. Silent corruption of history is fatal |
+| 1. Complete complaint workflow | **CLEAN** | Intake → review → correction → approval → report works end to end. |
+| 2. Mandatory human control | **CLEAN** | Every case is reviewed; autonomous approval/action is disabled. |
+| 3. Trust and tenant boundary | **CLEAN** | Every non-negotiable control in §2 passes. |
+| 4. Named pilot governance | **OPEN** | Scope, business policy and data authority are approved. |
+| 5. Operational evidence | **PARTIAL** | Recovery/security drills and operating ownership are complete. |
+| 6. Operator acceptance | **NOT RUN** | One non-builder operator completes a representative case. |
 
-The two bolded convergence rows are the ones to be honest about. If the schema does not visibly settle, the central idea in the concept document is wrong, and you need to know that before you sell anything.
+Gate 4 requires a named organisation, use case, intake channel, maximum volume, dates and success owner;
+an approved/versioned category, priority, SLA, escalation, retention and deletion policy; and agreement on
+lawful basis or consent, controller/processor roles, permitted data, residency, subprocessors, breach
+contact and deletion.
 
-> **Recorded decision — 2026-08-21 (owner): Arabic parity retired, voice-vs-text parity substituted.**
-> Arabic/code-switched support was **paused by owner decision** (voice kept as the behavioural wedge); the
-> Arabic field-extraction-parity row was written for a scope that is no longer in this milestone. Retiring
-> it **must be logged, not quietly deleted** — an unlogged pause is indistinguishable from dropping a gate
-> you failed. The substitute — **voice-vs-text extraction parity** — is the parity claim a voice-first
-> product genuinely makes and that a buyer will test (same case, spoken vs typed → same fields). The §4
-> requirement for "≥30 Arabic/code-switched cases" in the ground-truth set is **suspended with Arabic**;
-> when Arabic returns to scope, both the row and that composition requirement return with it. This is an
-> owner-authorised metric change (CLAUDE.md §10 — logged with its reason), not a relaxation to pass.
+Gate 5 requires a timestamped backup/restore drill, no unaccepted high/critical security result, tested
+secret rotation, a named monitor/incident responder and a rehearsed manual fallback.
 
----
+Gate 6 requires one operator who did not build the feature to complete a representative case end to end.
+Confusion is recorded; it is not necessary to hide documentation or keep the builder silent.
 
-## 5. Trust gates — non-negotiable
+**Pilot score:** three of six top-level gates are clean: product workflow, human control, and trust/data
+boundary. The remaining work is pilot-specific governance, operational evidence, and one operator
+acceptance run. Independent benchmark labels and three-stranger sessions do not block starting a bounded
+pilot; the pilot is how representative evidence is collected.
 
-Failure of any single item here blocks shipping regardless of how well everything else performs.
+## 5. Gate C — pilot success and paid continuation
 
-- [ ] **Every field is traceable.** Click any value, see the exact source — the sentence, the region of the image, the moment in the audio.
-- [ ] **Provenance is complete.** Source, model, model version, prompt version, confidence, reviewer, timestamp — on every value.
-- [ ] **The case exists before the questions do.** A case is created on first contact in an incomplete state, and survives the customer never replying again.
-- [ ] **The clock starts at first contact**, not at completeness.
-- [ ] **The question budget is enforced in code**, not left to the model's judgement. Anchor plus two, then hand off.
-- [ ] **Nothing external happens without approval.** No report issued, no record written elsewhere, no notification sent, on model output alone.
-- [ ] **SLA and priority are deterministic.** Same inputs, same policy, same result, every time, and explainable in one sentence.
-- [ ] **Tenant isolation is proven by an automated test** that attempts a cross-tenant read and fails.
-- [ ] **Originals are immutable.** Every source file retained, never overwritten by an extraction.
-- [ ] **Corrections are preserved, never overwritten.** This is the asset.
-- [ ] **The pipeline is idempotent.** Replay any stage; no duplicate cases, no lost data.
-- [ ] **No customer data in logs.**
+Gate C answers: “Did the product create enough operational value to continue or pay for?” Agree the
+numeric targets with the pilot organisation before the first live case. Default targets are:
 
----
+| Measure | Default continuation target |
+|---|---:|
+| Cases processed without engineering intervention | ≥95% |
+| Confirmed tenant/approval/provenance safety incidents | 0 |
+| Median review time | ≤60 seconds and ≥25% faster than that team’s measured manual baseline |
+| Cases exceeding the anchor-plus-two budget | 0 |
+| Silent object matches later found wrong | 0 |
+| Cases where the reviewer can locate supporting evidence | 100% |
+| Pilot users who want to continue using the workflow | Named decision, not inferred sentiment |
 
-## 6. What is allowed to be missing
+Measure correction rate, p90 review time, abandonment, processing latency, support load, and cost per case
+as diagnostics. They guide prioritisation; they are not retroactively turned into pass/fail gates.
 
-Being ready to ship does not mean being complete. These absences are acceptable at ship:
+The commercial winning condition is an explicit decision: a signed extension, paid pilot, purchase
+process, or documented “no” with reasons. Someone asking the price is useful discovery evidence, not a
+software acceptance test.
 
-- Only one or two intake channels
-- One case category, done properly, rather than several done shallowly
-- No dashboards beyond a register view and one report
-- No mobile application
-- No customer-facing portal
-- No integrations with other systems
-- No resolution suggestions or automation
-- A hand-seeded drill tree rather than a learned one — convergence of the question set is a later phase, the budget and the anchor are not
-- Rough visual design, provided the review screen is fast
-- Manual tenant onboarding behind the scenes
+## 6. Gate D — general availability
 
-**Do not delay shipping for anything on this list. Do not ship without anything in sections 2, 3 or 5.**
+Gate D answers: “Can the product be offered repeatedly without founder-dependent operation?” Before a
+broad or self-serve launch:
 
----
+- independent evaluation covers at least 100 representative cases from the chosen market;
+- governed-field, category, ambiguity, desired-outcome, voice/text, object-match, and question-reuse
+  claims have frozen definitions and published results;
+- at least two organisations and three operators have completed representative workflows;
+- invitation, membership revocation, password recovery, shared rate limiting, audit export, and workspace
+  administration are complete;
+- central monitoring, capacity alerts, restore evidence, release/rollback, support ownership, privacy
+  terms, pricing, limits, and buyer documentation are operational;
+- onboarding succeeds without developer intervention for the supported deployment model.
 
-## 7. Red flags — you are not ready
+Recommended GA quality objectives—not pilot-entry gates—are:
 
-Any one of these means stop, regardless of the metrics:
+| Measure | GA objective |
+|---|---:|
+| Governed-field accuracy | ≥90% on independently labelled, representative data |
+| Category accuracy | ≥90% |
+| Ambiguous cases correctly flagged | ≥90% |
+| Stated desired outcome captured correctly | ≥95% |
+| Silent object-match accuracy | ≥99% |
+| Asked for already-stated information | 0% |
+| Questions after anchor, median | ≤2 |
+| Median review time | ≤30 seconds or ≥50% faster than the customer baseline |
+| Message-to-ready latency | p95 ≤60 seconds for the supported workload |
 
-- You find yourself explaining what the tester should have expected
-- The demo only works with the sample data you prepared
-- You feel a need to say "it usually handles that better"
-- The tester's first instinct is to look for the form
-- The bot asks a fourth question, ever
-- It asks for something the customer already told it, or something the order record already contains
-- Elicitation reads like a survey rather than a conversation — the customer can feel the field list underneath it
-- An angry customer with an incomplete case gets questioned instead of handed to a human
-- Fields keep appearing that mean the same thing as existing fields
-- You cannot answer "where did this value come from?" in under five seconds
-- The review screen is slower than typing the case manually would have been
-- It works in English and is a different product in Arabic
-- Anything requires you to touch a database, a config file or a prompt to make a customer's case work
+Zero-edit rate is reported, but it is not the product’s primary success metric: a human-reviewed draft can
+be valuable even when corrected. Auto-route accuracy is not a launch metric while autonomous routing is
+disabled.
 
-That last one is the most common failure mode, and it disqualifies the product entirely. If serving a customer requires you, it is a service business wearing a product costume.
+## 7. Experimental claims
 
----
+Schema emergence, automatic promotion/backfill, cross-domain generality, voice parity, and fuzzy object
+resolution remain valuable differentiators. They must be demonstrated before being sold as claims, but
+they do not block a narrow human-reviewed pilot whose contract does not promise them.
 
-## 8. The external gate
+In particular, “self-converging schema” may be marketed only after representative recurring data shows
+fewer than 5% duplicate/synonym promoted fields and a declining new-field curve after 200 cases. Until
+then, describe the capability as captured emergent attributes with human-gated promotion.
 
-Internal testing does not decide this. Three people who did not build it do.
+## 8. Stop conditions
 
-Give three strangers — ideally people who handle real cases for a living — access with no walkthrough, and their own messy real inputs. Watch, and say nothing.
+Pause intake and return to manual handling when any of these occurs:
 
-You have won when:
+- a cross-tenant access, approval-bypass, lost-original, or untraceable-output incident;
+- repeated processing failure without an honest visible hand-off;
+- a policy/SLA decision cannot be explained or is using an unapproved default;
+- the pilot exceeds its agreed data types, channel, volume, support capacity, or residency boundary;
+- reviewers are approving without checking evidence, or the workflow is slower than their baseline with
+  no compensating quality benefit;
+- the customer asks for autonomous action before the evidence supports it.
 
-- [ ] All three complete a case without asking you a question
-- [ ] At least two ask **how** it did something, unprompted
-- [ ] At least one asks whether they can use it for something you had not thought of
-- [ ] None of them asks for a feature before asking about price
-- [ ] At least one asks what it costs
+## 9. Current scorecard
 
-**That last one is the actual winning condition.** Everything else in this document is a proxy for it. When someone asks the price before asking for a feature, you have built something people want.
-
----
-
-## 9. Scorecard
-
-Fill this in the day you think you are finished. Do not fill it in optimistically.
-
-**Current evidence audit (26 August 2026):** see
-[`docs/WINNING-CONDITION-REVIEW.md`](docs/WINNING-CONDITION-REVIEW.md) for the criterion-by-criterion
-ledger. The table below is intentionally filled before launch because the current decision is an honest
-no-go, not a claim that the product is finished.
-
-| Gate | Status | Evidence |
+| Decision | Status | Meaning |
 |---|---|---|
-| Setup gate (section 2) — all boxes | **PARTIAL / FAIL** | Guided pilot access + self-serve upload built; stranger timing, no-help use and builder absence unproven. |
-| Seven wow moments (section 3) | **PARTIAL** | Most mechanisms built; no unprompted external observation; convergence fails and voice parity is unmeasured. |
-| Quantitative thresholds (section 4) | **FAIL** | Accuracy and convergence miss; multiple human/data rows remain unmeasured. |
-| Trust gates (section 5) — all boxes | **MET IN CODE** | Automated evidence covers provenance, commit gate, deterministic rules, RLS, immutability, corrections, idempotency and log redaction. |
-| No red flags present (section 7) | **NOT CLEAN** | Convergence, review speed, external own-data use, no-builder-dependency and language parity are not clean. |
-| External gate with 3 strangers (section 8) | **NOT RUN** | No qualifying silent-observer session recorded. |
+| Engineering readiness (Gate A) | **PASS** | The coherent, human-controlled product and testable deployment path exist. |
+| Controlled-pilot entry (Gate B) | **3/6 CLEAN** | Code gates pass; governance, operational proof, and an operator acceptance run remain. |
+| Paid continuation (Gate C) | **NOT RUN** | Must be measured with the first named design partner. |
+| General availability (Gate D) | **NOT READY** | Independent quality, multi-user operations, and repeatable commercial delivery remain. |
 
-**Ship when all six rows are clean. Not before, and not one week after.**
-
----
-
-## 10. The honest reminder
-
-The temptation will be to ship on section 3 alone, because the wow moments are the fun part and they arrive early.
-
-Wow gets you a meeting. Sections 4, 5 and 7 are what stop the product falling apart in the second week, in front of the person who was going to pay you.
-
-Convergence, confidence and a two-question drill are the three claims this product is built on. If any of them fails to hold under real data, the right decision is to fix the design, not to ship and hope.
-
-The drill is the one most likely to rot quietly. Every question feels justified on the day it is added, and no single addition looks like a mistake. Watch the count, not the rationale.
+The next correct move is not more speculative feature breadth. It is to name a narrow pilot, close its
+three entry controls, run it with mandatory human approval, and let real correction/time/value evidence
+decide the roadmap.

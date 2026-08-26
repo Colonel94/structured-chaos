@@ -116,40 +116,39 @@
     <h1>Adaptive Intake</h1>
     <p class="lede">A domain-agnostic AI that turns a stranger's messiest real case — text, a chat export,
       a voice note, a photo — into a complete, correctly prioritised, fully-traceable case they never
-      typed. This tracks where the build stands against its own winning condition.</p>
+      typed. This tracks engineering, pilot-entry and general-availability readiness separately.</p>
     <div class="meta">
-      <span><b>origin/main</b> @ 4adefb1</span>
-      <span><b class="num">272</b> tests +1 skip</span>
-      <span>ruff · black · mypy · tsc · vitest — clean</span>
-      <span>phases <b class="num">0–7</b> done · 8 scored · 9 open</span>
+      <span><b>reviewed</b> @ 0edfd47</span>
+      <span><b class="num">147</b> backend pass · <b class="num">2</b> UI pass</span>
+      <span>ruff · mypy · tsc · vitest · production build — clean</span>
+      <span>engineering <b>pass</b> · pilot entry <b class="num">3/6</b></span>
     </div>
   </header>
 
   <section class="verdict">
     <div class="vcard vcard--good">
-      <h3>Product surface</h3>
-      <p class="big">Pilot-ready</p>
-      <p>The guided product surface can connect data, submit, review and report. No-walkthrough stranger
-        use is staged but unproven, so this is not yet a production or sellability pass.</p>
+      <h3>Engineering readiness</h3>
+      <p class="big">Pass</p>
+      <p>The product can connect data, submit, review, correct, approve and report with mandatory human
+        control and a tested trust boundary.</p>
     </div>
     <div class="vcard vcard--warn">
-      <h3>Winning-condition scorecard</h3>
-      <p class="big">5.6 · not passing</p>
-      <p>The trust spine is strong and the review UI is now a fast, polished surface, but convergence and
-        §4 accuracy still fail their metrics. Three levers move the score — a labeller, a reviewer with a
-        timer, three strangers — and all three remain open.</p>
+      <h3>Controlled-pilot entry</h3>
+      <p class="big">3/6 clean</p>
+      <p>Workflow, human control and trust are clean. Named pilot governance, operational evidence and one
+        non-builder operator acceptance run remain before real customer data.</p>
     </div>
   </section>
 
-  <h2>Winning-condition scorecard</h2>
+  <h2>Staged readiness scorecard</h2>
   <div class="rows">
-    <div class="row"><span class="row__k">Setup gate (§2)</span><span class="row__v">Branded pilot access + guided workflow, self-serve intake, object store, honest service readiness; workspace provisioning remains manual and is not yet externally timed.</span><span class="chip c-part">partial</span></div>
-    <div class="row"><span class="row__k">Seven wow moments (§3)</span><span class="row__v">Mechanisms for moments 2–6 are demonstrable, but the required unprompted reactions have not been externally observed; voice parity remains unmeasured.</span><span class="chip c-part">partial</span></div>
-    <div class="row"><span class="row__k">Quantitative thresholds (§4)</span><span class="row__v">Phase 8 scored: category <b class="num">77%</b> (≥90), zero-edit <b class="num">28%</b> (≥70), desired_outcome <b class="num">56%</b> (≥90) — all on self-authored labels. ≤30s review-time now instrumented, not yet human-measured.</span><span class="chip c-open">failing</span></div>
-    <div class="row"><span class="row__k">Trust gates (§5)</span><span class="row__v">RLS isolation, immutability, idempotency, provenance, commit gate — all held &amp; tested.</span><span class="chip c-done">clean</span></div>
-    <div class="row"><span class="row__k">No red flags (§7)</span><span class="row__v">The hard question cap, handoff and traceability controls hold. Convergence, review speed, own-data use, builder independence and language parity are not clean.</span><span class="chip c-open">not clean</span></div>
-    <div class="row"><span class="row__k">Evidence ledger</span><span class="row__v"><a href="WINNING-CONDITION-REVIEW.md">Criterion-by-criterion audit</a> distinguishes built, measured and independently proven claims.</span><span class="chip c-part">current</span></div>
-    <div class="row"><span class="row__k">External gate (§8)</span><span class="row__v">Possible (self-serve exists), tenant pristine-ready; not yet run with 3 strangers.</span><span class="chip c-open">not run</span></div>
+    <div class="row"><span class="row__k">Complete workflow</span><span class="row__v">Durable intake → evidence review → correction → per-case approval → report.</span><span class="chip c-done">clean</span></div>
+    <div class="row"><span class="row__k">Mandatory human control</span><span class="row__v">No autonomous approval; processing and failed cases stay locked; batch approval removed.</span><span class="chip c-done">clean</span></div>
+    <div class="row"><span class="row__k">Trust + tenant boundary</span><span class="row__v">RLS, immutability, provenance, idempotency, least-privilege auth and bounded public inputs are tested.</span><span class="chip c-done">clean</span></div>
+    <div class="row"><span class="row__k">Named pilot governance</span><span class="row__v">Needs one organisation, narrow workflow/channel/volume, approved tenant policy and agreed data terms.</span><span class="chip c-open">open</span></div>
+    <div class="row"><span class="row__k">Operational evidence</span><span class="row__v">Tooling exists; restore/security drills and named monitoring, incident and fallback owners remain.</span><span class="chip c-part">partial</span></div>
+    <div class="row"><span class="row__k">Operator acceptance</span><span class="row__v">One non-builder operator must complete a representative case and record confusion before live data.</span><span class="chip c-open">not run</span></div>
+    <div class="row"><span class="row__k">GA evidence</span><span class="row__v"><a href="WINNING-CONDITION-REVIEW.md">The staged audit</a> preserves current accuracy and convergence results as broad-launch and claim evidence.</span><span class="chip c-part">later gate</span></div>
   </div>
 
   <h2>Phases</h2>
@@ -162,14 +161,14 @@
     <div class="phase"><div class="phase__h"><span class="phase__n">5</span><span class="chip c-part">partial</span></div><span class="phase__t">Resolve + elicit</span><span class="phase__d">Anchor+2, silent bind, Moment 3 done; ≥99% self-graded.</span></div>
     <div class="phase"><div class="phase__h"><span class="phase__n">6</span><span class="chip c-done">done</span></div><span class="phase__t">Confidence + rules</span><span class="phase__d">Rules engine solid; confidence honest, auto-route off.</span></div>
     <div class="phase"><div class="phase__h"><span class="phase__n">7</span><span class="chip c-done">done</span></div><span class="phase__t">Review UI + commit + report</span><span class="phase__d">Guided pilot access, service readiness, queue overview, feedback loop, undo, one-key correction, review-time HUD and responsive light/dark UI.</span></div>
-    <div class="phase"><div class="phase__h"><span class="phase__n">8</span><span class="chip c-part">scored</span></div><span class="phase__t">Threshold scoring</span><span class="phase__d">§4 scorer runs; gates fail on self-authored labels. Tuning gate now scores a held-out slice.</span></div>
-    <div class="phase"><div class="phase__h"><span class="phase__n">9</span><span class="chip c-open">not started</span></div><span class="phase__t">External gate</span><span class="phase__d">Three strangers, no walkthrough.</span></div>
+    <div class="phase"><div class="phase__h"><span class="phase__n">8</span><span class="chip c-part">diagnostic</span></div><span class="phase__t">Quality measurement</span><span class="phase__d">Scorers run; current self-authored results remain GA/claim diagnostics until independent pilot evidence lands.</span></div>
+    <div class="phase"><div class="phase__h"><span class="phase__n">9</span><span class="chip c-open">next</span></div><span class="phase__t">Controlled pilot</span><span class="phase__d">Close governance, operational evidence and one operator acceptance run; then start capped human-reviewed learning.</span></div>
   </div>
 
   <h2>Pilot product surface — built</h2>
   <div class="rows">
     <div class="row"><span class="row__k">Data sources</span><span class="row__v"><code style="font-family:var(--mono)">POST /api/objects</code> + guided upload — CSV/JSON, schema-agnostic, idempotent.</span><span class="chip c-done">live</span></div>
-    <div class="row"><span class="row__k">Submit a case</span><span class="row__v"><code style="font-family:var(--mono)">POST /api/ingest</code> + "New case" — text/files → structured case in ~8–17s.</span><span class="chip c-done">live</span></div>
+    <div class="row"><span class="row__k">Submit a case</span><span class="row__v"><code style="font-family:var(--mono)">POST /api/ingest</code> + "New case" — text/files persist immediately, then the durable worker builds the case while the UI updates automatically.</span><span class="chip c-done">live</span></div>
     <div class="row"><span class="row__k">Moment 3</span><span class="row__v">Anchor resolves silently against uploaded data; confirmation states the record facts, not "found your order".</span><span class="chip c-done">live</span></div>
     <div class="row"><span class="row__k">Review → approve → report</span><span class="row__v">Keyboard review, one-key correction, processing lock, per-case commit gate + undo window, WeasyPrint PDF — nothing external before approval.</span><span class="chip c-done">live</span></div>
     <div class="row"><span class="row__k">Review UI polish</span><span class="row__v">Relit as a light Fluent / Power-Platform surface + a dark-mode toggle; clean record-style cards, keyboard flow and trust signals unchanged.</span><span class="chip c-done">live</span></div>
@@ -178,19 +177,21 @@
 
   <h2>Honest open gaps</h2>
   <div class="rows">
-    <div class="gap gap--crit"><div class="gap__h"><span class="tag">binding</span><span class="gap__t">Independent human-labelled held-out slice</span></div><p class="gap__d">60–80 cases labelled by someone who is neither the owner nor Claude. Gates the confidence number, the category score, and the review ordering — a better extractor can't beat Claude's own label inconsistency. Owner's data-source call.</p></div>
-    <div class="gap gap--crit"><div class="gap__h"><span class="tag">moat</span><span class="gap__t">Convergence fails at its committed metric</span></div><p class="gap__d">Duplicate/synonym fields <b class="num">7.6%</b> (gate &lt;5%), new-field curve flat ~90% hapax. The self-converging-schema claim is unproven on real data.</p></div>
-    <div class="gap gap--crit"><div class="gap__h"><span class="tag">accuracy</span><span class="gap__t">§4 accuracy gates unmet</span></div><p class="gap__d">Category <b class="num">77%</b> (≥90), zero-edit <b class="num">28%</b> (≥70), desired_outcome <b class="num">56%</b> (≥90), severity <b class="num">83%</b> (≥95); auto-route <code style="font-family:var(--mono)">gate_met=False</code>, τ=1.01. Honest, not forced — and self-graded until the independent labels land.</p></div>
-    <div class="gap gap--crit"><div class="gap__h"><span class="tag">measurement</span><span class="gap__t">≤30s review-time not yet human-measured</span></div><p class="gap__d">Under the τ=1.01 reframe (nothing auto-routes), time-to-approve is <em>the</em> load-bearing §4 number. Now instrumented (HUD + <code style="font-family:var(--mono)">/api/review-stats</code>) and a reviewer session is staged on a seeded tenant — a ~20-min human cold-read pass away, fully unblocked.</p></div>
+    <div class="gap gap--crit"><div class="gap__h"><span class="tag">pilot</span><span class="gap__t">Named governance and approved policy</span></div><p class="gap__d">A real-data pilot needs a named organisation, bounded workflow/channel/volume, approved SLA/escalation/retention policy, data basis and owners.</p></div>
+    <div class="gap gap--crit"><div class="gap__h"><span class="tag">operations</span><span class="gap__t">Restore/security evidence and ownership</span></div><p class="gap__d">Run the existing drills and assign monitoring, incident, support and manual-fallback responsibility.</p></div>
+    <div class="gap gap--crit"><div class="gap__h"><span class="tag">acceptance</span><span class="gap__t">One operator end-to-end run</span></div><p class="gap__d">A non-builder operator must complete a representative case. Normal onboarding help is allowed; confusion is captured and fixed.</p></div>
+    <div class="gap gap--warn"><div class="gap__h"><span class="tag tag--warn">GA evidence</span><span class="gap__t">Independent quality remains unmeasured</span></div><p class="gap__d">Category <b class="num">77%</b>, zero-edit <b class="num">28%</b> and desired outcome <b class="num">56%</b> remain self-authored diagnostics. They block broad accuracy claims, not a human-reviewed pilot.</p></div>
+    <div class="gap gap--warn"><div class="gap__h"><span class="tag tag--warn">claim</span><span class="gap__t">Self-converging schema remains unproven</span></div><p class="gap__d">Duplicate/synonym fields are <b class="num">7.6%</b> and the new-field curve is flat. Do not market this experimental claim until representative evidence passes.</p></div>
     <div class="gap gap--warn"><div class="gap__h"><span class="tag tag--warn">coverage</span><span class="gap__t">Arabic retired from §4; ~8 rows still unmeasured</span></div><p class="gap__d">Owner retired Arabic from §4 (voice-vs-text parity substituted; voice-first proven on a real iPhone). Object-match, latency, backfill rows remain measurable-but-unrun.</p></div>
     <div class="gap gap--warn"><div class="gap__h"><span class="tag tag--warn">infra</span><span class="gap__t">Cloud path partly vaporware</span></div><p class="gap__d"><code style="font-family:var(--mono)">asr_cohere</code> / <code style="font-family:var(--mono)">embed_bge</code> modules missing; WhatsApp send is a stub. File-drop + WhatsApp-in are the working channels; local qwen3:14b is the live path.</p></div>
   </div>
 
   <h2>Next steps</h2>
   <div class="steps">
-    <div class="step"><span class="step__n"></span><div><p class="step__t">Reviewer with a timer <span class="chip c-part" style="margin-left:6px">unblocked · staged</span></p><p class="step__d">The cheapest lever and the only one that yields the load-bearing §4 number. Tenant seeded, HUD live, session waiting — a ~20-min human cold-read pass. Read the median off <code style="font-family:var(--mono)">/api/review-stats</code>.</p></div></div>
-    <div class="step step--blocked"><span class="step__n"></span><div><p class="step__t">Independent human-labelled held-out slice <span class="chip c-defer" style="margin-left:6px">owner / human</span></p><p class="step__d">The binding numbers constraint — turns "77% agreement-with-Claude" into a real accuracy number. Blind sheet + scorer built; needs someone who is neither owner nor Claude. A bigger extractor is the wrong lever before this.</p></div></div>
-    <div class="step step--blocked"><span class="step__n"></span><div><p class="step__t">External gate — three strangers <span class="chip c-defer" style="margin-left:6px">owner / human</span></p><p class="step__d">The actual win condition (§8/§9): their own mess, no walkthrough, you silent. Win = someone asks the price before a feature. Tenant is pristine-ready.</p></div></div>
+    <div class="step"><span class="step__n"></span><div><p class="step__t">Name and bound the pilot <span class="chip c-part" style="margin-left:6px">owner</span></p><p class="step__d">One organisation, workflow, channel, case cap, dates, approved policy, data terms and stop conditions.</p></div></div>
+    <div class="step"><span class="step__n"></span><div><p class="step__t">Run operational release drills</p><p class="step__d">Timestamp restore and security evidence; assign monitoring, incident, support and fallback owners.</p></div></div>
+    <div class="step"><span class="step__n"></span><div><p class="step__t">Operator acceptance</p><p class="step__d">One non-builder operator completes the full workflow; record time, corrections, confusion and engineering intervention.</p></div></div>
+    <div class="step step--blocked"><span class="step__n"></span><div><p class="step__t">Independent holdout + onboarding studies <span class="chip c-defer" style="margin-left:6px">GA evidence</span></p><p class="step__d">Run during/after the pilot to validate broad quality and repeatability claims; not a blocker to the first bounded engagement.</p></div></div>
     <div class="step"><span class="step__n"></span><div><p class="step__t">Convergence remediation (the moat)</p><p class="step__d">Needs richer real recurring single-domain data + the dedup/mint proof to bend the composite curve — or the honest retraction stands.</p></div></div>
     <div class="step"><span class="step__n"></span><div><p class="step__t">Cloud backends</p><p class="step__d">Reviewer intake now uses the durable background worker with persisted progress. The optional <code style="font-family:var(--mono)">asr_cohere</code>/<code style="font-family:var(--mono)">embed_bge</code> cloud backends remain deferred; local inference is the supported release path.</p></div></div>
   </div>

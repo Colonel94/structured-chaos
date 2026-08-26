@@ -194,14 +194,17 @@ The same literature names the failure mode this design must avoid, and the fix: 
 
 **Voice-first, Arabic, WhatsApp-native intake.** Every serious player in the category is Western, web-form-replacement and English-first. Practitioner commentary in adjacent markets is explicit that customers send voice notes for everything, and that platforms which display a speaker icon and do nothing with it are unusable — described as table stakes and still unmet.
 
-### 7.3 What this narrows the claim to
+### 7.3 Current product claim — corrected 26 August 2026
 
-Two defensible positions, not four:
+The first sellable claim is narrower and already supported by the product:
 
-1. **A schema that converges on its own** — promotion, deduplication and retroactive backfill. Unbuilt commercially, and the only structural moat here.
-2. **Voice-first Arabic intake over WhatsApp, producing regulator-shaped output for GCC obligations.** Underserved by every incumbent and unlikely to be prioritised by any of them.
+> **Messy complaint evidence becomes a traceable case draft that a human can review and approve faster,
+> without forcing the customer through a form or surrendering control to automation.**
 
-Everything else in this document is table stakes. It has to be built well, but it will not win an argument with a buyer who has seen a demo from anyone else in the category.
+Self-converging schema, Arabic parity and regulator-shaped output remain research/product hypotheses, not
+the controlled-pilot promise. They may become differentiators after representative evidence passes, but
+the product does not need to pretend they are proven in order to learn whether its traceable drafting and
+review workflow saves a complaint team time.
 
 ---
 
@@ -286,7 +289,7 @@ Ninety seconds, no configuration, empty database.
 | Misclassification moves from customer to model, and becomes invisibly the vendor's fault | Confidence thresholds with a triage queue; never auto-route ambiguous cases |
 | Managers distrust AI-populated reports | Per-field provenance and confidence, visible in every report |
 | Case boundaries are hard — complaints arrive across many messages over time | Conversation windowing plus explicit new-case-versus-update classification. Budget more effort here than for extraction |
-| The conversational-intake category already exists and will absorb this wedge | Do not compete on conversation. Compete on self-converging schema and on voice-first Arabic with regulator-shaped output — see section 7. Defensibility is the correction log, the promoted field registry and external mappings, never the extraction |
+| The conversational-intake category already exists and will absorb this wedge | Compete first on traceable evidence, mandatory human control, fast complaint review and deployable data boundaries. Treat self-converging schema and voice/language breadth as evidence-gated future differentiators, not current promises. |
 | Elicitation becomes an interrogation — the long form rebuilt in chat | Hard budget of anchor plus two drills; questions-per-case tracked as a first-class metric, with any rising trend treated as a regression |
 | The system asks for something the customer already said, or could have been looked up | Extract before asking; infer from the anchor before asking; both enforced in the elicitation policy and measured |
 | Customer abandons mid-elicitation | Case created immediately in an incomplete state; never blocked on completeness. Reengagement outside the messaging service window requires a template — designed for, not discovered later |
