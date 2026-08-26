@@ -101,6 +101,15 @@ def resolve_embed_key(
     return UUID(str(row[0])), [str(o) for o in origins]
 
 
+def tenant_allowed_origins(session: Session) -> list[str]:
+    """The current tenant's portal CORS allowlist (session is already tenant-GUC scoped)."""
+    raw = session.execute(text("SELECT allowed_origins FROM tenant LIMIT 1")).scalar_one_or_none()
+    if raw is None:
+        return []
+    origins = raw if isinstance(raw, list) else json.loads(raw or "[]")
+    return [str(origin) for origin in origins]
+
+
 def _reference(case_id: UUID) -> str:
     """A short, human case reference shown to the customer (they hold the token; this is just a label)."""
     return f"C-{str(case_id).split('-')[0].upper()}"

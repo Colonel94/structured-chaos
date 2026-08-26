@@ -74,16 +74,6 @@ class FeedbackIn(BaseModel):
     comment: str | None = None
 
 
-class CommitBatchIn(BaseModel):
-    """Approve several cases at once — the reviewer's single act of clearing a whole reliability band (still
-    a human approval per §3, just amortised). ``review_ms`` is the time spent on the batch; it is split
-    evenly across the cases as each one's measured cost so the median stays honest."""
-
-    reviewer_id: str
-    case_ids: list[str]
-    review_ms: int | None = None
-
-
 class SignupIn(BaseModel):
     email: str
     password: str
@@ -311,23 +301,19 @@ async def ingest_case(
     factory: FactoryDep,
     text: Annotated[str, Form()] = "",
     files: Annotated[list[UploadFile], File()] = [],  # noqa: B006 (FastAPI reads this marker)
-) -> dict[str, Any]:
+) -> Response:
     """Self-serve intake: a stranger submits their messiest real case — pasted text and/or dropped files
     (a WhatsApp export, a photo, a PDF, a voice note) — and gets back a fully structured case, with no
     developer in the room (winning-condition §2/§8; closes the "no product surface" red flag §7).
 
-    Runs the REAL pipeline inline so the result is immediate: ingest (immutable content-addressed source
-    docs) → normalise (transcribe/OCR/text + provenance spans) → extract (governed core + emergent, with
-    per-field provenance) → the deterministic priority/SLA decision → elicitation (records the anchor+2
-    drill). Tenant-scoped via ``X-Tenant-Id`` (RLS); the case then appears in the review queue. p50 ≈ one
-    extraction (~7-10s local), well inside the ≤60s gate."""
-    from ..backends.registry import get_blob, get_llm
-    from ..elicit.stage import elicit_case
-    from ..extract.stage import extract_case
+    Persists the case and immutable sources, then returns as soon as the durable normalise job is committed.
+    The worker owns the single production path from normalise → extract → rules + elicitation. Keeping GPU,
+    ASR and OCR work out of the HTTP request prevents timeouts and avoids running a second copy of jobs that
+    intake already enqueued transactionally. The review client polls the case until its decision is ready.
+    Tenant-scoped by the authenticated workspace (RLS); first-contact time is recorded before this returns."""
+    from ..backends.registry import get_blob
     from ..intake.ingest import ingest_messages
     from ..intake.models import InboundAttachment, InboundMessage, guess_mime
-    from ..pipeline import normalise_source_document
-    from ..rules.stage import decide_case
 
     tenant = _tenant(x_tenant_id)
     body = text.strip()
@@ -346,7 +332,7 @@ async def ingest_case(
     if not body and not attachments:
         raise HTTPException(status_code=400, detail="provide text or at least one file")
 
-    blob, llm = get_blob(), get_llm()
+    blob = get_blob()
     msg = InboundMessage(
         channel="file_drop",
         sender="",  # a web drop has no anchor phone; resolution degrades to open questions (§5 fallback)
@@ -355,13 +341,13 @@ async def ingest_case(
         attachments=tuple(attachments),
     )
     res = await ingest_messages(tenant, [msg], blob=blob, factory=factory)
-    for sdid in res.source_document_ids:
-        await normalise_source_document(tenant, sdid, blob=blob, factory=factory)
-    for cid in res.case_ids:
-        await extract_case(tenant, cid, llm=llm, factory=factory)
-        decide_case(tenant, cid, factory=factory)
-        await elicit_case(tenant, cid, llm=llm, blob=blob, factory=factory)
-    return {"case_ids": [str(c) for c in res.case_ids]}
+    return JSONResponse(
+        {
+            "case_ids": [str(c) for c in res.case_ids],
+            "status": "queued",
+        },
+        status_code=202,
+    )
 
 
 @router.post("/objects")
@@ -376,6 +362,7 @@ async def upload_objects(
     the identifier columns itself; no schema is declared. Once loaded, the objects resolve the ANCHOR on
     a case so the drill looks facts up instead of asking (Moment 3). Idempotent — re-uploading the same
     export is a no-op (the object content-hash is unique per tenant)."""
+    from ..backends.registry import get_embedding
     from ..resolve import ingest_object_collection
     from ..resolve.upload import ObjectFileError, parse_object_file
 
@@ -388,13 +375,16 @@ async def upload_objects(
         raise HTTPException(status_code=400, detail=f"could not read the file: {exc}") from None
     otype = object_type.strip() or "object"
     with tenant_session(_tenant(x_tenant_id), factory=factory) as s:
-        result = await ingest_object_collection(s, object_type=otype, objects=objects)
+        result = await ingest_object_collection(
+            s, object_type=otype, objects=objects, embedder=get_embedding()
+        )
         total = api.count_objects(s, object_type=otype)
     return {
         "object_type": result.object_type,
         "ingested": result.ingested,
         "duplicates": result.duplicates,
         "keys_indexed": result.keys_indexed,
+        "embedded": result.embedded,
         "key_fields": result.key_fields,
         "total": total,
     }
@@ -471,9 +461,16 @@ def post_commit(
     cid = _case_uuid(case_id)
     with tenant_session(_tenant(x_tenant_id), factory=factory) as s:
         reviewer_id = reviewer or body.reviewer_id
-        result = api.commit_case(s, cid, reviewer_id=reviewer_id)
-        if result is None:
+        if api.get_case_channel(s, cid) is None:
             raise HTTPException(status_code=404, detail="case not found")
+        if api.get_case_decision(s, cid) is None:
+            raise HTTPException(
+                status_code=409,
+                detail="case processing is not complete — approval is not available yet",
+            )
+        result = api.commit_case(s, cid, reviewer_id=reviewer_id)
+        if result is None:  # defensive: the existence check above and commit share this transaction
+            raise HTTPException(status_code=409, detail="case cannot be approved")
         api.record_review_event(
             s,
             case_id=cid,
@@ -482,36 +479,6 @@ def post_commit(
             fields_edited=body.fields_edited,
         )
     return {"commit": result, "undo_window_seconds": UNDO_WINDOW_SECONDS}
-
-
-@router.post("/cases/commit-batch")
-def post_commit_batch(
-    body: CommitBatchIn,
-    x_tenant_id: TenantHeader,
-    reviewer: ReviewerDep,
-    factory: FactoryDep,
-) -> dict[str, Any]:
-    """Approve several cases in one act — the reviewer clears a whole high-reliability band at once. Each
-    commit is the same one-way, idempotent human approval (§3); a case already committed just returns its
-    stamp. The batch's ``review_ms`` is split evenly as each case's measured cost. Absent/cross-tenant ids
-    are reported in ``failed`` (fail-closed), never a leak."""
-    tid = _tenant(x_tenant_id)
-    ids = [_case_uuid(c) for c in body.case_ids]
-    per_case_ms = round(body.review_ms / len(ids)) if body.review_ms is not None and ids else None
-    committed: list[str] = []
-    failed: list[str] = []
-    reviewer_id = reviewer or body.reviewer_id
-    with tenant_session(tid, factory=factory) as s:
-        for cid in ids:
-            result = api.commit_case(s, cid, reviewer_id=reviewer_id)
-            if result is None:
-                failed.append(str(cid))
-                continue
-            api.record_review_event(
-                s, case_id=cid, reviewer_id=reviewer_id, review_ms=per_case_ms, fields_edited=0
-            )
-            committed.append(str(cid))
-    return {"committed": committed, "failed": failed}
 
 
 @router.post("/cases/{case_id}/uncommit")

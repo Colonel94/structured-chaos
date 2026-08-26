@@ -307,20 +307,19 @@ the delta as a tuning addendum (`tuning_addenda.json` — `[]` on main, so eval-
 $0). The human reviews, checks the score didn't regress, and merges. Every automated step still stops at a
 human gate.
 
-**Triage + batch approve (new 2026-08-23).** The register splits into a "nothing flagged for review" band
-(every governed field above the 0.5 flag line) and the needs-you remainder; `approve all N clean` clears
-the whole band in one act (still a per-case human approval, §3). Honest: "nothing flagged" is a class-level
-band, not a per-case safety guarantee (§10 CORRECTION) — the floor is the same 0.5 line the flag uses, so
-it's reachable, unlike an aspirational high-confidence threshold on a MIN-of-products signal.
+**Batch approval retracted (2026-08-26).** A class-level score above the 0.5 flag line is not evidence
+that an individual case was read or is correct; the measured zero-edit rate is only 28%. Bulk approval
+therefore made reports available for cases a reviewer had never inspected and contradicted the product's
+human-verification promise. Every case now requires its own review + approval. Queue ordering still puts
+the weakest class-level confidence first, without pretending it is a per-case safety guarantee.
 
 **The empty register is a first impression, designed.** A new tenant sees a quiet centred state: one
 line naming what this screen is, and the `+ submit your first case` action — never a blank rail.
 
-**The ~17s intake wait shows the pipeline, not a spinner.** A staged indicator walks
-`normalising → transcribing → extracting → deciding` (the real pipeline order), advancing on a timer
-since the request is synchronous with no progress events. Honest about being stage-labels not telemetry;
-it shows *what is running*, not a fake percentage. `prefers-reduced-motion` → the stages show statically,
-no shimmer.
+**Intake is durable and asynchronous (2026-08-26).** Submission returns after the case, originals and
+normalise job commit atomically. The selected case then polls persisted state and shows one honest
+"building the case" state until a deterministic decision exists. Approval and the human review timer are
+locked until then. No timer-driven fake stage labels and no second inline copy of the worker pipeline.
 
 **Motion — a machine responding, not a website performing.** Focus transitions and highlight reveals
 only, ≤150ms, ease-out. No page transitions, no skeleton shimmer, no easing flourishes. All of it inside

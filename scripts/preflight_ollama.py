@@ -38,9 +38,7 @@ def main() -> int:
     try:
         resp = httpx.get(f"{host}/api/tags", timeout=5.0)
         resp.raise_for_status()
-    except (
-        Exception
-    ) as exc:  # noqa: BLE001 — any failure here is a hard, reportable deploy problem
+    except httpx.HTTPError as exc:
         print(
             f"\n!! CANNOT REACH OLLAMA at {host}: {type(exc).__name__}: {exc}\n"
             "\n   This is almost certainly the container→Ollama bind trap on a native Linux host:\n"

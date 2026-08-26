@@ -391,7 +391,7 @@ button {
   font-size: 12px;
   font-weight: 700;
 }
-.access-tabs button[aria-selected="true"] {
+.access-tabs button[aria-pressed="true"] {
   background: var(--surface);
   color: var(--ink);
   box-shadow: var(--shadow-4);
@@ -716,6 +716,43 @@ button {
 }
 .banner--failed strong {
   color: var(--alarm);
+}
+.processing-card {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--sp-4);
+  max-width: 720px;
+  margin: var(--sp-8) auto;
+  padding: var(--sp-6);
+  border: 1px solid var(--brand-line);
+  border-radius: var(--r-lg);
+  background: var(--brand-wash);
+  color: var(--ink);
+}
+.processing-card__dot {
+  flex: 0 0 auto;
+  width: 12px;
+  height: 12px;
+  margin-top: 5px;
+  border: 3px solid var(--brand-line);
+  border-top-color: var(--brand);
+  border-radius: 50%;
+  animation: spin 0.9s linear infinite;
+}
+.processing-card strong {
+  display: block;
+  margin-bottom: var(--sp-2);
+}
+.processing-card p {
+  margin: 0;
+  color: var(--ink-2);
+  line-height: 1.5;
+}
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .processing-card__dot { animation: none; }
 }
 
 /* ---- layout: register rail | case ---- */
@@ -1797,58 +1834,6 @@ button {
   line-height: 1.6;
 }
 
-/* ---- intake pipeline indicator: show the pipeline working, not a spinner ---- */
-.pipeline {
-  margin: var(--sp-4) 0 0;
-  display: flex;
-  flex-direction: column;
-  gap: var(--sp-2);
-}
-.pipeline__row {
-  display: flex;
-  align-items: center;
-  gap: var(--sp-3);
-  font-size: var(--t-meta);
-  color: var(--ink-3);
-  transition: color var(--motion);
-}
-.pipeline__row--active {
-  color: var(--ink);
-  font-weight: 600;
-}
-.pipeline__row--done {
-  color: var(--ink-2);
-}
-.pipeline__dot {
-  width: 9px;
-  height: 9px;
-  border-radius: 50%;
-  border: 1px solid var(--line-strong);
-  flex: none;
-}
-.pipeline__row--active .pipeline__dot {
-  background: var(--brand);
-  border-color: var(--brand);
-  box-shadow: 0 0 0 3px var(--brand-wash);
-  animation: pulse 1.1s ease-in-out infinite;
-}
-.pipeline__row--done .pipeline__dot {
-  background: var(--committed);
-  border-color: var(--committed);
-}
-.pipeline__label {
-  letter-spacing: 0;
-}
-@keyframes pulse {
-  0%,
-  100% {
-    box-shadow: 0 0 0 3px var(--brand-wash);
-  }
-  50% {
-    box-shadow: 0 0 0 6px color-mix(in srgb, var(--brand) 8%, transparent);
-  }
-}
-
 /* ---- keyboard help ---- */
 .help {
   position: fixed;
@@ -2114,39 +2099,6 @@ kbd {
   background: var(--committed-strong);
 }
 .undo-toast__btn:disabled {
-  opacity: 0.5;
-  cursor: default;
-}
-
-/* ---- triage: clear the "nothing flagged" band in one act ---- */
-.triage {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--sp-3);
-  padding: var(--sp-3) var(--sp-4);
-  border-bottom: 1px solid var(--line);
-  background: var(--committed-wash);
-}
-.triage__count {
-  font-size: var(--t-meta);
-  color: var(--ink-2);
-  letter-spacing: 0;
-}
-.triage__btn {
-  font-size: var(--t-meta);
-  font-weight: 600;
-  color: #fff;
-  background: var(--committed-btn);
-  border: 1px solid var(--committed-btn);
-  border-radius: var(--r-sm);
-  padding: 5px var(--sp-3);
-  white-space: nowrap;
-}
-.triage__btn:hover:not(:disabled) {
-  background: var(--committed-strong);
-}
-.triage__btn:disabled {
   opacity: 0.5;
   cursor: default;
 }

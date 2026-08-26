@@ -79,27 +79,20 @@ def create_account(
     salt, password_hash = hash_password(password)
     session = factory()
     try:
-        tenant_id = session.execute(
-            text("SELECT create_review_workspace(:name)"), {"name": workspace_name}
-        ).scalar_one()
-        user_id = session.execute(
+        row = session.execute(
             text("""
-                INSERT INTO app_user (email, display_name, password_salt, password_hash)
-                VALUES (:email, :name, :salt, :password_hash) RETURNING id
-            """),
-            {"email": email, "name": name, "salt": salt, "password_hash": password_hash},
-        ).scalar_one()
-        session.execute(
-            text("""
-                INSERT INTO workspace_membership (user_id, tenant_id, role, workspace_name)
-                VALUES (:user_id, :tenant_id, 'admin', :workspace_name)
+                SELECT user_id, tenant_id FROM create_review_identity(
+                    :email, :name, :salt, :password_hash, :workspace_name)
             """),
             {
-                "user_id": user_id,
-                "tenant_id": tenant_id,
+                "email": email,
+                "name": name,
+                "salt": salt,
+                "password_hash": password_hash,
                 "workspace_name": workspace_name,
             },
-        )
+        ).one()
+        user_id, tenant_id = row[0], row[1]
         identity = Identity(user_id, tenant_id, email, name, "admin", workspace_name)
         session_token, csrf_token = _insert_session(session, identity)
         session.commit()
@@ -120,13 +113,9 @@ def login(
         row = (
             session.execute(
                 text("""
-                SELECT u.id, u.email, u.display_name, u.password_salt, u.password_hash,
-                       m.tenant_id, m.role, m.workspace_name
-                  FROM app_user u
-                  JOIN workspace_membership m ON m.user_id = u.id
-                 WHERE u.email = :email
-                 ORDER BY m.created_at
-                 LIMIT 1
+                SELECT user_id AS id, email, display_name, password_salt, password_hash,
+                       tenant_id, role, workspace_name
+                  FROM lookup_review_login(:email)
             """),
                 {"email": email},
             )
@@ -158,9 +147,8 @@ def _insert_session(session: Session, identity: Identity) -> tuple[str, str]:
     csrf_token = secrets.token_urlsafe(24)
     session.execute(
         text("""
-            INSERT INTO review_session
-                (user_id, tenant_id, token_hash, csrf_hash, expires_at)
-            VALUES (:user_id, :tenant_id, :token_hash, :csrf_hash, :expires_at)
+            SELECT create_review_session(
+                :user_id, :tenant_id, :token_hash, :csrf_hash, :expires_at)
         """),
         {
             "user_id": identity.user_id,
@@ -179,14 +167,8 @@ def resolve_session(factory: sessionmaker[Session], token: str) -> Identity | No
         row = (
             session.execute(
                 text("""
-                SELECT s.user_id, s.tenant_id, u.email, u.display_name, m.role,
-                       m.workspace_name
-                  FROM review_session s
-                  JOIN app_user u ON u.id = s.user_id
-                  JOIN workspace_membership m
-                    ON m.user_id = s.user_id AND m.tenant_id = s.tenant_id
-                 WHERE s.token_hash = :token_hash
-                   AND s.revoked_at IS NULL AND s.expires_at > now()
+                SELECT user_id, tenant_id, email, display_name, role, workspace_name
+                  FROM lookup_review_session(:token_hash)
             """),
                 {"token_hash": token_digest(token)},
             )
@@ -212,8 +194,7 @@ def valid_csrf(factory: sessionmaker[Session], session_token: str, csrf_token: s
     try:
         stored = session.execute(
             text("""
-                SELECT csrf_hash FROM review_session
-                 WHERE token_hash = :token_hash AND revoked_at IS NULL AND expires_at > now()
+                SELECT lookup_review_csrf(:token_hash)
             """),
             {"token_hash": token_digest(session_token)},
         ).scalar_one_or_none()
@@ -226,7 +207,7 @@ def revoke_session(factory: sessionmaker[Session], token: str) -> None:
     session = factory()
     try:
         session.execute(
-            text("UPDATE review_session SET revoked_at = now() WHERE token_hash = :token_hash"),
+            text("SELECT revoke_review_session(:token_hash)"),
             {"token_hash": token_digest(token)},
         )
         session.commit()

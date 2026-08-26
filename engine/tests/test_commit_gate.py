@@ -33,6 +33,7 @@ from app.intake.models import InboundMessage
 from app.main import app
 from app.pipeline import normalise_source_document
 from app.report import NotCommittedError, build_case_html, render_case_html
+from app.report.register import _safe_cell
 from app.rules.stage import decide_case
 from app.store import api
 from app.store.db import tenant_session
@@ -143,6 +144,11 @@ def test_build_case_html_renders_absence_and_escapes() -> None:
     assert "not stated" in html  # governed fields with no value shown explicitly
     assert "<script>alert(1)</script>" not in html  # escaped, not injected
     assert "&lt;script&gt;" in html
+
+
+@pytest.mark.parametrize("prefix", ["=", "+", "-", "@", "\t", "\r"])
+def test_register_csv_neutralises_spreadsheet_formulas(prefix: str) -> None:
+    assert _safe_cell(prefix + "SUM(1,1)") == "'" + prefix + "SUM(1,1)"
 
 
 async def test_correction_appends_recomputes_and_locks_after_commit(

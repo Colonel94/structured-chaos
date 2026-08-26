@@ -18,6 +18,9 @@ import json
 from typing import Any
 
 _WRAPPER_KEYS = ("objects", "data", "records", "rows", "items")
+MAX_OBJECT_ROWS = 5_000
+MAX_OBJECT_FIELDS = 200
+MAX_OBJECT_VALUE_CHARS = 32_000
 
 
 class ObjectFileError(ValueError):
@@ -25,11 +28,26 @@ class ObjectFileError(ValueError):
 
 
 def _clean_row(row: dict[str, Any]) -> dict[str, Any]:
+    if len(row) > MAX_OBJECT_FIELDS:
+        raise ObjectFileError(
+            f"an object has more than {MAX_OBJECT_FIELDS} fields; split or simplify the export"
+        )
     out: dict[str, Any] = {}
     for k, v in row.items():
         if not k or not str(k).strip():
             continue
-        out[str(k).strip()] = v.strip() if isinstance(v, str) else v
+        key = str(k).strip()
+        if len(key) > 200:
+            raise ObjectFileError("a field name is longer than 200 characters")
+        value = v.strip() if isinstance(v, str) else v
+        # Values are stored in JSONB and may be embedded. Bound both plain strings and nested JSON so
+        # a small upload cannot expand into pathological database/model work.
+        rendered = value if isinstance(value, str) else json.dumps(value, ensure_ascii=False)
+        if len(rendered) > MAX_OBJECT_VALUE_CHARS:
+            raise ObjectFileError(
+                f"field {key!r} is longer than {MAX_OBJECT_VALUE_CHARS} characters"
+            )
+        out[key] = value
     return out
 
 
@@ -87,4 +105,8 @@ def parse_object_file(filename: str, data: bytes) -> list[dict[str, Any]]:
         rows = _parse_csv(text)
     if not rows:
         raise ObjectFileError("no objects found in the file")
+    if len(rows) > MAX_OBJECT_ROWS:
+        raise ObjectFileError(
+            f"the file contains more than {MAX_OBJECT_ROWS} objects; split it into smaller uploads"
+        )
     return rows

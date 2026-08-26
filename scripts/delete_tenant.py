@@ -31,6 +31,7 @@ def main() -> int:
 
     engine = make_engine(settings, admin=True)
     blob_keys: list[str] = []
+    membership_user_ids: list[UUID] = []
     try:
         with Session(bind=engine, future=True) as session, session.begin():
             exists = session.execute(
@@ -56,6 +57,15 @@ def main() -> int:
                         {"tenant": args.tenant},
                     ).scalars()
                 )
+                membership_user_ids = [
+                    UUID(str(user_id))
+                    for user_id in session.execute(
+                        text(
+                            "SELECT user_id FROM workspace_membership WHERE tenant_id = :tenant"
+                        ),
+                        {"tenant": args.tenant},
+                    ).scalars()
+                ]
                 for key in blob_keys:
                     session.execute(
                         text("""
@@ -93,6 +103,20 @@ def main() -> int:
                 session.execute(
                     text("DELETE FROM tenant WHERE id = :tenant"), {"tenant": args.tenant}
                 )
+                # Identity rows are global because authentication runs before the tenant GUC exists.
+                # Remove only users whose last membership belonged to the erased workspace; a person who
+                # still belongs to another workspace keeps their account and those other memberships.
+                if membership_user_ids:
+                    session.execute(
+                        text("""
+                            DELETE FROM app_user u
+                             WHERE u.id = ANY(:user_ids)
+                               AND NOT EXISTS (
+                                   SELECT 1 FROM workspace_membership m WHERE m.user_id = u.id
+                               )
+                        """),
+                        {"user_ids": membership_user_ids},
+                    )
 
         client = boto3.client(
             "s3",

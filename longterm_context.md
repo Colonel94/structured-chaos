@@ -10,7 +10,15 @@ Phase 0), and `BUILD-PLAN.md` (Phase 0→ship, with per-phase subagent guidance 
 `winning-condition.md` — when this file and those disagree, those win and this file is stale and must
 be corrected (except the two research-backed spec deltas in §6, which supersede two of their numbers).*
 
-*Last updated: 2026-08-23b (session: **REVIEW-UI USABILITY — the ≤30s-gate surface**. Built the backend +
+*Last updated: 2026-08-26 (session: **MARKET-READINESS ADVERSARIAL PASS**. Supersedes the historical
+batch/inline-intake notes below: reviewer intake now returns 202 onto the single durable worker path and
+the UI polls persisted readiness; approval and review timing are locked until the deterministic decision
+exists; confidence-band batch approval was removed because 28% zero-edit cannot justify rubber-stamping
+unseen cases. Auth tables are behind exact-key SECURITY DEFINER RPCs (migration 0027), portal status/answer
+CORS is tenant-enforced, CSV formula injection is neutralised, tenant erasure removes orphaned identities,
+and the real upload+elicitation path now wires guarded fuzzy object matching. Independent labels, timed
+reviewers, convergence evidence, legal/ops sign-off and three strangers remain external gates.) Prior arc:
+2026-08-23b (session: **REVIEW-UI USABILITY — the ≤30s-gate surface**. Built the backend +
 frontend that make the review UI fast AND measure time-to-approve: review_event instrumentation + HUD,
 one-key correction picks, triage + batch approve, single-key commit + an undo window (superseding the
 c-arms/Enter gate), diff-on-return. 256 tests +1 skip, nabu-ui-tested live incl. an end-to-end commit→undo.
@@ -40,6 +48,25 @@ live-testing (voice/image/text) → turn each failing case into a prompt/policy 
 ---
 
 ## 0. Current state & next actions  ← read this first every session; keep it current
+
+> ## ✅ 2026-08-26 ADVERSARIAL MARKET-READINESS UPDATE
+> - **Lifecycle fixed:** `/api/ingest` no longer runs a duplicate inline pipeline. It commits case +
+>   originals + durable job and returns 202; the UI polls the selected case. A case with no decision is
+>   visibly processing and cannot be approved by API, button or hotkey. Human review timing starts only
+>   after processing, so the ≤30s metric is no longer polluted by GPU time.
+> - **Human gate restored:** removed `/api/cases/commit-batch` and the "approve all clean" UI. The 0.5
+>   class-confidence band plus 28% zero-edit rate never justified approval of unseen cases.
+> - **Security/privacy fixed:** migration 0027 revokes bulk app-role access to passwords/sessions and
+>   exposes exact-key auth RPCs; portal token reads/answers now enforce the tenant origin allowlist; CSV
+>   exports neutralise spreadsheet formulas; full tenant erasure removes identity rows only when their
+>   last membership is gone.
+> - **Object-resolution path completed:** self-serve uploads now embed records and elicitation passes a
+>   narrowly typed customer/complainant name plus the configured embedder into the guarded fuzzy fallback.
+> - **Verification so far:** migrations applied to the live DB; backend 147 passed / 138 skipped locally
+>   (DB/container cases run in CI); mypy clean; UI typecheck clean, 2/2 tests and production build green.
+> - **Still binding, unchanged:** the scorer finds no completed, independently named holdout label file;
+>   accuracy/convergence gates fail or are unproven; human review timing, legal/operational evidence and
+>   the three-stranger gate remain.
 
 > ## ✅ CURRENT STATE + NEXT STEPS (2026-08-25 — clean top-of-mind summary; the dated FOLLOW-UP + SESSION HANDOFF blocks below are detail + audit trail)
 >

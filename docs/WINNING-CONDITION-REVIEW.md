@@ -1,7 +1,7 @@
 # Winning-condition review
 
 **Audit date:** 26 August 2026  
-**Reviewed revision:** `4adefb1` plus this audit  
+**Reviewed revision:** release hardening candidate based on `0acf5bf`
 **Decision:** **NO-GO for production launch.** The product is suitable for a controlled design-partner
 pilot, but only one of the six ship-scorecard rows is fully clean under the evidence rules in
 `winning-condition.md`.
@@ -19,7 +19,7 @@ is not relaxed because the product is otherwise impressive.
 
 | Ship gate | Status | Why it is not clean |
 |---|---|---|
-| Setup gate (§2) | **PARTIAL / FAIL** | Guided pilot access and self-serve file upload exist, but signup-to-value has not been timed by a stranger and workspace provisioning is still manual. |
+| Setup gate (§2) | **PARTIAL / FAIL** | Self-serve account/workspace creation and file upload exist, but signup-to-value has not been timed by a stranger. |
 | Seven wow moments (§3) | **PARTIAL** | The mechanisms exist for most moments, but none has passed the required unprompted external observation; Arabic is formally suspended and voice parity is unmeasured. |
 | Quantitative thresholds (§4) | **FAIL** | Accuracy and convergence gates miss; several human, sparse-case, discrepancy, voice, and latency rows are unmeasured. |
 | Trust gates (§5) | **MET IN CODE** | The automated trust spine is strong. Human speed-to-source still belongs in the external usability run, but no missing code gate was found. |
@@ -41,7 +41,8 @@ questions. Those conditions have not been observed together in an independent se
 Evidence in favour:
 
 - Portal, file intake and WhatsApp paths exist.
-- Observed inline processing is approximately 8–17 seconds, below one minute, but not load-tested.
+- Historical processing was approximately 8–17 seconds; intake is now durable/asynchronous, but the
+  message-to-ready interval has not been formally load-tested on the new path.
 - The elicitation measurement reports median one drill after anchor and a hard maximum below budget.
 - Object resolution produced zero wrong silent binds across 311 measured silent matches.
 
@@ -58,7 +59,7 @@ Every item is binary in the source contract. A partial result therefore leaves t
 
 | Criterion | Status | Evidence and remaining gap |
 |---|---|---|
-| Zero configuration to first value | **PARTIAL** | The new pilot entry and empty-database path require no schema/category configuration, but the administrator must provision and send a workspace UUID. |
+| Zero configuration to first value | **PARTIAL** | Account creation provisions a private workspace without schema/category configuration or a workspace UUID; the external timed proof is still missing. |
 | Under 10 minutes, timed by a new user | **UNMEASURED** | No external timed run exists. |
 | No historical data required | **MET IN CODE** | Intake and extraction operate without object-store history; elicitation is the fallback. |
 | No per-customer training/tuning | **MET IN DESIGN** | Tenant configuration is policy/data, not model training. Independent use has not tested whether exceptions force manual prompt work. |
@@ -104,7 +105,7 @@ authored by Claude and are agreement-with-labeller figures, not independent ship
 | Elicitation abandonment | ≤20% | No real-customer run | **UNMEASURED** |
 | Desired outcome captured | ≥90% | 56% | **FAIL** |
 | Median review time | ≤30s | Instrumented and seeded; no human result | **UNMEASURED** |
-| Message-to-ready latency | ≤60s | 8–17s observed inline; no formal/load result | **PARTIAL** |
+| Message-to-ready latency | ≤60s | Durable worker path built; historical 8–17s samples, no formal/load result on current path | **PARTIAL** |
 | Voice-vs-text parity | within 5 points | No paired voice/text evaluation set | **UNMEASURED** |
 | Duplicate/synonym fields | <5% | 7.6% | **FAIL** |
 | New-field creation rate | declining | Flat composite curve | **FAIL** |
@@ -123,7 +124,7 @@ not erase the need to meet the thresholds.
 | Case exists before questions | **MET** | Intake persists the case before the elicitation stage; ingest and elicitation tests. |
 | Clock starts at first contact | **MET** | `test_stage_writes_the_decision_and_clock_runs_from_first_contact`. |
 | Anchor plus two enforced in code | **MET** | `test_hard_cap_blocks_even_the_anchor_at_three_questions`; live measurement stays below cap. |
-| No external action without approval | **MET** | Commit gate refuses reports before approval; channel dispatch is explicit and idempotent. |
+| No external action without approval | **MET** | Commit gate refuses reports before approval; still-processing cases cannot be approved; channel dispatch is explicit and idempotent. |
 | Deterministic SLA/priority | **MET** | Rules-stage repeat/idempotency and policy-version tests. |
 | Tenant isolation automated | **MET** | Cross-tenant read/write/repoint/unset-context tests using the non-bypass app role. |
 | Originals immutable | **MET** | Database triggers/grants plus content-addressed blob verification. |
@@ -160,7 +161,7 @@ Still present or unproven:
 - review speed versus manual typing is unmeasured;
 - own-data, no-explanation behavior is not externally tested;
 - accuracy is low enough that “it usually handles that better” remains a material demo risk;
-- guided workspace access improved usability, but provisioning and identity still depend on an administrator;
+- self-serve identity/workspace creation exists, but team invitation/reset/revocation is incomplete;
 - Arabic is suspended, so the original cross-language red flag cannot be declared absent.
 
 ## Section 8 — external gate
@@ -182,8 +183,8 @@ condition: at least one person asking the price before asking for a feature.
    sell “self-converging schema” as proven.
 5. **Create paired voice/text cases.** Measure field-level parity within five points and formalise
    end-to-end latency under representative load.
-6. **Close pilot identity and operations.** Replace free-text reviewer/workspace access with authenticated
-   membership; complete privacy, retention, monitoring, restore and support gates from
+6. **Close team identity and operations.** Add invitation acceptance, password reset and membership
+   revocation to the authenticated workspace; complete privacy, retention, monitoring, restore and support gates from
    `docs/MARKET-READINESS.md`.
 7. **Only then run the three-stranger gate.** Use their data, provide no walkthrough, say nothing, and
    record the five outcomes verbatim. Do not count a coached design-partner demo.

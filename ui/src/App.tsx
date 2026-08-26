@@ -3,7 +3,6 @@ import { useHotkeys } from "react-hotkeys-hook";
 import AudioProvenance, { type AudioSegment } from "./AudioProvenance";
 import ImageProvenance from "./ImageProvenance";
 import {
-  commitBatch,
   commitCase,
   docUrl,
   draftPromptDelta,
@@ -93,22 +92,6 @@ function confBand(conf: number | null): string | null {
 /** A citation's source document, resolved so provenance can pick the right viewer by its mime. */
 function docOf(cite: Citation, docs: Map<string, SourceDocument>): SourceDocument | undefined {
   return docs.get(cite.source_document_id);
-}
-
-/** Honour prefers-reduced-motion in JS-driven motion (the intake stage cycle). CSS handles the rest. */
-function usePrefersReducedMotion(): boolean {
-  const [reduced, setReduced] = useState(
-    () =>
-      typeof matchMedia !== "undefined" && matchMedia("(prefers-reduced-motion: reduce)").matches,
-  );
-  useEffect(() => {
-    if (typeof matchMedia === "undefined") return;
-    const m = matchMedia("(prefers-reduced-motion: reduce)");
-    const onChange = () => setReduced(m.matches);
-    m.addEventListener?.("change", onChange);
-    return () => m.removeEventListener?.("change", onChange);
-  }, []);
-  return reduced;
 }
 
 // ---- provenance: the "where did this come from?" answer, per source modality ----
@@ -655,6 +638,7 @@ function CaseDetail({
   // case — surface it as an error so a human picks it up; the source below is retained (originals are
   // immutable, §3), so the reviewer can still act on what the customer sent.
   const failed = review.case_state === "processing_failed";
+  const processing = !failed && review.decision === null;
 
   // The keyboard order: governed fields present (review order), then emergent — j/k walk it.
   const selectable = useMemo(() => {
@@ -692,10 +676,10 @@ function CaseDetail({
   useEffect(() => {
     openedAtRef.current = Date.now();
     setElapsed(0);
-    if (review.commit !== null || review.case_state === "processing_failed") return;
+    if (review.commit !== null || review.case_state === "processing_failed" || processing) return;
     const t = window.setInterval(() => setElapsed(Date.now() - openedAtRef.current), 1000);
     return () => window.clearInterval(t);
-  }, [review.case_id, review.commit, review.case_state]);
+  }, [review.case_id, review.commit, review.case_state, processing]);
 
   // Count down the undo window; clear it when it lapses.
   useEffect(() => {
@@ -757,7 +741,7 @@ function CaseDetail({
   // two-step: an accidental approval is reversible for a few seconds, then durable (DESIGN.md §10; the
   // owner-blessed successor to the c-arms/Enter gate). The measured review time + edit count go with it.
   const doCommit = useCallback(async () => {
-    if (committed || busy || failed) return; // never approve a case that failed to process
+    if (committed || busy || failed || processing) return;
     setBusy(true);
     setNote(null);
     const reviewMs = Date.now() - openedAtRef.current;
@@ -770,7 +754,7 @@ function CaseDetail({
     } finally {
       setBusy(false);
     }
-  }, [committed, busy, failed, review.case_id, reviewer, edits, onCommitted]);
+  }, [committed, busy, failed, processing, review.case_id, reviewer, edits, onCommitted]);
 
   const doUndo = useCallback(async () => {
     setBusy(true);
@@ -787,10 +771,11 @@ function CaseDetail({
     }
   }, [review.case_id, reviewer, onCommitted]);
 
-  useHotkeys("c", () => void doCommit(), { enabled: !committed && !failed }, [
+  useHotkeys("c", () => void doCommit(), { enabled: !committed && !failed && !processing }, [
     doCommit,
     committed,
     failed,
+    processing,
   ]);
   useHotkeys("u", () => undoUntil !== null && void doUndo(), { enabled: undoUntil !== null }, [
     undoUntil,
@@ -853,10 +838,10 @@ function CaseDetail({
             <button
               type="button"
               className="approve"
-              disabled={busy}
+              disabled={busy || processing}
               onClick={() => void doCommit()}
             >
-              approve (c)
+              {processing ? "processing…" : "approve (c)"}
             </button>
           )}
           <button type="button" className="ghost" onClick={() => setShowJson((v) => !v)}>
@@ -885,6 +870,19 @@ function CaseDetail({
           the underlying issue is fixed. It has not been auto-routed or resolved.
         </div>
       )}
+      {processing ? (
+        <div className="processing-card" role="status" aria-live="polite">
+          <span className="processing-card__dot" />
+          <div>
+            <strong>Building the case from the original evidence…</strong>
+            <p>
+              The worker is reading the submission, extracting traceable facts, and applying the SLA
+              policy. This view updates automatically; approval stays locked until that finishes.
+            </p>
+          </div>
+        </div>
+      ) : (
+        <>
       <DecisionBar review={review} />
       {/* The synthesis assumes a processed case — suppress it when processing failed, so a generic
           "A complaint / next step: action per the routed team" never contradicts the failure banner. */}
@@ -979,6 +977,8 @@ function CaseDetail({
           {showJson && <pre className="json">{JSON.stringify(review, null, 2)}</pre>}
         </aside>
       </div>
+        </>
+      )}
     </section>
   );
 }
@@ -1001,45 +1001,18 @@ function reviewOrder(cases: CaseSummary[]): CaseSummary[] {
   return [...cases].sort((a, b) => rank(a) - rank(b) || conf(a) - conf(b));
 }
 
-const INTAKE_STAGES = ["normalising", "transcribing", "extracting", "deciding"] as const;
-
-/** The ~17s synchronous intake wait shows the PIPELINE working, not a generic spinner (DESIGN.md §6).
- * Honest: these are the real pipeline stages in order, advanced on a timer (the request has no progress
- * events) — stage labels, not telemetry. prefers-reduced-motion → shown statically, no cycle, no pulse. */
-function IntakePipeline() {
-  const reduced = usePrefersReducedMotion();
-  const [stage, setStage] = useState(0);
+function useModalEscape(onClose: () => void, blocked = false) {
   useEffect(() => {
-    if (reduced) return;
-    const t = window.setInterval(
-      () => setStage((s) => (s + 1 < INTAKE_STAGES.length ? s + 1 : s)),
-      3400,
-    );
-    return () => window.clearInterval(t);
-  }, [reduced]);
-  return (
-    <div className="pipeline" role="status" aria-live="polite">
-      {INTAKE_STAGES.map((label, i) => {
-        const state = reduced
-          ? "pipeline__row--active"
-          : i < stage
-            ? "pipeline__row--done"
-            : i === stage
-              ? "pipeline__row--active"
-              : "";
-        return (
-          <div key={label} className={`pipeline__row ${state}`}>
-            <span className="pipeline__dot" />
-            <span className="pipeline__label">{label}…</span>
-          </div>
-        );
-      })}
-    </div>
-  );
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && !blocked) onClose();
+    };
+    window.addEventListener("keydown", closeOnEscape);
+    return () => window.removeEventListener("keydown", closeOnEscape);
+  }, [onClose, blocked]);
 }
 
-/** Self-serve intake: paste the messiest real case (or drop files) and get a structured case back — no
- * form to fill, no developer in the room. This is the product surface the winning-condition opens with. */
+/** Self-serve intake: persist a messy case and hand it to the durable worker — no form to fill and no
+ * fragile model work inside the browser request. The selected case then updates automatically. */
 function NewCaseModal({
   onClose,
   onCreated,
@@ -1051,6 +1024,7 @@ function NewCaseModal({
   const [files, setFiles] = useState<File[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  useModalEscape(onClose, busy);
 
   async function submit() {
     if (!text.trim() && files.length === 0) {
@@ -1071,9 +1045,9 @@ function NewCaseModal({
   }
 
   return (
-    <div className="modal" onClick={() => !busy && onClose()}>
-      <div className="modal__card" onClick={(e) => e.stopPropagation()}>
-        <h3>New case</h3>
+    <div className="modal" onClick={() => !busy && onClose()} role="presentation">
+      <div className="modal__card" role="dialog" aria-modal="true" aria-labelledby="new-case-title" onClick={(e) => e.stopPropagation()}>
+        <h3 id="new-case-title">New case</h3>
         <p className="modal__hint">
           Paste the messiest real case you have — a complaint, a chat thread, an email. Or drop a file
           (voice note, photo, PDF). Nothing to fill in; the system structures it.
@@ -1086,6 +1060,7 @@ function NewCaseModal({
           disabled={busy}
           rows={8}
           autoFocus
+          aria-label="Customer complaint or message"
         />
         <input
           type="file"
@@ -1093,6 +1068,7 @@ function NewCaseModal({
           className="modal__file"
           onChange={(e) => setFiles(Array.from(e.target.files ?? []))}
           disabled={busy}
+          aria-label="Attach evidence files"
         />
         {error && <div className="banner banner--error">{error}</div>}
         <div className="modal__actions">
@@ -1103,7 +1079,6 @@ function NewCaseModal({
             cancel
           </button>
         </div>
-        {busy && <IntakePipeline />}
       </div>
     </div>
   );
@@ -1118,6 +1093,7 @@ function ObjectStoreModal({ onClose }: { onClose: () => void }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<ObjectUploadResult | null>(null);
+  useModalEscape(onClose, busy);
 
   async function submit() {
     if (!file) {
@@ -1137,9 +1113,9 @@ function ObjectStoreModal({ onClose }: { onClose: () => void }) {
 
   const kind = objectType.trim() || "object";
   return (
-    <div className="modal" onClick={() => !busy && onClose()}>
-      <div className="modal__card" onClick={(e) => e.stopPropagation()}>
-        <h3>Connect your data</h3>
+    <div className="modal" onClick={() => !busy && onClose()} role="presentation">
+      <div className="modal__card" role="dialog" aria-modal="true" aria-labelledby="object-store-title" onClick={(e) => e.stopPropagation()}>
+        <h3 id="object-store-title">Connect your data</h3>
         <p className="modal__hint">
           Upload your orders, bookings, or assets — a CSV or JSON export, however your system produces
           it. No schema to define; the system finds the identifiers itself. Once connected, a case that
@@ -1161,6 +1137,7 @@ function ObjectStoreModal({ onClose }: { onClose: () => void }) {
           className="modal__file"
           onChange={(e) => setFile(e.target.files?.[0] ?? null)}
           disabled={busy}
+          aria-label="Choose a CSV or JSON object export"
         />
         {error && <div className="banner banner--error">{error}</div>}
         {result && (
@@ -1196,6 +1173,7 @@ function TuningDigestModal({ onClose }: { onClose: () => void }) {
   const [draft, setDraft] = useState<PromptDraft | null>(null);
   const [drafting, setDrafting] = useState(false);
   const [copied, setCopied] = useState(false);
+  useModalEscape(onClose, drafting);
 
   useEffect(() => {
     getTuningDigest()
@@ -1228,10 +1206,10 @@ function TuningDigestModal({ onClose }: { onClose: () => void }) {
   }
 
   return (
-    <div className="modal" onClick={onClose}>
-      <div className="modal__card modal__card--wide" onClick={(e) => e.stopPropagation()}>
+    <div className="modal" onClick={onClose} role="presentation">
+      <div className="modal__card modal__card--wide" role="dialog" aria-modal="true" aria-labelledby="tuning-title" onClick={(e) => e.stopPropagation()}>
         <div className="digest__head">
-          <h3>Tuning digest</h3>
+          <h3 id="tuning-title">Tuning digest</h3>
           <span className="digest__sub">
             what to fix next — clustered from reviewer corrections + feedback
           </span>
@@ -1583,8 +1561,10 @@ function WorkspaceWelcome({
   const [password, setPassword] = useState("");
   const [authError, setAuthError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
-  const ready = health?.status === "ok" && health.worker.status === "alive";
-  const statusLabel = healthFailed
+  const ready = health?.status === "ok" && health.worker.status === "alive" && !error;
+  const statusLabel = error
+    ? "Review service unavailable"
+    : healthFailed
     ? "Service unavailable"
     : health === null
       ? "Checking service"
@@ -1664,9 +1644,9 @@ function WorkspaceWelcome({
               {statusLabel}
             </span>
           </div>
-          <div className="access-tabs" role="tablist" aria-label="Account access">
-            <button type="button" role="tab" aria-selected={mode === "signup"} onClick={() => setMode("signup")}>Create account</button>
-            <button type="button" role="tab" aria-selected={mode === "login"} onClick={() => setMode("login")}>Sign in</button>
+          <div className="access-tabs" role="group" aria-label="Account access">
+            <button type="button" aria-pressed={mode === "signup"} onClick={() => setMode("signup")}>Create account</button>
+            <button type="button" aria-pressed={mode === "login"} onClick={() => setMode("login")}>Sign in</button>
           </div>
           <p className="access-card__copy">
             {mode === "signup"
@@ -1777,7 +1757,6 @@ export default function App() {
   const [showTuning, setShowTuning] = useState(false);
   const [fieldOptions, setFieldOptions] = useState<FieldOptions>({});
   const [reviewStats, setReviewStats] = useState<ReviewStats | null>(null);
-  const [batchBusy, setBatchBusy] = useState(false);
   const [theme, setTheme] = useState<Theme>(initialTheme);
   const [systemHealth, setSystemHealth] = useState<SystemHealth | null>(null);
   const [healthFailed, setHealthFailed] = useState(false);
@@ -1813,23 +1792,6 @@ export default function App() {
 
   const ordered = useMemo(() => (cases ? reviewOrder(cases) : null), [cases]);
   const processingReady = systemHealth?.status === "ok" && systemHealth.worker.status === "alive";
-
-  // The triage split (the plan's frontend #3): CLEAN = an unapproved, non-failed case with NO field
-  // flagged for review (every governed field above the 0.5 flag line) — the system raised no uncertainty
-  // on it, so the reviewer can clear the whole band in one act; everything else NEEDS YOU. Honest: this is
-  // "nothing flagged", a class-level band, not a per-case safety guarantee (§10 CORRECTION). Failed/
-  // committed cases are in neither band.
-  const clean = useMemo(
-    () =>
-      (ordered ?? []).filter(
-        (c) =>
-          !c.committed_at &&
-          c.case_state !== "processing_failed" &&
-          c.min_governed_confidence !== null &&
-          c.min_governed_confidence > CLEAN_BAND_FLOOR,
-      ),
-    [ordered],
-  );
 
   const refreshStats = useCallback(() => {
     if (!getTenantId()) return;
@@ -1871,27 +1833,6 @@ export default function App() {
 
   // Approve a whole clean band at once — one human act clearing many cases (§3), the only way ≤30s/case
   // scales past a big queue. The batch's elapsed time is split evenly so the median stays honest.
-  const batchStartRef = useRef<number>(Date.now());
-  const approveClean = useCallback(async () => {
-    if (clean.length === 0 || batchBusy) return;
-    setBatchBusy(true);
-    setError(null);
-    const ms = Date.now() - batchStartRef.current;
-    try {
-      await commitBatch(
-        clean.map((c) => c.case_id),
-        reviewer || "reviewer",
-        ms,
-      );
-      await refresh();
-      refreshStats();
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setBatchBusy(false);
-    }
-  }, [clean, batchBusy, reviewer, refresh, refreshStats]);
-
   useEffect(() => {
     let live = true;
     void getAuthSession()
@@ -1927,6 +1868,39 @@ export default function App() {
     };
   }, [selectedId]);
 
+  // Intake is durable and asynchronous. Keep the selected case live while the worker builds it so a
+  // reviewer never has to guess whether to refresh. Stop once rules have produced a decision, or when
+  // processing has failed honestly. Elicitation may deliberately leave a ready case "incomplete" while
+  // waiting for a customer answer, so case_state alone is not a completion signal.
+  useEffect(() => {
+    if (
+      !selectedId ||
+      !review ||
+      review.case_id !== selectedId ||
+      review.decision !== null ||
+      review.case_state === "processing_failed"
+    ) {
+      return;
+    }
+    let live = true;
+    const poll = window.setInterval(() => {
+      void getCase(selectedId)
+        .then((next) => {
+          if (!live) return;
+          setReview(next);
+          if (next.decision !== null || next.case_state === "processing_failed") {
+            window.clearInterval(poll);
+            void refresh();
+          }
+        })
+        .catch((reason) => live && setError((reason as Error).message));
+    }, 1500);
+    return () => {
+      live = false;
+      window.clearInterval(poll);
+    };
+  }, [selectedId, review, refresh]);
+
   // n/p walk the review queue (next/prev case, class-reliability-first).
   const moveCase = useCallback(
     (delta: number) => {
@@ -1949,7 +1923,6 @@ export default function App() {
     setWorkspaceReady(true);
     setSelectedId(null);
     setReview(null);
-    batchStartRef.current = Date.now(); // the triage clock for this queue starts now
     void refresh();
     refreshStats();
     void getFieldOptions()
@@ -2106,24 +2079,6 @@ export default function App() {
             <p className="register__basis">
               Needs review first · lowest confidence at the top
             </p>
-          )}
-          {/* Triage: clear the high-reliability band in one act so a reviewer only ever opens cases that
-              need them. Honest label — class-level band, not a per-case safety claim (§10). */}
-          {clean.length > 0 && (
-            <div className="triage">
-              <span className="triage__count">
-                {clean.length} with nothing flagged for review
-              </span>
-              <button
-                type="button"
-                className="triage__btn"
-                onClick={() => void approveClean()}
-                disabled={batchBusy}
-                title="approve every case with no flagged field in one act — each is still your approval (§3)"
-              >
-                {batchBusy ? "approving…" : `approve all ${clean.length} clean`}
-              </button>
-            </div>
           )}
           {loadingCases ? (
             <div className="register__empty register__empty--loading">

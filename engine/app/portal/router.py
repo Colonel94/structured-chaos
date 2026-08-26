@@ -19,6 +19,7 @@ from collections import defaultdict, deque
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Annotated
+from urllib.parse import urlsplit
 from uuid import UUID
 
 from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
@@ -106,7 +107,10 @@ def _rate_limit(request: Request, tenant_id: UUID) -> None:
 
 def _same_origin(request: Request, origin: str) -> bool:
     host = request.headers.get("host", "")
-    return origin.endswith("://" + host) if host else False
+    if not host:
+        return False
+    parsed = urlsplit(origin)
+    return parsed.scheme in {"http", "https"} and parsed.netloc == host and not parsed.path
 
 
 def _enforce_origin(request: Request, allowed: list[str]) -> str | None:
@@ -176,9 +180,21 @@ async def submit(
     body = text.strip()
     attachments: list[InboundAttachment] = []
     voice_meta: list[tuple[str, str, int]] = []
-    total = 0
+    total = len(body.encode("utf-8"))
+    if total > settings.portal_max_request_bytes:
+        raise HTTPException(status_code=413, detail="Too much submitted (max 25 MB total).")
     for f in files:
-        data = await f.read()
+        remaining = min(
+            settings.portal_max_file_bytes,
+            settings.portal_max_request_bytes - total,
+        )
+        if remaining <= 0:
+            raise HTTPException(
+                status_code=413, detail="Too much submitted (max 25 MB total)."
+            )
+        # Read only one byte past the applicable limit. ``UploadFile.read()`` without a bound can
+        # otherwise allocate an arbitrarily large chunked request before either size check runs.
+        data = await f.read(remaining + 1)
         if not data:
             continue
         name = f.filename or "upload"
@@ -191,11 +207,11 @@ async def submit(
             raise HTTPException(
                 status_code=413, detail="A file is too large (max 10 MB)."
             )
-        total += len(data)
-        if total > settings.portal_max_request_bytes:
+        if len(data) > remaining:
             raise HTTPException(
-                status_code=413, detail="Too much attached (max 25 MB total)."
+                status_code=413, detail="Too much submitted (max 25 MB total)."
             )
+        total += len(data)
         attachments.append(InboundAttachment(filename=name, mime=mime, data=data))
         voice_meta.append((name, mime, len(data)))
     if not body and not attachments:
@@ -242,6 +258,7 @@ def case_status(token: str, request: Request, factory: FactoryDep) -> Response:
     """Poll the redacted status — read-only, no internal state. RLS-scoped to the token's tenant."""
     tenant_id, case_id = _token_or_404(token)
     with tenant_session(tenant_id, factory=factory) as s:
+        origin = _enforce_origin(request, store.tenant_allowed_origins(s))
         status = store.public_status(
             s,
             case_id,
@@ -250,7 +267,7 @@ def case_status(token: str, request: Request, factory: FactoryDep) -> Response:
         )
     if status is None:
         raise HTTPException(status_code=404, detail="Case not found.")
-    return _cors(JSONResponse(status), request.headers.get("origin"))
+    return _cors(JSONResponse(status), origin)
 
 
 @router.post("/case/{token}/answer")
@@ -264,6 +281,8 @@ async def answer(
     case's contact_ref), then re-extracted on the DURABLE worker chain — the policy issues the next move.
     No portal question logic, no in-process task."""
     tenant_id, case_id = _token_or_404(token)
+    with tenant_session(tenant_id, factory=factory) as s:
+        origin = _enforce_origin(request, store.tenant_allowed_origins(s))
     _rate_limit(request, tenant_id)
     body = answer.strip()
     if not body:
@@ -292,7 +311,7 @@ async def answer(
     # Durable again: the re-ingest enqueues normalise→extract→elicit transactionally; the worker advances
     # the drill. The customer's poll picks up the next question (or completion) from persisted state.
     await ingest_messages(tenant_id, [msg], blob=get_blob(), factory=factory)
-    return _cors(JSONResponse({"ok": True}), request.headers.get("origin"))
+    return _cors(JSONResponse({"ok": True}), origin)
 
 
 # --------------------------------------------------------------------------- static widget + standalone pages

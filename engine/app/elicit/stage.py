@@ -21,7 +21,7 @@ from uuid import UUID
 
 from sqlalchemy.orm import Session, sessionmaker
 
-from ..backends.interfaces import BlobStore, LLMBackend
+from ..backends.interfaces import BlobStore, EmbeddingBackend, LLMBackend
 from ..config import settings
 from ..extract.schema import GOVERNED_KEYS
 from ..obs.logging import get_logger
@@ -237,13 +237,15 @@ async def elicit_case(
     *,
     llm: LLMBackend | None = None,
     blob: BlobStore | None = None,
+    embedder: EmbeddingBackend | None = None,
     factory: sessionmaker[Session] | None = None,
 ) -> bool:
     """Run elicitation for one case. Returns True if a decision was recorded, False if skipped
     (case absent, already past elicitation, or this extracted state was already handled).
 
     ``blob`` enables object-snapshot-on-bind (provenance); ``llm`` enables the complaint-vs-record
-    contradiction check. Both optional — without them the budget decision still runs (deterministic).
+    contradiction check; ``embedder`` enables the guarded customer-name fallback when no key resolves.
+    All are optional — without them the budget decision still runs (deterministic).
     """
     with tenant_session(tenant_id, factory=factory or SessionFactory) as session:
         state = api.get_case_elicit_state(session, case_id)
@@ -278,8 +280,22 @@ async def elicit_case(
         confirmation: str | None = None
         resolved = False
         resolution: Resolution | None = None
-        if anchor_value or contact_ref:
-            resolution = await resolve_object(session, anchor_id=anchor_value, phone=contact_ref)
+        customer_name = next(
+            (
+                value
+                for qualifier, value in api.get_emergent_values_by_head(session, case_id, "person")
+                if qualifier in {"customer", "customer_name", "complainant", "caller", "client"}
+            ),
+            None,
+        )
+        if anchor_value or contact_ref or (customer_name and embedder is not None):
+            resolution = await resolve_object(
+                session,
+                anchor_id=anchor_value,
+                phone=contact_ref,
+                name=customer_name,
+                embedder=embedder,
+            )
             if resolution.mode == "silent" and resolution.object_id is not None:
                 resolved = True
                 obj = api.get_object(session, resolution.object_id)

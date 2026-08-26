@@ -13,8 +13,8 @@ import sys
 
 sys.path.insert(0, "engine")
 
-from app.backends.cloud.blob_minio import sha256_hex  # noqa: E402
-from app.backends.registry import get_blob  # noqa: E402
+from app.backends.cloud.blob_minio import sha256_hex
+from app.backends.registry import get_blob
 
 
 async def main() -> int:

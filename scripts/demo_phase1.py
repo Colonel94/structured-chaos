@@ -17,8 +17,10 @@ immutable by design), so re-running just adds fresh demo tenants.
 from __future__ import annotations
 
 import sys
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from uuid import uuid4
+
+from sqlalchemy import text
 
 sys.path.insert(0, "engine")
 
@@ -28,7 +30,6 @@ if hasattr(sys.stdout, "reconfigure"):
 
 from app.store import api
 from app.store.db import SessionFactory, admin_session, tenant_session
-from sqlalchemy import text
 
 _PASS = "[PASS]"
 _FAIL = "[FAIL]"
@@ -50,7 +51,7 @@ def blocked(fn) -> tuple[bool, str]:  # type: ignore[no-untyped-def]
 
 
 def _now() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 def main() -> int:

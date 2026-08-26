@@ -8,6 +8,11 @@
 # Set it in .env:  SITE_ADDRESS=intake.example.com   and point the domain's A record at this host.
 # Bring the edge up:  docker compose --profile edge -f deploy/docker-compose.yml up -d caddy
 {$SITE_ADDRESS::80} {
+	# Reject oversized bodies at the public edge, including chunked uploads, before multipart parsing.
+	request_body {
+		max_size 25MB
+	}
+
 	reverse_proxy engine:8000
 
 	# Basic hardening headers for a public surface.

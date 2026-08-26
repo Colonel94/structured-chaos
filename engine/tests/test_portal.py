@@ -165,6 +165,27 @@ def test_submit_ignores_client_tenant_header(
         app.dependency_overrides.clear()
 
 
+def test_case_token_does_not_grant_cross_origin_read_access(
+    admin_session: Session,
+    app_factory: sessionmaker[Session],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _mint_tenant(admin_session, "Portal-CORS", "EK_cors")
+    client = _wire(monkeypatch, app_factory, _ScriptedLLM())
+    try:
+        created = client.post(
+            "/p/submit", data={"key": "EK_cors", "text": "my parcel arrived smashed"}
+        )
+        token = created.json()["token"]
+        blocked = client.get(
+            f"/p/case/{token}", headers={"Origin": "https://malicious.example"}
+        )
+        assert blocked.status_code == 403
+        assert "Access-Control-Allow-Origin" not in blocked.headers
+    finally:
+        app.dependency_overrides.clear()
+
+
 def test_case_token_cannot_read_another_tenants_case(
     admin_session: Session,
     app_factory: sessionmaker[Session],
@@ -275,6 +296,14 @@ def test_file_type_and_size_limits(
             "/p/submit",
             data={"key": "EK_lim"},
             files={"files": ("big.txt", b"x" * 100, "text/plain")},
+        )
+        assert r.status_code == 413
+        monkeypatch.setattr(config_mod.settings, "portal_max_file_bytes", 100)
+        monkeypatch.setattr(config_mod.settings, "portal_max_request_bytes", 50)
+        r = client.post(
+            "/p/submit",
+            data={"key": "EK_lim", "text": "x" * 40},
+            files={"files": ("total.txt", b"y" * 20, "text/plain")},
         )
         assert r.status_code == 413
     finally:

@@ -174,12 +174,20 @@ def elicit_case_task(context: JobContext, *, tenant_id: str, case_id: str) -> st
     silently. Returns the case id handled."""
     import asyncio
 
-    from .backends.registry import get_blob, get_llm
+    from .backends.registry import get_blob, get_embedding, get_llm
     from .elicit.stage import elicit_case
 
     # blob → object-snapshot-on-bind (provenance); llm → complaint-vs-record contradiction check.
     try:
-        asyncio.run(elicit_case(tenant_id, UUID(case_id), llm=get_llm(), blob=get_blob()))
+        asyncio.run(
+            elicit_case(
+                tenant_id,
+                UUID(case_id),
+                llm=get_llm(),
+                blob=get_blob(),
+                embedder=get_embedding(),
+            )
+        )
     except Exception as exc:
         _fail_case_if_terminal(context, exc, tenant_id=tenant_id, case_id=case_id, stage="elicit")
         raise

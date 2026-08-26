@@ -2,6 +2,9 @@ from __future__ import annotations
 
 import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy import text
+from sqlalchemy.engine import Engine
+from sqlalchemy.exc import ProgrammingError
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.api.routes import get_factory
@@ -66,3 +69,9 @@ def test_signup_session_and_logout(app_factory: sessionmaker[Session]) -> None:
         assert client.get("/api/cases").status_code == 401
     finally:
         app.dependency_overrides.clear()
+
+
+def test_runtime_role_cannot_bulk_read_credentials(app_engine: Engine) -> None:
+    """A compromised request path may use the exact-key auth RPCs, never dump credential/session tables."""
+    with app_engine.connect() as connection, pytest.raises(ProgrammingError):
+        connection.execute(text("SELECT password_hash FROM app_user"))

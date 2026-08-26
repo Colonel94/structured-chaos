@@ -134,44 +134,6 @@ async def test_review_stats_are_tenant_isolated(
         app.dependency_overrides.clear()
 
 
-async def test_batch_approve_commits_all_and_reports_cross_tenant_as_failed(
-    admin_session: Session, app_factory: sessionmaker[Session]
-) -> None:
-    """A batch approve commits every in-tenant case (splitting the time evenly) and reports an
-    out-of-tenant id as failed — never a leak."""
-    tenant_a = api.create_tenant(admin_session, "Batch-A")
-    tenant_b = api.create_tenant(admin_session, "Batch-B")
-    admin_session.commit()
-    a1 = await _seed_case(tenant_a, app_factory, marker="A1", sender="+97150001")
-    a2 = await _seed_case(tenant_a, app_factory, marker="A2", sender="+97150002")
-    b1 = await _seed_case(tenant_b, app_factory, marker="B1")  # belongs to another tenant
-    try:
-        client = _client(app_factory)
-        r = client.post(
-            "/api/cases/commit-batch",
-            headers={"X-Tenant-Id": str(tenant_a)},
-            json={"reviewer_id": "r1", "case_ids": [str(a1), str(a2), str(b1)], "review_ms": 20000},
-        )
-        assert r.status_code == 200
-        body = r.json()
-        assert set(body["committed"]) == {str(a1), str(a2)}
-        assert body["failed"] == [str(b1)]  # cross-tenant → fail-closed, not committed
-
-        # Both a-cases are approved and each carries an even share of the batch time (20000/3 ids).
-        for cid in (a1, a2):
-            assert (
-                client.get(f"/api/cases/{cid}", headers={"X-Tenant-Id": str(tenant_a)}).json()[
-                    "commit"
-                ]
-                is not None
-            )
-        stats = client.get("/api/review-stats", headers={"X-Tenant-Id": str(tenant_a)}).json()
-        assert stats["count"] == 2
-        assert stats["median_ms"] == round(20000 / 3)
-    finally:
-        app.dependency_overrides.clear()
-
-
 async def test_undo_within_window_reverts_then_report_gate_recloses(
     admin_session: Session, app_factory: sessionmaker[Session]
 ) -> None:

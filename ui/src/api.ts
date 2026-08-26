@@ -56,7 +56,13 @@ async function authRequest(path: string, body?: unknown): Promise<AuthSession> {
 export async function getAuthSession(): Promise<AuthSession | null> {
   const res = await fetch("/api/auth/session");
   if (res.status === 401) return null;
-  if (!res.ok) throw new Error(`Session check failed (${res.status})`);
+  if (!res.ok) {
+    throw new Error(
+      res.status === 404
+        ? "The review service is out of date. Restart it with the current release before signing in."
+        : "The review service is temporarily unavailable. Please try again.",
+    );
+  }
   const session = (await res.json()) as AuthSession;
   setTenantId(session.workspace.id);
   setReviewerId(session.user.display_name);
@@ -151,7 +157,10 @@ export function getCase(caseId: string): Promise<CaseReview> {
 
 /** Self-serve intake: submit a messy case (pasted text and/or dropped files) and get back the ids of
  *  the structured case(s). The browser sets the multipart boundary, so we must NOT set Content-Type. */
-export async function ingestCase(text: string, files: File[]): Promise<{ case_ids: string[] }> {
+export async function ingestCase(
+  text: string,
+  files: File[],
+): Promise<{ case_ids: string[]; status: "queued" }> {
   const form = new FormData();
   form.append("text", text);
   for (const f of files) form.append("files", f);
@@ -164,7 +173,7 @@ export async function ingestCase(text: string, files: File[]): Promise<{ case_id
     const detail = await res.json().catch(() => ({}));
     throw new Error(detail.detail ?? `Request failed (${res.status})`);
   }
-  return (await res.json()) as { case_ids: string[] };
+  return (await res.json()) as { case_ids: string[]; status: "queued" };
 }
 
 /** Record a reviewer's correction to one field; returns the refreshed review (projection + decision). */
@@ -226,20 +235,6 @@ export function commitCase(
     reviewer_id: reviewerId,
     review_ms: reviewMs ?? null,
     fields_edited: fieldsEdited ?? 0,
-  });
-}
-
-/** Approve several cases in one act (a whole reliability band). Each is still a per-case human approval;
- *  the batch time is split evenly across them. Returns which committed and which failed (cross-tenant). */
-export function commitBatch(
-  caseIds: string[],
-  reviewerId: string,
-  reviewMs?: number,
-): Promise<{ committed: string[]; failed: string[] }> {
-  return post(`/api/cases/commit-batch`, {
-    reviewer_id: reviewerId,
-    case_ids: caseIds,
-    review_ms: reviewMs ?? null,
   });
 }
 

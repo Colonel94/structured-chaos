@@ -1,9 +1,10 @@
 # Market readiness
 
-**Decision as of 26 August 2026: product experience ready for a controlled design-partner pilot; not
-ready for a production launch.** The first-run and reviewer experience is coherent and operational
-readiness is visible, but the evidence, identity, legal, and operating gates below remain binding. This
-is a product-readiness decision, not a judgment on the amount of implemented code.
+**Decision as of 26 August 2026: product experience ready for controlled evaluation with synthetic or
+properly redacted data; not ready for a real-customer pilot or production launch.** The first-run and
+reviewer experience is coherent and operational readiness is visible, but the evidence, identity,
+legal, and operating gates below remain binding. This is a product-readiness decision, not a judgment
+on the amount of implemented code.
 
 The acceptance-criterion ledger is maintained in
 [Winning-condition review](WINNING-CONDITION-REVIEW.md); it is the source for the current 1/6 clean
@@ -24,12 +25,18 @@ ship-scorecard result.
   HttpOnly sessions, membership-derived tenant/reviewer identity, CSRF binding and logout.
 - Added the built SPA to the production image, request/upload bounds, an intake MIME allowlist, security
   headers, CodeQL/dependency/Trivy workflows, recovery and incident runbooks, and an offline deletion path.
+- Moved reviewer intake onto the single durable worker path with automatic UI refresh; incomplete processing
+  cannot be approved and machine time no longer contaminates the human review-time metric.
+- Removed confidence-band bulk approval: every report-enabling approval now follows an individual case view.
+- Restricted the runtime DB role from bulk-reading credential/session tables, enforced portal-token CORS,
+  neutralised spreadsheet formulas in CSV exports, and completed account cleanup during tenant erasure.
+- Wired the guarded fuzzy object resolver through the real self-serve upload and elicitation paths.
 
 ## Evidence snapshot
 
 | Area | Status | Evidence / gap |
 |---|---|---|
-| Core intake and review | Built | Intake, provenance, correction, approval, undo, reports and failed-case handling exist. |
+| Core intake and review | Built | Durable intake, persisted processing state, provenance, correction, per-case approval, undo, reports and failed-case handling exist. |
 | Tenant isolation and trust controls | Strong PoC evidence | RLS, immutability, idempotency, provenance and commit-gate tests exist. CI forces DB-backed tests. |
 | Accuracy | Failing ship gate | Current tracker: category 77% vs 90%; zero-edit 28% vs 70%; desired outcome 56% vs 90%; severity 83% vs 95%. |
 | Evaluation validity | Blocked | Labels are self-authored; an independent 60–80 case held-out slice is still required. |
@@ -70,7 +77,6 @@ ship-scorecard result.
 ## P1 — required before a paid or wider launch
 
 - Meet the committed accuracy and convergence thresholds on independent, representative customer data.
-- Remove the long inline-processing wait through background intake with honest progress and retry state.
 - Build a customer/workspace admin flow: organisation creation, invite, data connection, policy setup,
   reviewer management and audit export.
 - Pin and routinely scan deployable images; avoid mutable `latest` tags in a release manifest.
@@ -91,7 +97,7 @@ usability findings.
 
 ### Stage 2 — design-partner hardening (2–4 weeks)
 
-Implement authentication, approved tenant policy, privacy/retention controls, monitoring and restore
+Complete team access, approved tenant policy, privacy/retention controls, monitoring and restore
 evidence. Select one narrow vertical and one intake path. Do not promise the six-vertical addressable
 market as shipped capability.
 

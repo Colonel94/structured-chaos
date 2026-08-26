@@ -15,7 +15,7 @@ _EVAL = Path(__file__).resolve().parents[1] / "eval"
 if str(_EVAL) not in sys.path:
     sys.path.insert(0, str(_EVAL))
 
-from score_holdout import Source, _agreement  # noqa: E402
+from score_holdout import Source, _agreement
 
 
 def _src(name: str, data: dict[str, dict[str, str]], null_ok: set[str] | None = None) -> Source:

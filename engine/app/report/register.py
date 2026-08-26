@@ -33,6 +33,19 @@ _COLUMNS = [
     "field_count",
 ]
 
+_FORMULA_PREFIXES = ("=", "+", "-", "@", "\t", "\r")
+
+
+def _safe_cell(value: Any) -> Any:
+    """Neutralise spreadsheet formulas in user-controlled CSV cells.
+
+    CSV quoting is not enough: Excel-compatible tools still execute a quoted value beginning with a
+    formula marker. A leading apostrophe is the conventional display-preserving escape.
+    """
+    if isinstance(value, str) and value.startswith(_FORMULA_PREFIXES):
+        return "'" + value
+    return value
+
 
 def render_register_csv(session: Session) -> str:
     """The register for the current tenant as a CSV string: one row per case, newest first, joined to
@@ -59,5 +72,5 @@ def render_register_csv(session: Session) -> str:
             "committed_by": commit.get("committed_by"),
             "field_count": case.get("field_count"),
         }
-        writer.writerow(row)
+        writer.writerow({key: _safe_cell(value) for key, value in row.items()})
     return out.getvalue()

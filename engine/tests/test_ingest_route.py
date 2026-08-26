@@ -1,15 +1,12 @@
-"""Phase 7 (sellability) — the self-serve intake route, end-to-end (the product surface).
+"""Phase 7 (sellability) — the self-serve intake route (the product surface).
 
-DB-backed. A stranger POSTs their messy case to ``/api/ingest`` (no developer, no script) and it comes
-back a fully structured case in the review register: governed core + a deterministic decision + per-field
-provenance, tenant-scoped (RLS). Closes the audit's "no product surface" red flag (winning-condition §7)
-and the "intake never exercised over HTTP" gap. The real Ollama/whisper are swapped for a scripted LLM +
-fake blob here (deterministic, host/CI-safe); the live model path is proven separately on the GPU.
+DB-backed. A stranger POSTs their messy case to ``/api/ingest`` (no developer, no script), receives a
+durably queued case immediately, and can open it in the tenant-scoped review register while the worker
+processes it. Stage behavior and the full queue chain are covered independently; this test guards the HTTP
+boundary against regressing to fragile/duplicate inline execution.
 """
 
 from __future__ import annotations
-
-import json
 
 import pytest
 from fastapi.testclient import TestClient
@@ -25,36 +22,13 @@ pytestmark = pytest.mark.usefixtures("pg")
 _CASE_TEXT = "chocolate cake order 4471 arrived crushed and late, I want a refund"
 
 
-class _ScriptedLLM:
-    def __init__(self) -> None:
-        self.last_usage = {"wall_ms": 5.0, "tokens_in": 100.0, "tokens_out": 40.0}
-        self._payload = json.dumps(
-            {
-                "category": "product_fault",
-                "fault": "cake crushed and late",
-                "desired_outcome": "refund",
-                "emotion_signal": "frustrated",
-                "severity_signal": "none",
-                "anchor_value": "4471",
-                "emergent_attributes": [
-                    {"head": "condition", "qualifier": "crushed", "value": "crushed"}
-                ],
-            }
-        )
-
-    async def complete(self, prompt: str, *, schema: dict[str, object] | None = None) -> str:
-        return self._payload
-
-
-async def test_ingest_route_structures_a_pasted_case_end_to_end(
+async def test_ingest_route_durably_queues_a_pasted_case(
     admin_session: Session,
     app_factory: sessionmaker[Session],
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     tenant = api.create_tenant(admin_session, "Ingest-Co")
     admin_session.commit()
-    # Swap the heavy live backends for deterministic ones (the route resolves them from the registry).
-    monkeypatch.setattr("app.backends.registry.get_llm", lambda *a, **k: _ScriptedLLM())
     monkeypatch.setattr("app.backends.registry.get_blob", lambda *a, **k: FakeBlob())
     app.dependency_overrides[get_factory] = lambda: app_factory
     try:
@@ -63,16 +37,23 @@ async def test_ingest_route_structures_a_pasted_case_end_to_end(
 
         # A stranger submits pasted text — no form, no developer.
         r = client.post("/api/ingest", headers=headers, files={"text": (None, _CASE_TEXT)})
-        assert r.status_code == 200
+        assert r.status_code == 202
+        assert r.json()["status"] == "queued"
         case_ids = r.json()["case_ids"]
         assert len(case_ids) == 1
 
-        # It comes back structured: governed core + a deterministic decision, in the register.
+        # The case exists before extraction/questions and is visible immediately. The durable worker is
+        # now the only component allowed to advance it; no inline extraction or decision is fabricated.
         review = client.get(f"/api/cases/{case_ids[0]}", headers=headers).json()
-        fields = {f["field_path"]: f for f in review["fields"]}
-        assert fields["category"]["value"] == "product_fault"
-        assert fields["category"]["provenance"]  # per-field provenance attached
-        assert review["decision"] is not None  # priority/SLA computed with no manual trigger
+        assert review["case_state"] == "created"
+        assert review["fields"] == []
+        assert review["decision"] is None
+        not_ready = client.post(
+            f"/api/cases/{case_ids[0]}/commit",
+            headers=headers,
+            json={"reviewer_id": "r1"},
+        )
+        assert not_ready.status_code == 409
         assert any(
             c["case_id"] == case_ids[0]
             for c in client.get("/api/cases", headers=headers).json()["cases"]

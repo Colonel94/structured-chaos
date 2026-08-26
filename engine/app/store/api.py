@@ -1393,6 +1393,22 @@ def get_field_values(session: Session, case_id: UUID, field_paths: Sequence[str]
     return {str(r[0]): str(r[1]) for r in rows if r[1] not in (None, "")}
 
 
+def get_emergent_values_by_head(session: Session, case_id: UUID, head: str) -> list[tuple[str, str]]:
+    """Current ``(qualifier, value)`` pairs for one typed emergent head on a case."""
+    rows = session.execute(
+        text("""
+            SELECT COALESCE(e.qualifier, ''), f.value #>> '{}'
+              FROM field_current f
+              JOIN emergent_field e
+                ON e.tenant_id = f.tenant_id AND e.field_name = f.field_path
+             WHERE f.case_id = :cid AND e.head = :head AND f.value IS NOT NULL
+             ORDER BY e.qualifier NULLS LAST, e.field_name
+        """),
+        {"cid": case_id, "head": head},
+    ).all()
+    return [(str(r[0]), str(r[1])) for r in rows if r[1] not in (None, "")]
+
+
 def get_emotion_history(
     session: Session, case_id: UUID, *, within_hours: float | None = None
 ) -> list[str]:

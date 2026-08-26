@@ -20,7 +20,7 @@ test("renders the review shell with secure account creation", () => {
 
 test("switches between account creation and sign in", () => {
   render(<App />);
-  fireEvent.click(screen.getByRole("tab", { name: /Sign in/i }));
+  fireEvent.click(screen.getByRole("button", { name: /Sign in/i }));
   expect(screen.queryByLabelText(/workspace name/i)).toBeNull();
   expect(screen.getByRole("heading", { name: /Welcome back/i })).toBeDefined();
 });

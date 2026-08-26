@@ -13,9 +13,10 @@ from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.api.routes import get_factory
+from app.backends.fake import FakeEmbedding
 from app.main import app
 from app.resolve import resolve_object
-from app.resolve.upload import ObjectFileError, parse_object_file
+from app.resolve.upload import MAX_OBJECT_ROWS, ObjectFileError, parse_object_file
 from app.store import api
 from app.store.db import tenant_session
 
@@ -42,13 +43,21 @@ def test_adapter_parses_csv_json_jsonl_and_rejects_garbage() -> None:
     assert len(parse_object_file("o.jsonl", b'{"order_id":"A1"}\n{"order_id":"A2"}\n')) == 2
     with pytest.raises(ObjectFileError):
         parse_object_file("o.json", b"not json at all {[")
+    too_many = ("id\n" + "\n".join(str(i) for i in range(MAX_OBJECT_ROWS + 1))).encode()
+    with pytest.raises(ObjectFileError, match="split it"):
+        parse_object_file("too-many.csv", too_many)
+    with pytest.raises(ObjectFileError, match="longer than"):
+        parse_object_file("wide.json", b'[{"note":"' + b"x" * 32_001 + b'"}]')
 
 
 async def test_upload_route_ingests_is_idempotent_and_resolves_an_anchor(
-    admin_session: Session, app_factory: sessionmaker[Session]
+    admin_session: Session,
+    app_factory: sessionmaker[Session],
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     tenant = api.create_tenant(admin_session, "Orders-Co")
     admin_session.commit()
+    monkeypatch.setattr("app.backends.registry.get_embedding", lambda *a, **k: FakeEmbedding())
 
     app.dependency_overrides[get_factory] = lambda: app_factory
     try:
@@ -65,6 +74,7 @@ async def test_upload_route_ingests_is_idempotent_and_resolves_an_anchor(
         assert r.status_code == 200
         body = r.json()
         assert body["ingested"] == 4 and body["total"] == 4
+        assert body["embedded"] == 4
         assert set(body["key_fields"]) == {"order_id", "phone"}  # profiler found the identifiers
 
         # Re-uploading the same export is a pure no-op (idempotent).
