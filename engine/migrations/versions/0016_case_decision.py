@@ -59,7 +59,9 @@ def upgrade() -> None:
             FOREIGN KEY (tenant_id, case_id) REFERENCES case_record (tenant_id, id)
         )
         """)
-    op.execute("CREATE INDEX ix_case_decision_due ON case_decision (tenant_id, sla_response_due_at)")
+    op.execute(
+        "CREATE INDEX ix_case_decision_due ON case_decision (tenant_id, sla_response_due_at)"
+    )
 
     op.execute("ALTER TABLE case_decision ENABLE ROW LEVEL SECURITY")
     op.execute("ALTER TABLE case_decision FORCE ROW LEVEL SECURITY")

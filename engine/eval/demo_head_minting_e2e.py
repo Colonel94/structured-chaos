@@ -46,7 +46,10 @@ from app.store import api
 from app.store.db import admin_session, tenant_session
 
 _FIX = Path(__file__).resolve().parent / "fixtures" / "cfpb_sample.jsonl"
-_CITE = re.compile(r"U\.?S\.?C|CFR|FCRA|FDCPA|Fair Credit|Fair Debt|Regulation [A-Z]", re.I)
+_CITE = re.compile(
+    r"U\.?S\.?C|CFR|FCRA|FDCPA|Fair Credit|Fair Debt|Regulation [A-Z]",
+    re.IGNORECASE,
+)
 _DT = datetime(2026, 8, 17, 10, 0, tzinfo=UTC)
 
 
@@ -84,7 +87,9 @@ async def main() -> int:
 
     rows = [json.loads(x) for x in _FIX.read_text(encoding="utf-8").splitlines() if x.strip()]
     cases = [r for r in rows if _CITE.search(r["narrative"])][:n]
-    print(f"=== FULL-PIPELINE HEAD-MINTING DEMO — {len(cases)} real citation-bearing CFPB cases ===")
+    print(
+        f"=== FULL-PIPELINE HEAD-MINTING DEMO — {len(cases)} real citation-bearing CFPB cases ==="
+    )
 
     from app.store.db import SessionFactory as factory
 
@@ -140,7 +145,9 @@ async def main() -> int:
     with tenant_session(tid, factory=factory) as s:
         glosses = api.list_minted_head_glosses(s)
     if not heads:
-        print("    NO head minted — the citation cluster didn't reach the recurrence floor at this n.")
+        print(
+            "    NO head minted — the citation cluster didn't reach the recurrence floor at this n."
+        )
         print(f"    (escape-valve facts={len(before)}; try more cases: `... {n + 6}`)")
         return 0
     for head, support, affected in heads:
@@ -159,7 +166,9 @@ async def main() -> int:
     print("\n===== RESULT — an emergent column was BORN and is now USED, zero-config =====")
     for head, support, _cs in heads:
         under = _facts_under(tid, head, factory)
-        print(f"  MINTED column '{head}' (emerged from {support} recurring cases) now holds {len(under)} facts")
+        print(
+            f"  MINTED column '{head}' (emerged from {support} recurring cases) now holds {len(under)} facts"
+        )
         print(f"    gloss: {glosses.get(head)}")
         for _cid, val in under[:12]:
             print(f"      • {val[:58]}")

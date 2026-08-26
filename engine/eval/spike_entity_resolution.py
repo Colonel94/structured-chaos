@@ -21,6 +21,7 @@ Policy (encodes "a checkable identifier beats an arguable one", mirroring the v2
 Run: deterministic core (no GPU) ->  uv run python eval/spike_entity_resolution.py
      with BGE fuzzy-name layer     ->  uv run --group embed python eval/spike_entity_resolution.py --fuzzy
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -33,14 +34,14 @@ if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8")  # type: ignore[union-attr]
 
 _STORE = Path(__file__).resolve().parent / "fixtures" / "spike_bakery_objects.jsonl"
-MATCH_TAU = 0.72   # BGE cosine floor for a name to be a candidate at all
-MARGIN = 0.06      # top candidate must beat the 2nd by this much to be SILENT on name alone
+MATCH_TAU = 0.72  # BGE cosine floor for a name to be a candidate at all
+MARGIN = 0.06  # top candidate must beat the 2nd by this much to be SILENT on name alone
 
 
 @dataclass
 class Resolution:
-    mode: str                       # "silent" | "confirm" | "elicit"
-    object_id: str | None = None    # the silently-bound order, if any
+    mode: str  # "silent" | "confirm" | "elicit"
+    object_id: str | None = None  # the silently-bound order, if any
     candidates: list[str] = field(default_factory=list)
     reason: str = ""
 
@@ -67,30 +68,50 @@ def resolve(
             # sender's phone is a CONTRADICTION (a typo can collide with someone else's valid order)
             # -> never silent-bind; surface it (winning-condition: acting on the wrong order > asking).
             if phone and o["phone"] != phone:
-                return Resolution("confirm", candidates=[o["order_id"]],
-                                  reason="order_id and sender phone point to DIFFERENT orders — contradiction, do NOT silent-bind")
-            return Resolution("silent", o["order_id"],
-                              reason="order_id exact & unique" + (", phone agrees" if phone else ""))
+                return Resolution(
+                    "confirm",
+                    candidates=[o["order_id"]],
+                    reason="order_id and sender phone point to DIFFERENT orders — contradiction, do NOT silent-bind",
+                )
+            return Resolution(
+                "silent",
+                o["order_id"],
+                reason="order_id exact & unique" + (", phone agrees" if phone else ""),
+            )
         if len(hits) == 0:
-            return Resolution("confirm", reason=f"order_id '{order_id}' not found — do NOT fuzzy-bind a typo")
-        return Resolution("confirm", candidates=[o["order_id"] for o in hits], reason="order_id non-unique")
+            return Resolution(
+                "confirm", reason=f"order_id '{order_id}' not found — do NOT fuzzy-bind a typo"
+            )
+        return Resolution(
+            "confirm", candidates=[o["order_id"] for o in hits], reason="order_id non-unique"
+        )
     # 2. phone
     if phone:
         hits = [o for o in store if o["phone"] == phone]
         if len(hits) == 1:
             return Resolution("silent", hits[0]["order_id"], reason="phone unique")
         if len(hits) > 1:
-            return Resolution("confirm", candidates=[o["order_id"] for o in hits], reason="phone shared by multiple orders")
+            return Resolution(
+                "confirm",
+                candidates=[o["order_id"] for o in hits],
+                reason="phone shared by multiple orders",
+            )
     # 3. name (fuzzy) — only if BGE scores were supplied
     if name and name_scores:
         ranked = sorted(name_scores.items(), key=lambda kv: kv[1], reverse=True)
         top_id, top = ranked[0]
         second = ranked[1][1] if len(ranked) > 1 else 0.0
         if top >= MATCH_TAU and (top - second) >= MARGIN:
-            return Resolution("silent", top_id, reason=f"name unique (cos={top:.2f}, margin={top-second:.2f})")
+            return Resolution(
+                "silent", top_id, reason=f"name unique (cos={top:.2f}, margin={top-second:.2f})"
+            )
         if top >= MATCH_TAU:
             near = [oid for oid, s in ranked if top - s < MARGIN]
-            return Resolution("confirm", candidates=near, reason=f"name ambiguous (cos={top:.2f}, 2nd={second:.2f})")
+            return Resolution(
+                "confirm",
+                candidates=near,
+                reason=f"name ambiguous (cos={top:.2f}, 2nd={second:.2f})",
+            )
     # 4. nothing to resolve on
     return Resolution("elicit", reason="no usable anchor — open elicitation")
 
@@ -115,29 +136,82 @@ def rule_of_three_upper(n_binds: int, wrong: int) -> str:
 
 # ---- planted hard cases (a DEFECT PROBE, not the gate): (label, kwargs, expected_mode, expected_object) ----
 CASES: list[tuple[str, dict, str, str | None]] = [
-    ("exact order_id, unique",        {"order_id": "BK-10236"},           "silent",  "BK-10236"),
-    ("exact order_id #2, unique",     {"order_id": "BK-10239"},           "silent",  "BK-10239"),
-    ("phone unique",                  {"phone": "+447700900668"},         "silent",  "BK-10236"),
-    ("phone shared (2 orders)",       {"phone": "+447700900112"},         "confirm", None),
-    ("phone shared (2 orders) #2",    {"phone": "+447700900447"},         "confirm", None),
-    ("transposed-digit order_id",     {"order_id": "BK-10321"},           "confirm", None),
-    ("nonexistent order_id",          {"order_id": "BK-99999"},           "confirm", None),
-    ("no anchor at all",              {},                                 "elicit",  None),
-    ("phone unique #2",               {"phone": "+447700900995"},         "silent",  "BK-10239"),
-    ("order_id lowercase, unique",    {"order_id": "bk-10242"},           "silent",  "BK-10242"),
+    ("exact order_id, unique", {"order_id": "BK-10236"}, "silent", "BK-10236"),
+    ("exact order_id #2, unique", {"order_id": "BK-10239"}, "silent", "BK-10239"),
+    ("phone unique", {"phone": "+447700900668"}, "silent", "BK-10236"),
+    ("phone shared (2 orders)", {"phone": "+447700900112"}, "confirm", None),
+    ("phone shared (2 orders) #2", {"phone": "+447700900447"}, "confirm", None),
+    ("transposed-digit order_id", {"order_id": "BK-10321"}, "confirm", None),
+    ("nonexistent order_id", {"order_id": "BK-99999"}, "confirm", None),
+    ("no anchor at all", {}, "elicit", None),
+    ("phone unique #2", {"phone": "+447700900995"}, "silent", "BK-10239"),
+    ("order_id lowercase, unique", {"order_id": "bk-10242"}, "silent", "BK-10242"),
     # --- fuzzy name cases (need --fuzzy / BGE) ---
-    ("name near-dup (Sarah/Sara)",    {"name": "Sarah Whitfield"},        "confirm", None),
-    ("name near-dup (Mohammed/Muhammad)", {"name": "Mohammed Ali"},       "confirm", None),
-    ("name unique",                   {"name": "Priya Nair"},             "silent",  "BK-10236"),
+    ("name near-dup (Sarah/Sara)", {"name": "Sarah Whitfield"}, "confirm", None),
+    ("name near-dup (Mohammed/Muhammad)", {"name": "Mohammed Ali"}, "confirm", None),
+    ("name unique", {"name": "Priya Nair"}, "silent", "BK-10236"),
 ]
 
 
-_FIRST = ["Sarah", "Sara", "James", "Aisha", "Tom", "Priya", "Daniel", "Emily", "Mohammed", "Muhammad",
-          "Grace", "Liam", "Olivia", "Noah", "Fatima", "Henry", "Chloe", "Jack", "Isabella", "William",
-          "Sophia", "Ava", "Ethan", "Mia", "Omar", "Layla", "Yusuf", "Zara", "Ryan", "Nina"]
-_LAST = ["Whitfield", "O'Connor", "Rahman", "Baker", "Nair", "Cohen", "Clarke", "Ali", "Thompson",
-         "Murphy", "Bennett", "Williams", "Khan", "Scott", "Evans", "Robinson", "Ward", "Hughes",
-         "Turner", "Mitchell", "Patel", "Ahmed", "Foster", "Brooks", "Reed"]
+_FIRST = [
+    "Sarah",
+    "Sara",
+    "James",
+    "Aisha",
+    "Tom",
+    "Priya",
+    "Daniel",
+    "Emily",
+    "Mohammed",
+    "Muhammad",
+    "Grace",
+    "Liam",
+    "Olivia",
+    "Noah",
+    "Fatima",
+    "Henry",
+    "Chloe",
+    "Jack",
+    "Isabella",
+    "William",
+    "Sophia",
+    "Ava",
+    "Ethan",
+    "Mia",
+    "Omar",
+    "Layla",
+    "Yusuf",
+    "Zara",
+    "Ryan",
+    "Nina",
+]
+_LAST = [
+    "Whitfield",
+    "O'Connor",
+    "Rahman",
+    "Baker",
+    "Nair",
+    "Cohen",
+    "Clarke",
+    "Ali",
+    "Thompson",
+    "Murphy",
+    "Bennett",
+    "Williams",
+    "Khan",
+    "Scott",
+    "Evans",
+    "Robinson",
+    "Ward",
+    "Hughes",
+    "Turner",
+    "Mitchell",
+    "Patel",
+    "Ahmed",
+    "Foster",
+    "Brooks",
+    "Reed",
+]
 
 
 def _synth_store(n_orders: int, rng) -> tuple[list[dict], set[str]]:
@@ -154,15 +228,24 @@ def _synth_store(n_orders: int, rng) -> tuple[list[dict], set[str]]:
             phone = f"+4477009{rng.randint(0, 999999):06d}"
         phones.append(phone)
         name = f"{rng.choice(_FIRST)} {rng.choice(_LAST)}"
-        store.append({"order_id": oid, "phone": phone, "customer_name": name,
-                      "items": "order", "slot": "2026-08-18 15:00", "delivered_at": "2026-08-18 15:30"})
+        store.append(
+            {
+                "order_id": oid,
+                "phone": phone,
+                "customer_name": name,
+                "items": "order",
+                "slot": "2026-08-18 15:00",
+                "delivered_at": "2026-08-18 15:30",
+            }
+        )
     shared = {p for p in phones if phones.count(p) > 1}
     return store, shared
 
 
 def _synth_cases(store: list[dict], shared: set[str], rng, *, include_name: bool):
     """Realistic WhatsApp-channel case mix with OBJECTIVE ground truth.
-    Yields (kwargs, gt_mode, gt_object). The sender phone is (almost) always known on this channel."""
+    Yields (kwargs, gt_mode, gt_object). The sender phone is (almost) always known on this channel.
+    """
     by_phone: dict[str, list[dict]] = {}
     for o in store:
         by_phone.setdefault(o["phone"], []).append(o)
@@ -170,22 +253,30 @@ def _synth_cases(store: list[dict], shared: set[str], rng, *, include_name: bool
     for o in store:
         r = rng.random()
         uniq = o["phone"] not in shared
-        if r < 0.45:                                   # phone-only (the WhatsApp default anchor)
+        if r < 0.45:  # phone-only (the WhatsApp default anchor)
             if uniq:
                 cases.append(({"phone": o["phone"]}, "silent", o["order_id"]))
             else:
                 cases.append(({"phone": o["phone"]}, "confirm", None))
-        elif r < 0.62:                                 # quotes the order id (+ phone) -> strong
-            cases.append(({"order_id": o["order_id"], "phone": o["phone"]}, "silent", o["order_id"]))
-        elif r < 0.72:                                 # typo'd order id -> must NOT bind
+        elif r < 0.62:  # quotes the order id (+ phone) -> strong
+            cases.append(
+                ({"order_id": o["order_id"], "phone": o["phone"]}, "silent", o["order_id"])
+            )
+        elif r < 0.72:  # typo'd order id -> must NOT bind
             typo = o["order_id"][:-1] + str((int(o["order_id"][-1]) + 5) % 10)
             cases.append(({"order_id": typo, "phone": o["phone"]}, "confirm", None))
-        elif r < 0.82:                                 # unknown sender, no id -> elicit
+        elif r < 0.82:  # unknown sender, no id -> elicit
             cases.append(({"phone": f"+4477000{rng.randint(0,999999):06d}"}, "elicit", None))
-        elif include_name:                             # name-only (web form; the fuzzy path)
+        elif include_name:  # name-only (web form; the fuzzy path)
             cases.append(({"name": o["customer_name"]}, "silent", o["order_id"]))
         else:
-            cases.append(({"phone": o["phone"]}, "silent" if uniq else "confirm", o["order_id"] if uniq else None))
+            cases.append(
+                (
+                    {"phone": o["phone"]},
+                    "silent" if uniq else "confirm",
+                    o["order_id"] if uniq else None,
+                )
+            )
     rng.shuffle(cases)
     return cases
 
@@ -199,7 +290,8 @@ async def _bge_scores(store: list[dict], name: str) -> dict[str, float]:
     embedder = get_embedding()
     names = [o["customer_name"] for o in store]
     vecs = await embedder.embed([name] + names)
-    q = np.array(vecs[0]); mat = np.array(vecs[1:])
+    q = np.array(vecs[0])
+    mat = np.array(vecs[1:])
     q = q / (np.linalg.norm(q) + 1e-9)
     mat = mat / (np.linalg.norm(mat, axis=1, keepdims=True) + 1e-9)
     sims = mat @ q
@@ -211,16 +303,25 @@ def _score(cases, results):
     """Return the PAIR + trust counts over (gt_mode, gt_object) vs Resolution results."""
     total = len(cases)
     silent = [(c, r) for c, r in zip(cases, results) if r.mode == "silent"]
-    correct = sum(1 for (_, _, gt_obj), r in silent if r.object_id == gt_obj)  # gt_obj is 3rd of case tuple
+    correct = sum(
+        1 for (_, _, gt_obj), r in silent if r.object_id == gt_obj
+    )  # gt_obj is 3rd of case tuple
     wrong = len(silent) - correct
     should_silent = sum(1 for _, m, _ in cases if m == "silent")
-    got_when_should = sum(1 for (_, m, gt_obj), r in zip(cases, results)
-                          if m == "silent" and r.mode == "silent" and r.object_id == gt_obj)
+    got_when_should = sum(
+        1
+        for (_, m, gt_obj), r in zip(cases, results)
+        if m == "silent" and r.mode == "silent" and r.object_id == gt_obj
+    )
     return {
-        "total": total, "silent": len(silent), "correct": correct, "wrong": wrong,
+        "total": total,
+        "silent": len(silent),
+        "correct": correct,
+        "wrong": wrong,
         "rate": len(silent) / total if total else 0,
         "accuracy": correct / len(silent) if silent else 0,
-        "should_silent": should_silent, "recall": got_when_should / should_silent if should_silent else 0,
+        "should_silent": should_silent,
+        "recall": got_when_should / should_silent if should_silent else 0,
     }
 
 
@@ -234,6 +335,7 @@ async def _run(store, cases, *, fuzzy):
 
 async def main() -> int:
     import random
+
     fuzzy = "--fuzzy" in sys.argv
 
     # ---- 1. DEFECT PROBE (hand-authored planted cases; NOT the gate — reported as "no failures at n") ----
@@ -243,37 +345,59 @@ async def main() -> int:
     res = await _run(store, probe, fuzzy=fuzzy)
     binds = [(c, r) for c, r in zip(probe, res) if r.mode == "silent"]
     wrong = sum(1 for (_, _, gt), r in binds if r.object_id != gt or gt is None)
-    behaviour_ok = sum(1 for (_, m, gt), r in zip(probe, res)
-                       if (r.mode == m) or (m in {"confirm", "elicit"} and r.mode in {"confirm", "elicit"}))
+    behaviour_ok = sum(
+        1
+        for (_, m, gt), r in zip(probe, res)
+        if (r.mode == m) or (m in {"confirm", "elicit"} and r.mode in {"confirm", "elicit"})
+    )
     print(f"DEFECT PROBE — {len(probe)} planted hard cases (fuzzy={'ON' if fuzzy else 'OFF'}):")
     for lbl, (_, m, gt), r in zip(labels, probe, res):
-        got = r.mode + (f"->{r.object_id}" if r.object_id else (f"?{r.candidates}" if r.candidates else ""))
+        got = r.mode + (
+            f"->{r.object_id}" if r.object_id else (f"?{r.candidates}" if r.candidates else "")
+        )
         ok = (r.mode == m) or (m in {"confirm", "elicit"} and r.mode in {"confirm", "elicit"})
         print(f"  {'OK ' if ok else 'XX '}{lbl:34s} expect={m:7s} got={got}")
-    print(f"  -> behaviour {behaviour_ok}/{len(probe)}; silent binds {rule_of_three_upper(len(binds), wrong)}")
+    print(
+        f"  -> behaviour {behaviour_ok}/{len(probe)}; silent binds {rule_of_three_upper(len(binds), wrong)}"
+    )
     print("  (this is DEFECT DETECTION at small n, NOT a 99% claim.)\n")
 
     # ---- 2. GATE MEASUREMENT (scaled synthetic, objective ground truth; report the PAIR) ----
     rng = random.Random(42)
-    n_orders = 60 if fuzzy else 700   # fuzzy embeds every name (GPU) -> smaller; deterministic -> big n (>=300 clean binds for a real >=99% bound)
+    n_orders = (
+        60 if fuzzy else 700
+    )  # fuzzy embeds every name (GPU) -> smaller; deterministic -> big n (>=300 clean binds for a real >=99% bound)
     sstore, shared = _synth_store(n_orders, rng)
     scases = _synth_cases(sstore, shared, rng, include_name=fuzzy)
     sres = await _run(sstore, scases, fuzzy=fuzzy)
     m = _score(scases, sres)
-    print(f"GATE MEASUREMENT — {m['total']} synthetic cases over {n_orders} orders "
-          f"({len(shared)} shared phones; name-only path {'ON' if fuzzy else 'OFF'}):")
-    print(f"  silent-match RATE     : {m['silent']}/{m['total']} = {m['rate']:.0%}   (target >= 60%; abstention tanks this)")
-    print(f"  silent-match ACCURACY : {rule_of_three_upper(m['silent'], m['wrong'])}   (target >= 99%)")
+    print(
+        f"GATE MEASUREMENT — {m['total']} synthetic cases over {n_orders} orders "
+        f"({len(shared)} shared phones; name-only path {'ON' if fuzzy else 'OFF'}):"
+    )
+    print(
+        f"  silent-match RATE     : {m['silent']}/{m['total']} = {m['rate']:.0%}   (target >= 60%; abstention tanks this)"
+    )
+    print(
+        f"  silent-match ACCURACY : {rule_of_three_upper(m['silent'], m['wrong'])}   (target >= 99%)"
+    )
     print(f"  WRONG silent binds    : {m['wrong']}   (the trust gate — must be 0)")
     print(f"  recall on resolvable  : {m['recall']:.0%}  (of cases that SHOULD silently resolve)")
     print("\n  READ THE PAIR TOGETHER: high accuracy + low rate = abstention gaming = regression.")
     if m["silent"] < 300:
-        print(f"  NOTE: {m['silent']} clean binds < ~300, so this run cannot yet CLAIM >=99% — it bounds error at ~{3/max(m['silent'],1):.1%}.")
+        print(
+            f"  NOTE: {m['silent']} clean binds < ~300, so this run cannot yet CLAIM >=99% — it bounds error at ~{3/max(m['silent'],1):.1%}."
+        )
     verdict = "no-defect" if m["wrong"] == 0 else "FAIL"
-    print(f"\n  VERDICT: {verdict} — "
-          + (f"0 wrong binds across {m['silent']} silent matches; rate {m['rate']:.0%}. "
-             + ("Fuzzy layer is the real rate test." if not fuzzy else "Name-only path priced in.")
-             if m["wrong"] == 0 else "silent match bound a WRONG object — unsafe."))
+    print(
+        f"\n  VERDICT: {verdict} — "
+        + (
+            f"0 wrong binds across {m['silent']} silent matches; rate {m['rate']:.0%}. "
+            + ("Fuzzy layer is the real rate test." if not fuzzy else "Name-only path priced in.")
+            if m["wrong"] == 0
+            else "silent match bound a WRONG object — unsafe."
+        )
+    )
     return 0 if m["wrong"] == 0 else 1
 
 

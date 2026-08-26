@@ -167,7 +167,6 @@ async def main() -> int:
     canon_support: dict[tuple[str, str], int] = Counter()
     for (head, q), sup in ((k, support[k[0]][k[1]]) for k in canonical_of):
         canon_support[(head, canonical_of[(head, q)])] += sup
-    canonicals = set(canonical_of.values())
     n_canon = len({(h, canonical_of[(h, q)]) for (h, q) in canonical_of})
     merged = len(merges)
     dup_rate = merged / total_variants if total_variants else 0.0
@@ -227,7 +226,9 @@ async def main() -> int:
         (h, q) for h in heads for q in first_seen[h] if support[h][q] >= PROMOTE_QUALIFIER_M
     ]
     max_sup = max(canon_support.values()) if canon_support else 0
-    ge = {k: sum(1 for v in canon_support.values() if v >= k) for k in (2, 3, 4, PROMOTE_QUALIFIER_M)}
+    ge = {
+        k: sum(1 for v in canon_support.values() if v >= k) for k in (2, 3, 4, PROMOTE_QUALIFIER_M)
+    }
     print(
         f"\n-- distance to the qualifier-promotion gate --\n"
         f"  max qualifier support (post-merge): {max_sup} case(s)   canonical variants recurring "
@@ -251,7 +252,7 @@ async def main() -> int:
             "0% pass here would be trivial/substance-free (§10). The 200-case gate needs a corpus where "
             "qualifiers actually recur; these are dominated by hapax values (hygiene note below)."
         )
-        for (h, c) in promo_canon:
+        for h, c in promo_canon:
             print(f"    promoted column: [{h}] {c!r}  (support {canon_support[(h, c)]})")
     else:
         # ≥2 promoted canonicals: check for dedup-missed synonym pairs UNDER THE SAME HEAD.
@@ -275,7 +276,7 @@ async def main() -> int:
         for head, frm, into, sim, method in sorted(merges, key=lambda x: -x[3])[:25]:
             print(f"  [{head}] {frm!r} -> {into!r}   sim={sim:.3f} ({method})")
     if near_miss:
-        print(f"\n-- gray-band NOT merged (fail-safe, over-merge is worse than a dup) up to 15 --")
+        print("\n-- gray-band NOT merged (fail-safe, over-merge is worse than a dup) up to 15 --")
         for head, q, other, sim in sorted(near_miss, key=lambda x: -x[3])[:15]:
             print(f"  [{head}] {q!r} kept vs {other!r}   sim={sim:.3f}")
 

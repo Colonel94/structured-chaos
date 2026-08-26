@@ -41,9 +41,13 @@ gold = {
 v15, v16 = _preds(_FIX / "cfpb_extractions_v15.jsonl"), _preds(_FIX / "cfpb_extractions.jsonl")
 
 print("                     v15        v16")
-for name, p in (("overall accuracy", None), ("record_accuracy recall", "record_accuracy"),
-                ("service_fault recall", "service_fault"), ("billing_charge recall", "billing_charge"),
-                ("access_availability recall", "access_availability")):
+for name, p in (
+    ("overall accuracy", None),
+    ("record_accuracy recall", "record_accuracy"),
+    ("service_fault recall", "service_fault"),
+    ("billing_charge recall", "billing_charge"),
+    ("access_availability recall", "access_availability"),
+):
     if p is None:
         a5, t = _acc(v15, gold)
         a6, _ = _acc(v16, gold)
@@ -53,6 +57,8 @@ for name, p in (("overall accuracy", None), ("record_accuracy recall", "record_a
     print(f"  {name:26} {a5}/{t:<3}     {a6}/{t}")
 
 for tag, preds in (("v15", v15), ("v16", v16)):
-    leak = sum(1 for i, g in gold.items() if g == "service_fault" and preds.get(i) == "record_accuracy")
+    leak = sum(
+        1 for i, g in gold.items() if g == "service_fault" and preds.get(i) == "record_accuracy"
+    )
     print(f"  service→record leak ({tag}): {leak}")
 print("\nv16 dist:", dict(Counter(v16.values()).most_common()))

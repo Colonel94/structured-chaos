@@ -86,7 +86,9 @@ def upgrade() -> None:
         )
         """)
     op.execute("CREATE INDEX ix_citation_tenant ON extraction_citation (tenant_id)")
-    op.execute("CREATE INDEX ix_citation_extraction ON extraction_citation (tenant_id, extraction_id)")
+    op.execute(
+        "CREATE INDEX ix_citation_extraction ON extraction_citation (tenant_id, extraction_id)"
+    )
 
     # Citations are provenance → append-only + immutable, like the logs they cite.
     op.execute("""

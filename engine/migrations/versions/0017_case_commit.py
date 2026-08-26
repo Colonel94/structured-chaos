@@ -43,9 +43,7 @@ def upgrade() -> None:
         "CHECK ((committed_at IS NULL) = (committed_by IS NULL))"
     )
     # The reviewer stamps only these two columns; case_state's grant already exists (0001).
-    op.execute(
-        f"GRANT UPDATE (committed_at, committed_by) ON case_record TO {_APP_ROLE}"
-    )
+    op.execute(f"GRANT UPDATE (committed_at, committed_by) ON case_record TO {_APP_ROLE}")
 
 
 def downgrade() -> None:

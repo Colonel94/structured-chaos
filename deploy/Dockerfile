@@ -39,6 +39,12 @@ RUN cd engine && uv pip install --system \
       --group embed --group ocr --group pdf --group report --group vad \
       .
 
+RUN groupadd --system --gid 10001 intake \
+    && useradd --system --uid 10001 --gid intake --home-dir /app --shell /usr/sbin/nologin intake \
+    && chown -R intake:intake /app
+
+USER intake
+
 WORKDIR /app/engine
 ENV PYTHONPATH=/app/engine
 ENV UI_DIST_DIR=/app/ui-dist
