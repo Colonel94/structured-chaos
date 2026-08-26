@@ -210,14 +210,19 @@ You have won when:
 
 Fill this in the day you think you are finished. Do not fill it in optimistically.
 
+**Current evidence audit (26 August 2026):** see
+[`docs/WINNING-CONDITION-REVIEW.md`](docs/WINNING-CONDITION-REVIEW.md) for the criterion-by-criterion
+ledger. The table below is intentionally filled before launch because the current decision is an honest
+no-go, not a claim that the product is finished.
+
 | Gate | Status | Evidence |
 |---|---|---|
-| Setup gate (section 2) — all boxes | | |
-| Seven wow moments (section 3) | | |
-| Quantitative thresholds (section 4) | | |
-| Trust gates (section 5) — all boxes | | |
-| No red flags present (section 7) | | |
-| External gate with 3 strangers (section 8) | | |
+| Setup gate (section 2) — all boxes | **PARTIAL / FAIL** | Guided pilot access + self-serve upload built; stranger timing, no-help use and builder absence unproven. |
+| Seven wow moments (section 3) | **PARTIAL** | Most mechanisms built; no unprompted external observation; convergence fails and voice parity is unmeasured. |
+| Quantitative thresholds (section 4) | **FAIL** | Accuracy and convergence miss; multiple human/data rows remain unmeasured. |
+| Trust gates (section 5) — all boxes | **MET IN CODE** | Automated evidence covers provenance, commit gate, deterministic rules, RLS, immutability, corrections, idempotency and log redaction. |
+| No red flags present (section 7) | **NOT CLEAN** | Convergence, review speed, external own-data use, no-builder-dependency and language parity are not clean. |
+| External gate with 3 strangers (section 8) | **NOT RUN** | No qualifying silent-observer session recorded. |
 
 **Ship when all six rows are clean. Not before, and not one week after.**
 

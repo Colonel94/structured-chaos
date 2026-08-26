@@ -1,5 +1,11 @@
 # TEST-PLAN.md — Per-phase test plan for the PoC build
 
+> **Status-note — 2026-08-26:** the phase labels and unchecked implementation bullets below are the
+> original execution plan and have not been kept current with every later build. Do not infer current
+> readiness from an unchecked box here. Use `docs/WINNING-CONDITION-REVIEW.md` for the evidence ledger,
+> `engine/eval/PHASE8_SCORECARD.md` for measured thresholds, and the automated test files named here for
+> implementation evidence. A later documentation-only pass should reconcile every historical checkbox.
+
 *The working test checklist for the Adaptive Intake PoC. Every phase maps to its **Exit gate** and
 **Regression gate** in `BUILD-PLAN.md` (the backbone), scored against `winning-condition.md` (§2 setup,
 §3 wow, §4 thresholds, §5 trust, §7 red flags, §8 external) and `CLAUDE.md` (§2 three claims, §3 trust

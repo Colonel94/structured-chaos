@@ -87,8 +87,9 @@ Needs **humans / new data**: median review time (human on the review UI); elicit
 customers); discrepancies-surfaced (cases labelled with a known complaint-vs-record discrepancy); emergent
 attribute accuracy (labelled emergent gold).
 
-**BLOCKED:** Arabic field-extraction parity — **0/216** Arabic in the set. The marquee differentiator is
-unbuilt and unmeasured (separate project).
+**UNMEASURED:** voice-vs-text field-extraction parity — there is no paired set containing the same cases
+spoken and typed. Arabic/code-switched coverage was suspended by owner decision on 2026-08-21; when it
+returns to scope, the ≥30-case composition rule and Arabic parity gate return with it.
 
 ## Bottom line
 

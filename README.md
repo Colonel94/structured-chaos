@@ -17,6 +17,7 @@ See [Market readiness](docs/MARKET-READINESS.md) for the evidence-based launch d
 - **Deployment owner:** use [Deployment guide](docs/DEPLOY.md) and the production gates in
   [Market readiness](docs/MARKET-READINESS.md).
 - **Product decision-maker:** read the [PRD](PRD.md), then the live [build/readiness tracker](docs/tracker.html).
+- **Ship decision:** read the [winning-condition audit](docs/WINNING-CONDITION-REVIEW.md).
 
 ## What the system does
 
@@ -92,3 +93,6 @@ Database-backed tests require Docker. CI sets `REQUIRE_DB=1` so those tests cann
 - Do not present the current evaluation figures as customer accuracy claims; the label set is not yet
   independently produced.
 
+## Contributors
+
+See [CONTRIBUTORS.md](CONTRIBUTORS.md) for human ownership and AI-assistance attribution.

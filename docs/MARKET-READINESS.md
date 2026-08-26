@@ -5,6 +5,10 @@ ready for a production launch.** The first-run and reviewer experience is cohere
 readiness is visible, but the evidence, identity, legal, and operating gates below remain binding. This
 is a product-readiness decision, not a judgment on the amount of implemented code.
 
+The acceptance-criterion ledger is maintained in
+[Winning-condition review](WINNING-CONDITION-REVIEW.md); it is the source for the current 1/6 clean
+ship-scorecard result.
+
 ## Design hardening completed 26 August 2026
 
 - Added a branded pilot entry experience with a plain-language product promise and four-step workflow.

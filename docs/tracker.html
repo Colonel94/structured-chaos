@@ -118,7 +118,7 @@
       a voice note, a photo — into a complete, correctly prioritised, fully-traceable case they never
       typed. This tracks where the build stands against its own winning condition.</p>
     <div class="meta">
-      <span><b>origin/main</b> @ b09eb0a</span>
+      <span><b>origin/main</b> @ 4adefb1</span>
       <span><b class="num">272</b> tests +1 skip</span>
       <span>ruff · black · mypy · tsc · vitest — clean</span>
       <span>phases <b class="num">0–7</b> done · 8 scored · 9 open</span>
@@ -128,9 +128,9 @@
   <section class="verdict">
     <div class="vcard vcard--good">
       <h3>Product surface</h3>
-      <p class="big">Sellable</p>
-      <p>A stranger can connect their data, submit their case, and see it structured + resolved — no
-        developer in the room. The disqualifying red flag is gone.</p>
+      <p class="big">Pilot-ready</p>
+      <p>The guided product surface can connect data, submit, review and report. No-walkthrough stranger
+        use is staged but unproven, so this is not yet a production or sellability pass.</p>
     </div>
     <div class="vcard vcard--warn">
       <h3>Winning-condition scorecard</h3>
@@ -144,10 +144,11 @@
   <h2>Winning-condition scorecard</h2>
   <div class="rows">
     <div class="row"><span class="row__k">Setup gate (§2)</span><span class="row__v">Branded pilot access + guided workflow, self-serve intake, object store, honest service readiness; workspace provisioning remains manual and is not yet externally timed.</span><span class="chip c-part">partial</span></div>
-    <div class="row"><span class="row__k">Seven wow moments (§3)</span><span class="row__v">Moments 2–6 demonstrable incl. voice-first (proven on a real iPhone); Arabic retired from §4 by owner (voice-vs-text parity substituted).</span><span class="chip c-part">partial</span></div>
+    <div class="row"><span class="row__k">Seven wow moments (§3)</span><span class="row__v">Mechanisms for moments 2–6 are demonstrable, but the required unprompted reactions have not been externally observed; voice parity remains unmeasured.</span><span class="chip c-part">partial</span></div>
     <div class="row"><span class="row__k">Quantitative thresholds (§4)</span><span class="row__v">Phase 8 scored: category <b class="num">77%</b> (≥90), zero-edit <b class="num">28%</b> (≥70), desired_outcome <b class="num">56%</b> (≥90) — all on self-authored labels. ≤30s review-time now instrumented, not yet human-measured.</span><span class="chip c-open">failing</span></div>
     <div class="row"><span class="row__k">Trust gates (§5)</span><span class="row__v">RLS isolation, immutability, idempotency, provenance, commit gate — all held &amp; tested.</span><span class="chip c-done">clean</span></div>
-    <div class="row"><span class="row__k">No red flags (§7)</span><span class="row__v">"Touch a DB to serve a case" false. Arabic retired from §4, so "different product in Arabic" no longer gates — a deferred coverage item, not a red flag.</span><span class="chip c-done">clean</span></div>
+    <div class="row"><span class="row__k">No red flags (§7)</span><span class="row__v">The hard question cap, handoff and traceability controls hold. Convergence, review speed, own-data use, builder independence and language parity are not clean.</span><span class="chip c-open">not clean</span></div>
+    <div class="row"><span class="row__k">Evidence ledger</span><span class="row__v"><a href="WINNING-CONDITION-REVIEW.md">Criterion-by-criterion audit</a> distinguishes built, measured and independently proven claims.</span><span class="chip c-part">current</span></div>
     <div class="row"><span class="row__k">External gate (§8)</span><span class="row__v">Possible (self-serve exists), tenant pristine-ready; not yet run with 3 strangers.</span><span class="chip c-open">not run</span></div>
   </div>
 
@@ -160,15 +161,15 @@
     <div class="phase"><div class="phase__h"><span class="phase__n">4</span><span class="chip c-open">unproven</span></div><span class="phase__t">Extraction + the moat</span><span class="phase__d">Mechanisms built; convergence fails its metric.</span></div>
     <div class="phase"><div class="phase__h"><span class="phase__n">5</span><span class="chip c-part">partial</span></div><span class="phase__t">Resolve + elicit</span><span class="phase__d">Anchor+2, silent bind, Moment 3 done; ≥99% self-graded.</span></div>
     <div class="phase"><div class="phase__h"><span class="phase__n">6</span><span class="chip c-done">done</span></div><span class="phase__t">Confidence + rules</span><span class="phase__d">Rules engine solid; confidence honest, auto-route off.</span></div>
-    <div class="phase"><div class="phase__h"><span class="phase__n">7</span><span class="chip c-done">done</span></div><span class="phase__t">Review UI + commit + report</span><span class="phase__d">Feedback loop, undo, one-key correct, review-time HUD; relit as a light Fluent/Power-Platform UI + dark mode.</span></div>
+    <div class="phase"><div class="phase__h"><span class="phase__n">7</span><span class="chip c-done">done</span></div><span class="phase__t">Review UI + commit + report</span><span class="phase__d">Guided pilot access, service readiness, queue overview, feedback loop, undo, one-key correction, review-time HUD and responsive light/dark UI.</span></div>
     <div class="phase"><div class="phase__h"><span class="phase__n">8</span><span class="chip c-part">scored</span></div><span class="phase__t">Threshold scoring</span><span class="phase__d">§4 scorer runs; gates fail on self-authored labels. Tuning gate now scores a held-out slice.</span></div>
     <div class="phase"><div class="phase__h"><span class="phase__n">9</span><span class="chip c-open">not started</span></div><span class="phase__t">External gate</span><span class="phase__d">Three strangers, no walkthrough.</span></div>
   </div>
 
-  <h2>Sellability surface — complete</h2>
+  <h2>Pilot product surface — built</h2>
   <div class="rows">
-    <div class="row"><span class="row__k">Connect data</span><span class="row__v"><code style="font-family:var(--mono)">POST /api/objects</code> + "connect data" — CSV/JSON, schema-agnostic, idempotent.</span><span class="chip c-done">live</span></div>
-    <div class="row"><span class="row__k">Submit a case</span><span class="row__v"><code style="font-family:var(--mono)">POST /api/ingest</code> + "new case" — text/files → structured case in ~8–17s.</span><span class="chip c-done">live</span></div>
+    <div class="row"><span class="row__k">Data sources</span><span class="row__v"><code style="font-family:var(--mono)">POST /api/objects</code> + guided upload — CSV/JSON, schema-agnostic, idempotent.</span><span class="chip c-done">live</span></div>
+    <div class="row"><span class="row__k">Submit a case</span><span class="row__v"><code style="font-family:var(--mono)">POST /api/ingest</code> + "New case" — text/files → structured case in ~8–17s.</span><span class="chip c-done">live</span></div>
     <div class="row"><span class="row__k">Moment 3</span><span class="row__v">Anchor resolves silently against uploaded data; confirmation states the record facts, not "found your order".</span><span class="chip c-done">live</span></div>
     <div class="row"><span class="row__k">Review → approve → report</span><span class="row__v">Keyboard review, one-key correction, batch approve, commit gate + undo window, WeasyPrint PDF — nothing external before approval.</span><span class="chip c-done">live</span></div>
     <div class="row"><span class="row__k">Review UI polish</span><span class="row__v">Relit as a light Fluent / Power-Platform surface + a dark-mode toggle; clean record-style cards, keyboard flow and trust signals unchanged.</span><span class="chip c-done">live</span></div>
