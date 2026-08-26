@@ -1,6 +1,5 @@
-// Thin fetch client for the engine's review routes. The tenant is sent as X-Tenant-Id (the PoC
-// convention — RLS is the real isolation boundary; see engine/app/api/routes.py). Same-origin in
-// prod; via the Vite `/api` proxy in dev.
+// Thin same-origin client. Production scope and reviewer identity come from the secure session;
+// the stored tenant id is display state and a dev-only compatibility header.
 
 import type {
   CaseReview,
@@ -15,6 +14,74 @@ import type {
 
 const TENANT_KEY = "adaptive-intake.tenant-id";
 const REVIEWER_KEY = "adaptive-intake.reviewer-id";
+
+export interface AuthSession {
+  authenticated: true;
+  user: { id: string; email: string; display_name: string };
+  workspace: { id: string; name: string; role: "admin" | "reviewer" };
+}
+
+function cookie(name: string): string {
+  const prefix = `${encodeURIComponent(name)}=`;
+  const part = document.cookie.split("; ").find((item) => item.startsWith(prefix));
+  return part ? decodeURIComponent(part.slice(prefix.length)) : "";
+}
+
+function requestHeaders(json = false): Record<string, string> {
+  const headers: Record<string, string> = {};
+  const tenant = getTenantId();
+  const csrf = cookie("adaptive_intake_csrf");
+  if (tenant) headers["X-Tenant-Id"] = tenant;
+  if (csrf) headers["X-CSRF-Token"] = csrf;
+  if (json) headers["Content-Type"] = "application/json";
+  return headers;
+}
+
+async function authRequest(path: string, body?: unknown): Promise<AuthSession> {
+  const res = await fetch(path, {
+    method: body === undefined ? "GET" : "POST",
+    headers: body === undefined ? undefined : requestHeaders(true),
+    body: body === undefined ? undefined : JSON.stringify(body),
+  });
+  if (!res.ok) {
+    const detail = await res.json().catch(() => ({}));
+    throw new Error(detail.detail ?? `Request failed (${res.status})`);
+  }
+  const session = (await res.json()) as AuthSession;
+  setTenantId(session.workspace.id);
+  setReviewerId(session.user.display_name);
+  return session;
+}
+
+export async function getAuthSession(): Promise<AuthSession | null> {
+  const res = await fetch("/api/auth/session");
+  if (res.status === 401) return null;
+  if (!res.ok) throw new Error(`Session check failed (${res.status})`);
+  const session = (await res.json()) as AuthSession;
+  setTenantId(session.workspace.id);
+  setReviewerId(session.user.display_name);
+  return session;
+}
+
+export function signupAccount(input: {
+  email: string;
+  password: string;
+  display_name: string;
+  workspace_name: string;
+}): Promise<AuthSession> {
+  return authRequest("/api/auth/signup", input);
+}
+
+export function loginAccount(email: string, password: string): Promise<AuthSession> {
+  return authRequest("/api/auth/login", { email, password });
+}
+
+export async function logoutAccount(): Promise<void> {
+  const res = await fetch("/api/auth/logout", { method: "POST", headers: requestHeaders() });
+  if (!res.ok) throw new Error(`Sign out failed (${res.status})`);
+  setTenantId("");
+  setReviewerId("");
+}
 
 export interface SystemHealth {
   status: string;
@@ -52,14 +119,8 @@ export function setReviewerId(id: string): void {
   localStorage.setItem(REVIEWER_KEY, id.trim() || "reviewer");
 }
 
-function tenantOrThrow(): string {
-  const tenant = getTenantId();
-  if (!tenant) throw new Error("Set a tenant id first.");
-  return tenant;
-}
-
 async function get<T>(path: string): Promise<T> {
-  const res = await fetch(path, { headers: { "X-Tenant-Id": tenantOrThrow() } });
+  const res = await fetch(path, { headers: requestHeaders() });
   if (!res.ok) {
     const detail = await res.json().catch(() => ({}));
     throw new Error(detail.detail ?? `Request failed (${res.status})`);
@@ -70,7 +131,7 @@ async function get<T>(path: string): Promise<T> {
 async function post<T>(path: string, body: unknown): Promise<T> {
   const res = await fetch(path, {
     method: "POST",
-    headers: { "X-Tenant-Id": tenantOrThrow(), "Content-Type": "application/json" },
+    headers: requestHeaders(true),
     body: JSON.stringify(body),
   });
   if (!res.ok) {
@@ -96,7 +157,7 @@ export async function ingestCase(text: string, files: File[]): Promise<{ case_id
   for (const f of files) form.append("files", f);
   const res = await fetch("/api/ingest", {
     method: "POST",
-    headers: { "X-Tenant-Id": tenantOrThrow() },
+    headers: requestHeaders(),
     body: form,
   });
   if (!res.ok) {
@@ -139,7 +200,7 @@ export async function uploadObjects(objectType: string, file: File): Promise<Obj
   form.append("file", file);
   const res = await fetch("/api/objects", {
     method: "POST",
-    headers: { "X-Tenant-Id": tenantOrThrow() },
+    headers: requestHeaders(),
     body: form,
   });
   if (!res.ok) {
@@ -236,7 +297,7 @@ export const docUrl = (docId: string): string => `/api/docs/${docId}`;
 /** Fetch a tenant-scoped binary route (report/CSV/source blob) with the X-Tenant-Id header, as an
  *  object URL a browser can open or embed. The caller revokes it when done. */
 export async function fetchBlobUrl(path: string): Promise<string> {
-  const res = await fetch(path, { headers: { "X-Tenant-Id": tenantOrThrow() } });
+  const res = await fetch(path, { headers: requestHeaders() });
   if (!res.ok) {
     const detail = await res.json().catch(() => ({}));
     throw new Error(detail.detail ?? `Request failed (${res.status})`);

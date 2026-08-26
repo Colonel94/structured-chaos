@@ -49,6 +49,32 @@ _FIELDS = list(_FIELD_MAP.values())
 _NULL_ON_BLANK = {
     "desired_outcome"
 }  # blank = a real "null" label (only if the source used the column)
+_ALLOWED = {
+    "category": {
+        "product_fault",
+        "service_fault",
+        "delivery_fulfilment",
+        "billing_charge",
+        "record_accuracy",
+        "access_availability",
+        "staff_conduct",
+        "safety_health",
+        "other",
+        "unclear",
+    },
+    "desired_outcome": {
+        "",
+        "refund",
+        "replacement",
+        "repair_redo",
+        "acknowledgement",
+        "information",
+        "escalation",
+        "other",
+    },
+    "severity_signal": {"safety_health", "vulnerable_party", "financial_harm", "none"},
+    "emotion_signal": {"calm", "frustrated", "angry"},
+}
 
 
 def _norm(v: object) -> str:
@@ -89,15 +115,27 @@ def _load_csv(name: str, path: Path) -> Source:
         rows = list(csv.DictReader(f))
     values: dict[str, dict[str, str]] = {}
     used: Counter[str] = Counter()
+    invalid: list[str] = []
     for r in rows:
         cid = str(r["id"])
+        # A blank outcome is a real null only on a row the labeller has otherwise completed. This keeps
+        # an in-progress sheet from scoring every untouched row as a correct null prediction.
+        active = any(
+            str(r.get(col, "") or "").strip() for col in _FIELD_MAP if col != "gold_desired_outcome"
+        )
+        if not active and not str(r.get("gold_desired_outcome", "") or "").strip():
+            continue
         fv: dict[str, str] = {}
         for col, field in _FIELD_MAP.items():
             raw = str(r.get(col, "") or "").strip()
             fv[field] = _norm(raw)
+            if fv[field] not in _ALLOWED[field]:
+                invalid.append(f"id={cid} {col}={raw!r}")
             if raw:
                 used[field] += 1
         values[cid] = fv
+    if invalid:
+        raise ValueError(f"{path} contains invalid labels:\n  " + "\n  ".join(invalid))
     null_ok = {f for f in _NULL_ON_BLANK if used[f] > 0}
     return Source(name, values, null_ok)
 
@@ -213,7 +251,11 @@ def main() -> int:
         return 0
 
     model = _load_model()
-    humans = [_load_csv(name, path) for name, path in specs]
+    try:
+        humans = [_load_csv(name, path) for name, path in specs]
+    except ValueError as exc:
+        print(f"INVALID LABEL FILE — no official score produced:\n{exc}")
+        return 2
     print("=" * 78)
     print(
         f"HELD-OUT ACCURACY — model ({sum(1 for _ in _MODEL.open())} cases) vs {len(humans)} human label set(s)"

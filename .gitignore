@@ -9,6 +9,7 @@
 .venv/
 .venv-check/
 .uv-cache/
+.test-tmp-*/
 __pycache__/
 *.py[cod]
 .pytest_cache/

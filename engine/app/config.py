@@ -38,6 +38,9 @@ class Settings(BaseSettings):
     # Stamped into every idempotency key (§7.3) so a code change forces a fresh run
     # instead of silently colliding with a prior one. Bump on any extraction-behaviour change.
     code_version: str = "0.1.0"
+    auth_allow_signup: bool = True
+    ui_dist_dir: str = ""
+    api_max_request_bytes: int = 25 * 1024 * 1024
 
     # --- backend switch (one per interface) — default LOCAL (the committed PoC path); the .env
     #     sets these explicitly. Defaulting to `cloud` here would ImportError on a fresh checkout,

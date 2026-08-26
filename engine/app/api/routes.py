@@ -1,26 +1,27 @@
 """Review-view HTTP routes — the engine's first client reads the assembled case (Phase 4.7).
 
-Two read-only endpoints under ``/api``: a case register and one case's full review payload (governed
-core + emergent + provenance + corrections + the normalised text that backs it). Everything is
-RLS-scoped: the tenant comes from the ``X-Tenant-Id`` header and is set as the transaction GUC, so a
-query can only ever read that tenant's rows — a wrong id reads nothing (fail-closed), never a leak.
-
-The tenant header is the **PoC** convention (operator-facing review tool, manual tenant onboarding —
-CLAUDE.md §9); real auth mapping a session→tenant is later. RLS, not the header, is the isolation
-boundary. The session factory is a FastAPI dependency so tests can bind it to their per-test engine.
+Every review request is scoped by an authenticated session whose membership supplies both tenant and
+reviewer identity. RLS remains the database isolation boundary. A legacy ``X-Tenant-Id`` path is kept
+only outside production so the established integration harness can exercise the API without accounts.
 """
 
 from __future__ import annotations
 
+import time
+from collections import defaultdict, deque
 from datetime import UTC, datetime
+from threading import Lock
 from typing import Annotated, Any
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, File, Form, Header, HTTPException, UploadFile
-from fastapi.responses import Response
+from fastapi import APIRouter, Depends, File, Form, Header, HTTPException, Request, UploadFile
+from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, sessionmaker
 
+from .. import review_auth
+from ..config import settings
 from ..report import (
     NotCommittedError,
     ReportBackendUnavailable,
@@ -83,15 +84,190 @@ class CommitBatchIn(BaseModel):
     review_ms: int | None = None
 
 
+class SignupIn(BaseModel):
+    email: str
+    password: str
+    display_name: str
+    workspace_name: str
+
+
+class LoginIn(BaseModel):
+    email: str
+    password: str
+
+
 def get_factory() -> sessionmaker[Session]:
     """The app-role session factory — overridden in tests to bind the per-test engine."""
     return SessionFactory
 
 
-# FastAPI dependency aliases via Annotated (the B008-safe idiom — the marker lives in the type, not
-# a mutable default). ``TenantHeader`` is required, so a missing header is a 422 before any DB touch.
-TenantHeader = Annotated[str, Header(alias="X-Tenant-Id")]
 FactoryDep = Annotated[sessionmaker[Session], Depends(get_factory)]
+
+
+def _production() -> bool:
+    return settings.app_env.strip().lower() in ("prod", "production")
+
+
+def get_request_identity(
+    request: Request,
+    factory: FactoryDep,
+    x_tenant_id: Annotated[str | None, Header(alias="X-Tenant-Id")] = None,
+    x_csrf_token: Annotated[str | None, Header(alias="X-CSRF-Token")] = None,
+) -> review_auth.Identity | UUID:
+    """Resolve a real session, or the explicit dev-only tenant compatibility path."""
+    raw_session = request.cookies.get(review_auth.SESSION_COOKIE, "")
+    if raw_session:
+        identity = review_auth.resolve_session(factory, raw_session)
+        if identity is None:
+            raise HTTPException(status_code=401, detail="Your session has expired. Sign in again.")
+        if request.method not in {"GET", "HEAD", "OPTIONS"}:
+            cookie_csrf = request.cookies.get(review_auth.CSRF_COOKIE, "")
+            if (
+                not cookie_csrf
+                or not x_csrf_token
+                or cookie_csrf != x_csrf_token
+                or not review_auth.valid_csrf(factory, raw_session, x_csrf_token)
+            ):
+                raise HTTPException(
+                    status_code=403, detail="Invalid request token. Refresh and retry."
+                )
+        return identity
+    if x_tenant_id and not _production():
+        try:
+            return UUID(x_tenant_id)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="X-Tenant-Id is not a valid UUID") from None
+    raise HTTPException(status_code=401, detail="Sign in to open a review workspace.")
+
+
+IdentityDep = Annotated[review_auth.Identity | UUID, Depends(get_request_identity)]
+
+
+def get_request_tenant(identity: IdentityDep) -> str:
+    return str(identity.tenant_id if isinstance(identity, review_auth.Identity) else identity)
+
+
+def get_request_reviewer(identity: IdentityDep) -> str | None:
+    return identity.display_name if isinstance(identity, review_auth.Identity) else None
+
+
+TenantHeader = Annotated[str, Depends(get_request_tenant)]
+ReviewerDep = Annotated[str | None, Depends(get_request_reviewer)]
+
+
+def _auth_payload(identity: review_auth.Identity) -> dict[str, Any]:
+    return {
+        "authenticated": True,
+        "user": {
+            "id": str(identity.user_id),
+            "email": identity.email,
+            "display_name": identity.display_name,
+        },
+        "workspace": {
+            "id": str(identity.tenant_id),
+            "name": identity.workspace_name,
+            "role": identity.role,
+        },
+    }
+
+
+def _set_auth_cookies(response: Response, session_token: str, csrf_token: str) -> None:
+    secure = _production()
+    response.set_cookie(
+        review_auth.SESSION_COOKIE,
+        session_token,
+        max_age=12 * 60 * 60,
+        httponly=True,
+        secure=secure,
+        samesite="strict",
+        path="/",
+    )
+    response.set_cookie(
+        review_auth.CSRF_COOKIE,
+        csrf_token,
+        max_age=12 * 60 * 60,
+        httponly=False,
+        secure=secure,
+        samesite="strict",
+        path="/",
+    )
+
+
+_auth_hits: dict[str, deque[float]] = defaultdict(deque)
+_auth_hits_lock = Lock()
+
+
+def _limit_auth(request: Request) -> None:
+    """Bound password-hash work per process/IP. The deployment edge adds the global limit."""
+    ip = request.client.host if request.client else "unknown"
+    now = time.monotonic()
+    with _auth_hits_lock:
+        hits = _auth_hits[ip]
+        while hits and hits[0] < now - 600:
+            hits.popleft()
+        if len(hits) >= 20:
+            raise HTTPException(
+                status_code=429, detail="Too many sign-in attempts. Try again later."
+            )
+        hits.append(now)
+
+
+@router.post("/auth/signup")
+def signup(body: SignupIn, request: Request, factory: FactoryDep) -> Response:
+    _limit_auth(request)
+    if not settings.auth_allow_signup:
+        raise HTTPException(status_code=403, detail="Account creation is disabled.")
+    try:
+        identity, session_token, csrf_token = review_auth.create_account(
+            factory,
+            email=body.email,
+            password=body.password,
+            display_name=body.display_name,
+            workspace=body.workspace_name,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from None
+    except IntegrityError:
+        raise HTTPException(
+            status_code=409, detail="An account already exists for this email."
+        ) from None
+    response = JSONResponse(_auth_payload(identity), status_code=201)
+    _set_auth_cookies(response, session_token, csrf_token)
+    return response
+
+
+@router.post("/auth/login")
+def auth_login(body: LoginIn, request: Request, factory: FactoryDep) -> Response:
+    _limit_auth(request)
+    try:
+        result = review_auth.login(factory, email=body.email, password=body.password)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from None
+    if result is None:
+        raise HTTPException(status_code=401, detail="Email or password is incorrect.")
+    identity, session_token, csrf_token = result
+    response = JSONResponse(_auth_payload(identity))
+    _set_auth_cookies(response, session_token, csrf_token)
+    return response
+
+
+@router.get("/auth/session")
+def auth_session(identity: IdentityDep) -> dict[str, Any]:
+    if not isinstance(identity, review_auth.Identity):
+        raise HTTPException(status_code=401, detail="Sign in to continue.")
+    return _auth_payload(identity)
+
+
+@router.post("/auth/logout")
+def auth_logout(request: Request, factory: FactoryDep, identity: IdentityDep) -> Response:
+    del identity  # authentication + CSRF are enforced by the dependency
+    raw_session = request.cookies.get(review_auth.SESSION_COOKIE, "")
+    if raw_session:
+        review_auth.revoke_session(factory, raw_session)
+    response = JSONResponse({"authenticated": False})
+    response.delete_cookie(review_auth.SESSION_COOKIE, path="/")
+    response.delete_cookie(review_auth.CSRF_COOKIE, path="/")
+    return response
 
 
 def _tenant(x_tenant_id: str) -> UUID:
@@ -106,6 +282,20 @@ def _case_uuid(case_id: str) -> UUID:
         return UUID(case_id)
     except ValueError:
         raise HTTPException(status_code=400, detail="case_id is not a valid UUID") from None
+
+
+async def _bounded_upload(file: UploadFile, remaining: int) -> bytes:
+    if remaining <= 0:
+        raise HTTPException(status_code=413, detail="Uploads exceed the 25 MB request limit.")
+    data = await file.read(remaining + 1)
+    if len(data) > remaining:
+        raise HTTPException(status_code=413, detail="Uploads exceed the 25 MB request limit.")
+    return data
+
+
+def _supported_intake_mime(mime: str) -> bool:
+    base = mime.split(";", 1)[0].strip().lower()
+    return base.startswith(("image/", "audio/")) or base in {"application/pdf", "text/plain"}
 
 
 @router.get("/cases")
@@ -142,14 +332,17 @@ async def ingest_case(
     tenant = _tenant(x_tenant_id)
     body = text.strip()
     attachments: list[InboundAttachment] = []
+    total_bytes = len(body.encode("utf-8"))
     for f in files:
-        data = await f.read()
+        data = await _bounded_upload(f, settings.api_max_request_bytes - total_bytes)
         if not data:
             continue
         name = f.filename or "upload"
-        attachments.append(
-            InboundAttachment(filename=name, mime=f.content_type or guess_mime(name), data=data)
-        )
+        mime = f.content_type or guess_mime(name)
+        if not _supported_intake_mime(mime):
+            raise HTTPException(status_code=415, detail=f"Unsupported file type: {mime}")
+        total_bytes += len(data)
+        attachments.append(InboundAttachment(filename=name, mime=mime, data=data))
     if not body and not attachments:
         raise HTTPException(status_code=400, detail="provide text or at least one file")
 
@@ -186,7 +379,7 @@ async def upload_objects(
     from ..resolve import ingest_object_collection
     from ..resolve.upload import ObjectFileError, parse_object_file
 
-    data = await file.read()
+    data = await _bounded_upload(file, settings.api_max_request_bytes)
     if not data:
         raise HTTPException(status_code=400, detail="the uploaded file is empty")
     try:
@@ -220,7 +413,11 @@ def get_case(case_id: str, x_tenant_id: TenantHeader, factory: FactoryDep) -> di
 
 @router.post("/cases/{case_id}/corrections")
 def post_correction(
-    case_id: str, body: CorrectionIn, x_tenant_id: TenantHeader, factory: FactoryDep
+    case_id: str,
+    body: CorrectionIn,
+    x_tenant_id: TenantHeader,
+    reviewer: ReviewerDep,
+    factory: FactoryDep,
 ) -> dict[str, Any]:
     """Record a reviewer's correction to one field, rebuild the projection, and recompute the
     deterministic decision (a governed-signal change re-derives priority/SLA — §16.2). Returns the
@@ -243,7 +440,7 @@ def post_correction(
             prev_value=prev,
             new_value=body.new_value,
             based_on_extraction_id=based_on,
-            reviewer_id=body.reviewer_id,
+            reviewer_id=reviewer or body.reviewer_id,
             note=body.note,
         )
         api.rebuild_field_current(s, cid)
@@ -261,7 +458,11 @@ def post_correction(
 
 @router.post("/cases/{case_id}/commit")
 def post_commit(
-    case_id: str, body: CommitIn, x_tenant_id: TenantHeader, factory: FactoryDep
+    case_id: str,
+    body: CommitIn,
+    x_tenant_id: TenantHeader,
+    reviewer: ReviewerDep,
+    factory: FactoryDep,
 ) -> dict[str, Any]:
     """Approve a case (the commit gate). One-way + idempotent: a re-commit returns the original stamp,
     never re-attributing it. After this, and only after this, a report may be issued (§3). The measured
@@ -269,13 +470,14 @@ def post_commit(
     honest undo of a fresh, accidental approval."""
     cid = _case_uuid(case_id)
     with tenant_session(_tenant(x_tenant_id), factory=factory) as s:
-        result = api.commit_case(s, cid, reviewer_id=body.reviewer_id)
+        reviewer_id = reviewer or body.reviewer_id
+        result = api.commit_case(s, cid, reviewer_id=reviewer_id)
         if result is None:
             raise HTTPException(status_code=404, detail="case not found")
         api.record_review_event(
             s,
             case_id=cid,
-            reviewer_id=body.reviewer_id,
+            reviewer_id=reviewer_id,
             review_ms=body.review_ms,
             fields_edited=body.fields_edited,
         )
@@ -284,7 +486,10 @@ def post_commit(
 
 @router.post("/cases/commit-batch")
 def post_commit_batch(
-    body: CommitBatchIn, x_tenant_id: TenantHeader, factory: FactoryDep
+    body: CommitBatchIn,
+    x_tenant_id: TenantHeader,
+    reviewer: ReviewerDep,
+    factory: FactoryDep,
 ) -> dict[str, Any]:
     """Approve several cases in one act — the reviewer clears a whole high-reliability band at once. Each
     commit is the same one-way, idempotent human approval (§3); a case already committed just returns its
@@ -295,14 +500,15 @@ def post_commit_batch(
     per_case_ms = round(body.review_ms / len(ids)) if body.review_ms is not None and ids else None
     committed: list[str] = []
     failed: list[str] = []
+    reviewer_id = reviewer or body.reviewer_id
     with tenant_session(tid, factory=factory) as s:
         for cid in ids:
-            result = api.commit_case(s, cid, reviewer_id=body.reviewer_id)
+            result = api.commit_case(s, cid, reviewer_id=reviewer_id)
             if result is None:
                 failed.append(str(cid))
                 continue
             api.record_review_event(
-                s, case_id=cid, reviewer_id=body.reviewer_id, review_ms=per_case_ms, fields_edited=0
+                s, case_id=cid, reviewer_id=reviewer_id, review_ms=per_case_ms, fields_edited=0
             )
             committed.append(str(cid))
     return {"committed": committed, "failed": failed}
@@ -333,7 +539,11 @@ _FEEDBACK_VERDICTS = frozenset({"accurate", "inaccurate", "partial"})
 
 @router.post("/cases/{case_id}/feedback")
 def post_feedback(
-    case_id: str, body: FeedbackIn, x_tenant_id: TenantHeader, factory: FactoryDep
+    case_id: str,
+    body: FeedbackIn,
+    x_tenant_id: TenantHeader,
+    reviewer: ReviewerDep,
+    factory: FactoryDep,
 ) -> dict[str, Any]:
     """Record a reviewer's verdict on the model's extraction for this case — the feedback loop. Distinct
     from a field correction (which fixes a value) and from approval: it's the qualitative signal ("what did
@@ -351,7 +561,11 @@ def post_feedback(
         if api.get_case_channel(s, cid) is None:  # None ⇒ absent for this tenant (RLS fail-closed)
             raise HTTPException(status_code=404, detail="case not found")
         entry = api.record_case_feedback(
-            s, case_id=cid, reviewer_id=body.reviewer_id, verdict=verdict, comment=comment
+            s,
+            case_id=cid,
+            reviewer_id=reviewer or body.reviewer_id,
+            verdict=verdict,
+            comment=comment,
         )
     return {"feedback": entry}
 

@@ -373,6 +373,29 @@ button {
   color: var(--ink-2);
   line-height: 1.55;
 }
+.access-tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+  margin-top: 22px;
+  border-radius: 10px;
+  background: var(--surface-2);
+  padding: 4px;
+}
+.access-tabs button {
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  padding: 9px;
+  color: var(--ink-3);
+  font-size: 12px;
+  font-weight: 700;
+}
+.access-tabs button[aria-selected="true"] {
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: var(--shadow-4);
+}
 .service-status {
   display: inline-flex;
   align-items: center;
@@ -430,10 +453,6 @@ button {
   border-color: var(--brand);
   box-shadow: 0 0 0 3px var(--brand-wash);
 }
-.access-field:last-of-type input {
-  font-family: var(--font-mono);
-  font-size: 12px;
-}
 .access-submit {
   width: 100%;
   display: flex;
@@ -452,6 +471,11 @@ button {
   background: var(--brand-strong);
   transform: translateY(-1px);
   box-shadow: var(--shadow-8);
+}
+.access-submit:disabled {
+  opacity: 0.6;
+  cursor: wait;
+  transform: none;
 }
 .access-note {
   margin: 12px 0 0;
@@ -620,8 +644,13 @@ button {
   box-shadow: 0 0 0 1px var(--brand);
 }
 .tenant__reviewer {
-  width: 108px !important;
-  font-family: var(--font-sans) !important;
+  max-width: 140px;
+  overflow: hidden;
+  color: var(--ink-2);
+  font-size: var(--t-meta);
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .tenant button {
   border: 1px solid var(--line-strong);

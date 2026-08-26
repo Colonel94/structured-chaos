@@ -1,3 +1,13 @@
+# Build the reviewer SPA once and serve it from the API image. Keeping one origin is deliberate:
+# secure session cookies and CSRF protection do not depend on cross-origin exceptions.
+FROM node:22-slim AS ui-build
+WORKDIR /ui
+RUN corepack enable
+COPY ui/package.json ui/pnpm-lock.yaml ./
+RUN pnpm install --frozen-lockfile
+COPY ui/ ./
+RUN pnpm build
+
 # Engine image. Linux base so PaddleOCR + WeasyPrint (GTK/Pango) install cleanly —
 # the whole reason we containerise instead of installing on the Windows host (§3).
 FROM python:3.12-slim
@@ -21,6 +31,7 @@ WORKDIR /app
 # (hatchling needs app/ present) — and so container-only heavy groups resolve.
 COPY engine/ ./engine/
 COPY scripts/ ./scripts/
+COPY --from=ui-build /ui/dist /app/ui-dist
 
 # Install the project (core runtime deps) + the container-only heavy groups, into the
 # system interpreter. sh-safe: no bash process-substitution (the old `<(...)` broke here).
@@ -30,6 +41,7 @@ RUN cd engine && uv pip install --system \
 
 WORKDIR /app/engine
 ENV PYTHONPATH=/app/engine
+ENV UI_DIST_DIR=/app/ui-dist
 
 EXPOSE 8000
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]

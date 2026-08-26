@@ -9,6 +9,7 @@ import {
   draftPromptDelta,
   fetchBlobUrl,
   getCase,
+  getAuthSession,
   getFieldOptions,
   getReviewerId,
   getReviewStats,
@@ -17,16 +18,19 @@ import {
   getTuningDigest,
   ingestCase,
   listCases,
+  loginAccount,
+  logoutAccount,
   postFeedback,
   recordCorrection,
   registerCsvUrl,
   reportUrl,
-  setReviewerId,
   setTenantId,
+  signupAccount,
   uncommitCase,
   uploadObjects,
   type ObjectUploadResult,
   type SystemHealth,
+  type AuthSession,
 } from "./api";
 import {
   GOVERNED_ORDER,
@@ -1554,30 +1558,31 @@ function ReviewHelp({ onClose }: { onClose: () => void }) {
 }
 
 function WorkspaceWelcome({
-  workspace,
-  reviewer,
   theme,
   error,
   health,
   healthFailed,
-  onWorkspaceChange,
-  onReviewerChange,
-  onContinue,
+  checking,
+  onAuthenticated,
   onThemeChange,
   onHelp,
 }: {
-  workspace: string;
-  reviewer: string;
   theme: Theme;
   error: string | null;
   health: SystemHealth | null;
   healthFailed: boolean;
-  onWorkspaceChange: (value: string) => void;
-  onReviewerChange: (value: string) => void;
-  onContinue: () => void;
+  checking: boolean;
+  onAuthenticated: (session: AuthSession) => void;
   onThemeChange: () => void;
   onHelp: () => void;
 }) {
+  const [mode, setMode] = useState<"signup" | "login">("signup");
+  const [name, setName] = useState("");
+  const [workspaceName, setWorkspaceName] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [authError, setAuthError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
   const ready = health?.status === "ok" && health.worker.status === "alive";
   const statusLabel = healthFailed
     ? "Service unavailable"
@@ -1586,6 +1591,28 @@ function WorkspaceWelcome({
       : ready
         ? "Ready to process cases"
         : "Review available · new processing paused";
+
+  async function submitAccess() {
+    if (submitting) return;
+    setSubmitting(true);
+    setAuthError(null);
+    try {
+      const session =
+        mode === "signup"
+          ? await signupAccount({
+              email,
+              password,
+              display_name: name,
+              workspace_name: workspaceName,
+            })
+          : await loginAccount(email, password);
+      onAuthenticated(session);
+    } catch (reason) {
+      setAuthError((reason as Error).message);
+    } finally {
+      setSubmitting(false);
+    }
+  }
 
   return (
     <div className="welcome-shell">
@@ -1629,45 +1656,49 @@ function WorkspaceWelcome({
         <aside className="access-card" aria-labelledby="access-title">
           <div className="access-card__head">
             <div>
-              <span className="eyebrow">Pilot workspace</span>
-              <h2 id="access-title">Open your review queue</h2>
+              <span className="eyebrow">Secure workspace</span>
+              <h2 id="access-title">{mode === "signup" ? "Create your workspace" : "Welcome back"}</h2>
             </div>
             <span className={`service-status${ready ? " service-status--ready" : ""}`}>
               <span className="service-status__dot" />
               {statusLabel}
             </span>
           </div>
+          <div className="access-tabs" role="tablist" aria-label="Account access">
+            <button type="button" role="tab" aria-selected={mode === "signup"} onClick={() => setMode("signup")}>Create account</button>
+            <button type="button" role="tab" aria-selected={mode === "login"} onClick={() => setMode("login")}>Sign in</button>
+          </div>
           <p className="access-card__copy">
-            Use the workspace ID from your administrator. Your identity is recorded on corrections
-            and approvals.
+            {mode === "signup"
+              ? "Start with a private review workspace. No administrator setup or workspace code needed."
+              : "Sign in to continue reviewing your team’s cases."}
           </p>
-          {error && <div className="access-error">{error}</div>}
+          {(error || authError) && <div className="access-error">{authError ?? error}</div>}
+          {mode === "signup" && (
+            <>
+              <label className="access-field">
+                <span>Your name</span>
+                <input value={name} onChange={(event) => setName(event.target.value)} autoComplete="name" placeholder="e.g. Maya" />
+              </label>
+              <label className="access-field">
+                <span>Workspace name</span>
+                <input value={workspaceName} onChange={(event) => setWorkspaceName(event.target.value)} autoComplete="organization" placeholder="e.g. Northstar Support" />
+              </label>
+            </>
+          )}
           <label className="access-field">
-            <span>Your name</span>
-            <input
-              value={reviewer}
-              onChange={(event) => onReviewerChange(event.target.value)}
-              autoComplete="name"
-              placeholder="e.g. Maya"
-            />
+            <span>Work email</span>
+            <input value={email} onChange={(event) => setEmail(event.target.value)} type="email" autoComplete="email" placeholder="you@company.com" />
           </label>
           <label className="access-field">
-            <span>Workspace ID</span>
-            <input
-              value={workspace}
-              onChange={(event) => onWorkspaceChange(event.target.value)}
-              onKeyDown={(event) => event.key === "Enter" && onContinue()}
-              inputMode="text"
-              autoComplete="off"
-              placeholder="00000000-0000-0000-0000-000000000000"
-            />
+            <span>Password</span>
+            <input value={password} onChange={(event) => setPassword(event.target.value)} onKeyDown={(event) => event.key === "Enter" && void submitAccess()} type="password" autoComplete={mode === "signup" ? "new-password" : "current-password"} placeholder={mode === "signup" ? "10 characters minimum" : "Your password"} />
           </label>
-          <button type="button" className="access-submit" onClick={onContinue}>
-            Continue to workspace <span aria-hidden="true">→</span>
+          <button type="button" className="access-submit" onClick={() => void submitAccess()} disabled={submitting || checking}>
+            {checking ? "Checking session…" : submitting ? "Please wait…" : mode === "signup" ? "Create workspace" : "Sign in"} <span aria-hidden="true">→</span>
           </button>
           <p className="access-note">
-            Pilot access only. Production authentication and workspace invitations are a tracked
-            launch gate.
+            Secure session · reviewer identity recorded on every correction and approval
           </p>
         </aside>
 
@@ -1710,8 +1741,6 @@ function WorkspaceWelcome({
 }
 
 const params = new URLSearchParams(window.location.search);
-const WORKSPACE_ID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-const INITIAL_TENANT = (params.get("tenant") ?? getTenantId()).trim();
 const INITIAL_CASE = params.get("case");
 
 // Theme — a light (Fluent / Power Platform) default with a dark swap; persisted, and honouring the OS
@@ -1733,11 +1762,12 @@ function initialTheme(): Theme {
 if (typeof document !== "undefined") document.documentElement.setAttribute("data-theme", initialTheme());
 
 export default function App() {
-  const [tenant, setTenant] = useState(INITIAL_TENANT);
-  const [workspaceReady, setWorkspaceReady] = useState(WORKSPACE_ID_RE.test(INITIAL_TENANT));
+  const [workspaceName, setWorkspaceName] = useState("Workspace");
+  const [workspaceReady, setWorkspaceReady] = useState(false);
+  const [authChecking, setAuthChecking] = useState(true);
   const [reviewer, setReviewer] = useState(getReviewerId());
   const [cases, setCases] = useState<CaseSummary[] | null>(null);
-  const [loadingCases, setLoadingCases] = useState(WORKSPACE_ID_RE.test(INITIAL_TENANT));
+  const [loadingCases, setLoadingCases] = useState(false);
   const [review, setReview] = useState<CaseReview | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(INITIAL_CASE);
   const [error, setError] = useState<string | null>(null);
@@ -1863,14 +1893,24 @@ export default function App() {
   }, [clean, batchBusy, reviewer, refresh, refreshStats]);
 
   useEffect(() => {
-    if (WORKSPACE_ID_RE.test(INITIAL_TENANT)) {
-      setTenantId(INITIAL_TENANT);
-      void refresh();
-      refreshStats();
-    }
+    let live = true;
+    void getAuthSession()
+      .then((session) => {
+        if (!live || !session) return;
+        setWorkspaceName(session.workspace.name);
+        setReviewer(session.user.display_name);
+        setWorkspaceReady(true);
+        void refresh();
+        refreshStats();
+      })
+      .catch((reason) => live && setError((reason as Error).message))
+      .finally(() => live && setAuthChecking(false));
     void getFieldOptions()
       .then(setFieldOptions)
       .catch(() => setFieldOptions({}));
+    return () => {
+      live = false;
+    };
   }, [refresh, refreshStats]);
 
   useEffect(() => {
@@ -1902,15 +1942,10 @@ export default function App() {
   useHotkeys("shift+slash", () => setShowHelp((v) => !v));
   useHotkeys("escape", () => setShowHelp(false));
 
-  function applyTenant() {
-    const workspaceId = tenant.trim();
-    if (!WORKSPACE_ID_RE.test(workspaceId)) {
-      setError("Enter the complete workspace ID supplied by your administrator.");
-      return;
-    }
+  function onAuthenticated(session: AuthSession) {
     setError(null);
-    setTenantId(workspaceId);
-    setReviewerId(reviewer);
+    setWorkspaceName(session.workspace.name);
+    setReviewer(session.user.display_name);
     setWorkspaceReady(true);
     setSelectedId(null);
     setReview(null);
@@ -1922,7 +1957,15 @@ export default function App() {
       .catch(() => setFieldOptions({}));
   }
 
-  function leaveWorkspace() {
+  async function leaveWorkspace() {
+    try {
+      await logoutAccount();
+    } catch (reason) {
+      setError((reason as Error).message);
+      return;
+    }
+    setWorkspaceName("Workspace");
+    setReviewer("reviewer");
     setTenantId("");
     setWorkspaceReady(false);
     setLoadingCases(false);
@@ -1949,18 +1992,12 @@ export default function App() {
     return (
       <>
         <WorkspaceWelcome
-          workspace={tenant}
-          reviewer={reviewer}
           theme={theme}
           error={error}
           health={systemHealth}
           healthFailed={healthFailed}
-          onWorkspaceChange={(value) => {
-            setTenant(value);
-            setError(null);
-          }}
-          onReviewerChange={setReviewer}
-          onContinue={applyTenant}
+          checking={authChecking}
+          onAuthenticated={onAuthenticated}
           onThemeChange={() => setTheme((current) => (current === "dark" ? "light" : "dark"))}
           onHelp={() => setShowHelp(true)}
         />
@@ -1991,23 +2028,16 @@ export default function App() {
             <span />
             {processingReady ? "Processing ready" : "Processing paused"}
           </span>
-          <input
-            aria-label="reviewer id"
-            className="tenant__reviewer"
-            placeholder="reviewer"
-            value={reviewer}
-            onChange={(e) => setReviewer(e.target.value)}
-            onBlur={() => setReviewerId(reviewer)}
-          />
+          <span className="tenant__reviewer" title="Signed-in reviewer">{reviewer}</span>
           <button
             type="button"
             className="workspace-chip"
-            onClick={leaveWorkspace}
-            title="Switch workspace"
+            onClick={() => void leaveWorkspace()}
+            title="Sign out"
           >
             <span className="workspace-chip__dot" />
-            <span className="mono">{tenant.slice(0, 8)}</span>
-            <span aria-hidden="true">⌄</span>
+            <span>{workspaceName}</span>
+            <span aria-hidden="true">↗</span>
           </button>
           <button
             type="button"
@@ -2107,8 +2137,8 @@ export default function App() {
               <p>
                 We couldn’t load this workspace. Check the ID or service status, then try again.
               </p>
-              <button type="button" className="ghost ghost--sm" onClick={leaveWorkspace}>
-                Change workspace
+              <button type="button" className="ghost ghost--sm" onClick={() => void leaveWorkspace()}>
+                Sign out
               </button>
             </div>
           ) : ordered.length === 0 ? (

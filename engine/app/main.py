@@ -6,7 +6,12 @@ model. The engine stays headless — these routes are a thin client of the store
 
 from __future__ import annotations
 
-from fastapi import FastAPI
+from collections.abc import Awaitable, Callable
+from pathlib import Path
+
+from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse, Response
+from fastapi.staticfiles import StaticFiles
 
 from .api.routes import router as api_router
 from .api.whatsapp import router as whatsapp_router
@@ -24,6 +29,33 @@ if settings.portal_enabled:
     app.include_router(portal_router)
 
 
+@app.middleware("http")
+async def release_headers_and_size_limit(
+    request: Request, call_next: Callable[[Request], Awaitable[Response]]
+) -> Response:
+    content_length = request.headers.get("content-length")
+    if content_length:
+        try:
+            if int(content_length) > settings.api_max_request_bytes:
+                return JSONResponse({"detail": "Request is too large."}, status_code=413)
+        except ValueError:
+            return JSONResponse({"detail": "Invalid Content-Length header."}, status_code=400)
+    response = await call_next(request)
+    response.headers.setdefault("X-Content-Type-Options", "nosniff")
+    response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+    response.headers.setdefault("X-Frame-Options", "DENY")
+    response.headers.setdefault(
+        "Content-Security-Policy",
+        "default-src 'self'; connect-src 'self'; font-src 'self'; "
+        "img-src 'self' blob: data:; media-src 'self' blob:; object-src 'none'; "
+        "base-uri 'self'; frame-ancestors 'none'; form-action 'self'; "
+        "style-src 'self' 'unsafe-inline'; script-src 'self'",
+    )
+    if settings.app_env.strip().lower() in ("prod", "production"):
+        response.headers.setdefault("Strict-Transport-Security", "max-age=31536000")
+    return response
+
+
 def _worker_health() -> dict[str, object]:
     """Best-effort worker liveness for /health (R3): the newest intake-worker heartbeat and whether it is
     within the liveness window. Never raises — a DB hiccup reports 'unknown', it must not 500 /health.
@@ -37,9 +69,7 @@ def _worker_health() -> dict[str, object]:
     try:
         with engine.connect() as conn:
             beat = conn.execute(
-                text(
-                    "SELECT max(beat_at) FROM worker_heartbeat WHERE queue LIKE '%default%'"
-                )
+                text("SELECT max(beat_at) FROM worker_heartbeat WHERE queue LIKE '%default%'")
             ).scalar()
         if beat is None:
             return {"status": "unknown", "detail": "no heartbeat recorded yet"}
@@ -71,3 +101,12 @@ def health() -> dict[str, object]:
         },
         "worker": _worker_health(),
     }
+
+
+# Register last so explicit API, health, webhook, and portal routes always win. Local development leaves
+# UI_DIST_DIR empty and uses Vite; the release image sets it to the built SPA directory.
+if settings.ui_dist_dir:
+    ui_dist = Path(settings.ui_dist_dir)
+    if not ui_dist.is_dir():
+        raise RuntimeError(f"UI_DIST_DIR does not exist: {ui_dist}")
+    app.mount("/", StaticFiles(directory=ui_dist, html=True), name="review-ui")

@@ -1,0 +1,1 @@
+pair_id,utc_date,commit_sha,speaker_id,typed_case_id,voice_case_id,container,codec,noise_condition,typed_correct_fields,typed_total_fields,voice_correct_fields,voice_total_fields,absolute_gap_points,adjudicator,notes

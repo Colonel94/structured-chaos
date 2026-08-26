@@ -14,13 +14,13 @@ means “look here.” “Not stated” means the system deliberately refused to
 
 ## Start a review session
 
-1. Enter your reviewer name. It is recorded on corrections and approvals.
-2. Enter the workspace ID supplied by the pilot administrator and select **Continue to workspace**.
-3. Choose a case from the review queue. The least-reliable predicted class appears first.
-4. If the queue is empty, select **New case** to paste text or attach source files.
+1. On first use, select **Create account**, enter your name, workspace name, work email and a password of
+   at least 10 characters. Otherwise select **Sign in**.
+2. Choose a case from the review queue. The least-reliable predicted class appears first.
+3. If the queue is empty, select **New case** to paste text or attach source files.
 
-The current workspace-ID field is PoC plumbing. Production users should arrive through an authenticated
-workspace and should never have to copy a UUID.
+Your secure session selects the workspace and your signed-in name is recorded by the server on corrections
+and approvals. Reviewers never need to copy a tenant UUID or type an audit identity.
 
 ## Review and approve a case
 
@@ -74,7 +74,7 @@ Before a real pilot:
 
 ## Common problems
 
-- **No workspace loaded:** ask the pilot administrator for the workspace UUID; do not invent one.
+- **Cannot sign in:** check the email and password, then confirm the API and database migrations are current.
 - **Request failed / queue disappears:** check `/health`, confirm the API and worker are running, then
   reload the workspace. The health response should show a live worker, not only `status: ok`.
 - **Case stays in processing:** the worker or local model may be unavailable. Follow the worker and
@@ -87,9 +87,11 @@ Before a real pilot:
 
 ## Administrator handoff checklist
 
-- Provide the workspace ID and a named reviewer identity.
+- Create the first workspace account and use a separate secure channel for any access handoff.
 - Upload only the agreed object-store sample.
 - Replace placeholder policy values with written customer policy.
 - Demonstrate intake, trace, correction, approval, undo, and report once.
 - Explain what happens when processing fails and who owns manual handling.
 - Record support contact, retention period, backup owner, and incident route before accepting real data.
+- Use [Data governance](DATA-GOVERNANCE.md), [Security threat model](SECURITY-THREAT-MODEL.md), and the
+  [Operations runbook](OPERATIONS-RUNBOOK.md) as release evidence; assign named owners to every blank.

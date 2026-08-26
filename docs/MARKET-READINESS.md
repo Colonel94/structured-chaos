@@ -20,6 +20,10 @@ ship-scorecard result.
 - Added visible case counts for attention, ready-to-check, and approved work.
 - Improved responsive behavior, focus states, help-dialog semantics, product metadata, and brand identity.
 - Added a root start page, user guide, and market-readiness gate so each audience has one clear entry.
+- Replaced workspace UUID/free-text identity with account creation, scrypt password storage, expiring
+  HttpOnly sessions, membership-derived tenant/reviewer identity, CSRF binding and logout.
+- Added the built SPA to the production image, request/upload bounds, an intake MIME allowlist, security
+  headers, CodeQL/dependency/Trivy workflows, recovery and incident runbooks, and an offline deletion path.
 
 ## Evidence snapshot
 
@@ -31,10 +35,10 @@ ship-scorecard result.
 | Evaluation validity | Blocked | Labels are self-authored; an independent 60–80 case held-out slice is still required. |
 | Review efficiency | Unmeasured | Review time is instrumented but the ≤30-second human median has not been run. |
 | Schema convergence | Failing / unproven | Duplicate/synonym fields are 7.6% vs <5%; the new-field curve is not declining on real customer data. |
-| Onboarding | Guided pilot only | A branded access screen validates the workspace ID and explains the workflow, but there is no account, invite, session or role experience. |
+| Onboarding | Self-serve first workspace | Account creation, sign-in, session, roles and server audit identity are built; team invitation/revocation UX is still missing. |
 | External usability | Not run | The three-stranger, no-walkthrough test is still outstanding. |
-| Deployment safety | Partial | TLS, secret checks, worker liveness and backup instructions exist; restore drills and full observability evidence do not. |
-| Commercial/legal operations | Missing | No approved privacy notice, DPA, terms, retention schedule, support policy, incident process, pricing or buyer pack is present. |
+| Deployment safety | Partial | TLS, secret checks, worker liveness, security scanning, backup and isolated restore tooling exist; a timestamped restore run and central observability evidence do not. |
+| Commercial/legal operations | Templates only | Retention/deletion, support and incident procedures exist, but legal approval, named owners, pricing, DPA/terms and buyer pack remain external work. |
 
 ## P0 — required before any real-customer pilot
 
@@ -46,21 +50,21 @@ ship-scorecard result.
 3. **No-walkthrough onboarding test.** Give three strangers the product and their own messy input. Do not
    explain the UI. Capture time to first value, points of confusion, and whether they can complete intake,
    review, approval, and report.
-4. **Authentication and authorisation.** Replace pilot workspace-ID access and free-text reviewer identity with
-   authenticated sessions, workspace membership, reviewer/admin roles, logout, expiry, invite/revoke,
-   and server-side audit identity. Header possession is not production authentication.
+4. **Team access completion.** Core authentication is built: secure sessions, membership roles, logout,
+   expiry and server-side audit identity. Add invitation acceptance, membership revocation, password reset
+   and a shared edge rate limit before multi-user production use.
 5. **Tenant policy sign-off.** Replace `assets/policy/default_policy.yaml` placeholder priority/SLA values
    with an explicit per-tenant policy that has an owner, version, approval date and rollback path.
-6. **Data protection pack.** Define data controller/processor roles, purpose, subprocessors, residency,
+6. **Data protection approval.** Complete `DATA-GOVERNANCE.md`: controller/processor roles, purpose, subprocessors, residency,
    retention/deletion, data-subject requests, breach handling, and whether model inputs leave the tenant’s
    chosen boundary. Obtain jurisdiction-specific legal review rather than inferring compliance from code.
-7. **Operational recovery.** Perform and timestamp a restore drill for Postgres and object storage; set
+7. **Operational recovery evidence.** Run and timestamp `scripts/restore_drill.sh`; set
    RPO/RTO; verify worker restart, orphan reaping, failed-case handling and expired portal links.
-8. **Production observability.** Add central error reporting, structured-log collection, latency/error/job
+8. **Production observability.** Connect central error reporting and structured-log collection; add latency/error/job
    backlog dashboards, storage/capacity alerts and paging ownership. `/health` alone is insufficient.
-9. **Security release gate.** Threat-model portal, uploads, webhooks and reviewer API; test file validation,
-   rate limits, tenant boundary, signed-link leakage, secrets rotation and dependency vulnerabilities.
-10. **Support fallback.** Name the person/process that handles a failed case, bad extraction, outage,
+9. **Security release evidence.** Run the security workflow and the gate in `SECURITY-THREAT-MODEL.md`;
+   rehearse secrets rotation and resolve or explicitly accept every high/critical finding.
+10. **Support ownership.** Name the people who execute `OPERATIONS-RUNBOOK.md` for a failed case, bad extraction, outage,
     deletion request and customer escalation during the pilot. Publish response targets.
 
 ## P1 — required before a paid or wider launch

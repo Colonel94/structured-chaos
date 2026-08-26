@@ -6,8 +6,9 @@ prioritised case that a human can verify against its source before anything is a
 ## Current status
 
 This is a working proof of concept, **not a production-ready product**. The trust spine, review flow,
-customer portal, object-store matching, and local deployment path are implemented. The current measured
-accuracy gates, independent validation, authentication, and external onboarding gates are not complete.
+customer portal, object-store matching, authenticated reviewer workspace, and local deployment path are
+implemented. The current measured accuracy gates, independent validation, team invitations, and external
+onboarding gates are not complete.
 See [Market readiness](docs/MARKET-READINESS.md) for the evidence-based launch decision.
 
 ## Choose your path
@@ -52,9 +53,8 @@ pnpm install --frozen-lockfile
 pnpm dev
 ```
 
-Open the URL printed by Vite. A workspace/tenant UUID is currently required; seed a demo workspace with
-the scripts under `engine/scripts`, or obtain the UUID from an administrator. This manual identity step
-is a known product gap, not the intended production onboarding experience.
+Open the URL printed by Vite, create an account and name the workspace. The account becomes its first
+administrator; subsequent requests use the secure session rather than a browser-supplied tenant UUID.
 
 ## Verify a change
 
@@ -88,8 +88,8 @@ Database-backed tests require Docker. CI sets `REQUIRE_DB=1` so those tests cann
 
 - Never commit `.env`, customer source material, generated reports, or local databases.
 - The default policy contains illustrative values; replace it with an approved tenant policy before a pilot.
-- `APP_ENV=prod` rejects placeholder secrets, but production also requires authentication and the other
-  launch gates listed in [Market readiness](docs/MARKET-READINESS.md).
+- `APP_ENV=prod` rejects placeholder secrets and disables the legacy tenant-header test path. Production
+  still requires the external, legal and operational gates listed in [Market readiness](docs/MARKET-READINESS.md).
 - Do not present the current evaluation figures as customer accuracy claims; the label set is not yet
   independently produced.
 

@@ -16,7 +16,7 @@
 **/.pytest_cache
 **/*.egg-info
 
-# Node / UI (engine image doesn't build the UI)
+# Node outputs (the image builds the UI from its manifest + source)
 **/node_modules
 ui/dist
 
