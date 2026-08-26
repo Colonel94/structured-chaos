@@ -49,6 +49,45 @@ live-testing (voice/image/text) → turn each failing case into a prompt/policy 
 
 ## 0. Current state & next actions  ← read this first every session; keep it current
 
+> ## ✅ 2026-08-26 GATE-B VERIFICATION + REAL ELICIT BUG FIXED (aim-for-6/6 session)
+> - **The "3/6 CLEAN" claim was not actually true — Gate 1 (complete workflow) was silently broken.**
+>   `app/store/api.py::get_emergent_values_by_head` selected/ordered a non-existent
+>   `emergent_field.qualifier` column → the **elicit** path (anchor+2 drill) crashed with
+>   `psycopg UndefinedColumn`. Hidden because the seed path never calls elicit. **Fixed:** derive the
+>   qualifier from `field_name`/`head` in SQL (mirrors the Python `field_path[:-(len(head)+1)]`), bare
+>   head sorts last. Also fixed a stale test: `_seed_case` in `test_review_usability.py` skipped
+>   `decide_case`, so its case had no decision → the commit gate (correctly) refused it → the backdate
+>   tripped `case_commit_pair`. Added `decide_case` to the seed. **22 previously-failing tests now pass.**
+> - **Foundation now genuinely verified live:** full backend suite **283 passed / 2 skipped**; trust-spine
+>   21 green (`test_rls_isolation`, `test_provenance`, `test_idempotency`, `test_pii`,
+>   `test_pii_redaction`, `test_trust_coverage`); mypy clean (93 files); ruff clean on app+tests; **black
+>   reformatted 11 pre-existing-drift files** on the release surface (behaviour-preserving, suite still
+>   283 green); UI test + production build green.
+> - **Gate B-5 operational evidence — real drills run:** backup→restore→verify drill **PASSED** (stamp
+>   `20260826T121459Z`, restored counts 88/106/572/41 matched live, 0 errors); secret fail-closed tested
+>   (`test_config_secrets.py` 5 pass); CI security scan exists (`security.yml`: CodeQL + Trivy). Captured
+>   in new doc **`docs/GATE-B-PILOT-READINESS.md`** with the fallback runbook + Gate-4 governance template
+>   + Gate-6 operator-acceptance script.
+> - **HONEST CEILING on "6/6":** a true 6/6 on Gate B is NOT achievable by building alone. Gates 4
+>   (named pilot org + signed policy), 5 (named incident responder + accepted CI scan verdict) and 6
+>   (one **non-builder** operator run) each need a real external human and must not be fabricated
+>   (§10 no-self-grading). Buildable outcome reached: **gates 1/2/3 CLEAN (verified) + gate 5 technical
+>   evidence done**; 4 and 6 packaged ready in the doc. Owner actions to close 6/6 are the ⬜ slots there.
+> - **Also this session:** dev deps got pruned mid-session by an accidental `uv sync` (default group) and
+>   `.venv/pyvenv.cfg` was deleted; both restored (`uv sync --group dev --group embed --group asr`; note
+>   `FlagEmbedding`/BGE-M3 was never synced before, so the worker's schema-maintenance scans had been
+>   erroring — now installed). Seeded a synthetic **non-US-English** diverse demo tenant
+>   `11aa0e52-6d53-48d1-8383-f25884c903b0` (14 verticals; dev/demo only, NOT a gate) after the owner
+>   flagged the holdout is 55% US-finance/CFPB and English-only. Surfaced one extraction bug on it:
+>   an EU261 flight-delay case mis-categorised as `delivery_fulfilment`/`repair_redo`.
+> - **RUN IT:** DB+MinIO via `docker compose -f deploy/docker-compose.yml up -d db minio`; backend
+>   `cd engine && ./.venv/Scripts/python.exe -m uvicorn app.main:app --port 8000` (use `-m uvicorn`, not
+>   the console script, so `uv sync` never locks it); worker from repo root
+>   `./engine/.venv/Scripts/python.exe -m scripts.run_worker default --schedule`; UI `cd ui && pnpm dev`
+>   (:5173). Full suite: `cd engine && REQUIRE_DB=1 ./.venv/Scripts/python.exe -m pytest -q`.
+> - **GIT:** uncommitted changes: `engine/app/store/api.py` (elicit fix), `engine/tests/test_review_usability.py`
+>   (seed fix), 11 black-reformatted files (app+tests), new `docs/GATE-B-PILOT-READINESS.md`. NOT yet committed.
+>
 > ## ✅ 2026-08-26 WINNING-CONDITION v0.2 — OWNER-AUTHORISED PRODUCT CORRECTION
 > - The owner explicitly reconsidered the old 1/6 all-or-nothing contract. It mixed engineering safety,
 >   controlled-pilot entry, GA evidence and market reactions, making safe learning with one design partner
