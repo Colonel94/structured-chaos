@@ -112,16 +112,16 @@
 
 <div class="wrap">
   <header class="top">
-    <p class="eyebrow">Build &amp; sellability tracker · 20 Aug 2026</p>
+    <p class="eyebrow">Build &amp; sellability tracker · 26 Aug 2026</p>
     <h1>Adaptive Intake</h1>
     <p class="lede">A domain-agnostic AI that turns a stranger's messiest real case — text, a chat export,
       a voice note, a photo — into a complete, correctly prioritised, fully-traceable case they never
       typed. This tracks where the build stands against its own winning condition.</p>
     <div class="meta">
-      <span><b>origin/main</b> @ 372d878</span>
-      <span><b class="num">185</b> tests +1 skip</span>
-      <span>ruff · black · mypy · tsc — clean</span>
-      <span>phases <b class="num">0–7</b> done</span>
+      <span><b>origin/main</b> @ b09eb0a</span>
+      <span><b class="num">272</b> tests +1 skip</span>
+      <span>ruff · black · mypy · tsc · vitest — clean</span>
+      <span>phases <b class="num">0–7</b> done · 8 scored · 9 open</span>
     </div>
   </header>
 
@@ -134,20 +134,21 @@
     </div>
     <div class="vcard vcard--warn">
       <h3>Winning-condition scorecard</h3>
-      <p class="big">Not yet passing</p>
-      <p>The trust spine is strong, but convergence, §4 accuracy and Arabic are unmet or unmeasured. A
-        sellable surface is not a passing scorecard.</p>
+      <p class="big">5.6 · not passing</p>
+      <p>The trust spine is strong and the review UI is now a fast, polished surface, but convergence and
+        §4 accuracy still fail their metrics. Three levers move the score — a labeller, a reviewer with a
+        timer, three strangers — and all three remain open.</p>
     </div>
   </section>
 
   <h2>Winning-condition scorecard</h2>
   <div class="rows">
     <div class="row"><span class="row__k">Setup gate (§2)</span><span class="row__v">Self-serve intake + object store built; tenant onboarding manual (allowed). Not yet externally timed.</span><span class="chip c-part">partial</span></div>
-    <div class="row"><span class="row__k">Seven wow moments (§3)</span><span class="row__v">Moments 2–6 demonstrable; 1 &amp; 7 (Arabic) not buildable yet.</span><span class="chip c-part">partial</span></div>
-    <div class="row"><span class="row__k">Quantitative thresholds (§4)</span><span class="row__v">Every measured core metric misses; most are unmeasured (Phase 8 not started).</span><span class="chip c-open">failing</span></div>
+    <div class="row"><span class="row__k">Seven wow moments (§3)</span><span class="row__v">Moments 2–6 demonstrable incl. voice-first (proven on a real iPhone); Arabic retired from §4 by owner (voice-vs-text parity substituted).</span><span class="chip c-part">partial</span></div>
+    <div class="row"><span class="row__k">Quantitative thresholds (§4)</span><span class="row__v">Phase 8 scored: category <b class="num">77%</b> (≥90), zero-edit <b class="num">28%</b> (≥70), desired_outcome <b class="num">56%</b> (≥90) — all on self-authored labels. ≤30s review-time now instrumented, not yet human-measured.</span><span class="chip c-open">failing</span></div>
     <div class="row"><span class="row__k">Trust gates (§5)</span><span class="row__v">RLS isolation, immutability, idempotency, provenance, commit gate — all held &amp; tested.</span><span class="chip c-done">clean</span></div>
-    <div class="row"><span class="row__k">No red flags (§7)</span><span class="row__v">"Touch a DB to serve a case" now false. "Different product in Arabic" still true.</span><span class="chip c-part">1 remains</span></div>
-    <div class="row"><span class="row__k">External gate (§8)</span><span class="row__v">Now possible (self-serve exists) but not yet run with 3 strangers.</span><span class="chip c-open">not run</span></div>
+    <div class="row"><span class="row__k">No red flags (§7)</span><span class="row__v">"Touch a DB to serve a case" false. Arabic retired from §4, so "different product in Arabic" no longer gates — a deferred coverage item, not a red flag.</span><span class="chip c-done">clean</span></div>
+    <div class="row"><span class="row__k">External gate (§8)</span><span class="row__v">Possible (self-serve exists), tenant pristine-ready; not yet run with 3 strangers.</span><span class="chip c-open">not run</span></div>
   </div>
 
   <h2>Phases</h2>
@@ -159,8 +160,8 @@
     <div class="phase"><div class="phase__h"><span class="phase__n">4</span><span class="chip c-open">unproven</span></div><span class="phase__t">Extraction + the moat</span><span class="phase__d">Mechanisms built; convergence fails its metric.</span></div>
     <div class="phase"><div class="phase__h"><span class="phase__n">5</span><span class="chip c-part">partial</span></div><span class="phase__t">Resolve + elicit</span><span class="phase__d">Anchor+2, silent bind, Moment 3 done; ≥99% self-graded.</span></div>
     <div class="phase"><div class="phase__h"><span class="phase__n">6</span><span class="chip c-done">done</span></div><span class="phase__t">Confidence + rules</span><span class="phase__d">Rules engine solid; confidence honest, auto-route off.</span></div>
-    <div class="phase"><div class="phase__h"><span class="phase__n">7</span><span class="chip c-done">done</span></div><span class="phase__t">Review UI + commit + report</span><span class="phase__d">Verified live on real pixels.</span></div>
-    <div class="phase"><div class="phase__h"><span class="phase__n">8</span><span class="chip c-open">not started</span></div><span class="phase__t">Threshold scoring</span><span class="phase__d">The §4 scorer over the ground-truth set.</span></div>
+    <div class="phase"><div class="phase__h"><span class="phase__n">7</span><span class="chip c-done">done</span></div><span class="phase__t">Review UI + commit + report</span><span class="phase__d">Feedback loop, undo, one-key correct, review-time HUD; relit as a light Fluent/Power-Platform UI + dark mode.</span></div>
+    <div class="phase"><div class="phase__h"><span class="phase__n">8</span><span class="chip c-part">scored</span></div><span class="phase__t">Threshold scoring</span><span class="phase__d">§4 scorer runs; gates fail on self-authored labels. Tuning gate now scores a held-out slice.</span></div>
     <div class="phase"><div class="phase__h"><span class="phase__n">9</span><span class="chip c-open">not started</span></div><span class="phase__t">External gate</span><span class="phase__d">Three strangers, no walkthrough.</span></div>
   </div>
 
@@ -169,26 +170,28 @@
     <div class="row"><span class="row__k">Connect data</span><span class="row__v"><code style="font-family:var(--mono)">POST /api/objects</code> + "connect data" — CSV/JSON, schema-agnostic, idempotent.</span><span class="chip c-done">live</span></div>
     <div class="row"><span class="row__k">Submit a case</span><span class="row__v"><code style="font-family:var(--mono)">POST /api/ingest</code> + "new case" — text/files → structured case in ~8–17s.</span><span class="chip c-done">live</span></div>
     <div class="row"><span class="row__k">Moment 3</span><span class="row__v">Anchor resolves silently against uploaded data; confirmation states the record facts, not "found your order".</span><span class="chip c-done">live</span></div>
-    <div class="row"><span class="row__k">Review → approve → report</span><span class="row__v">&lt;30s keyboard review, commit gate, WeasyPrint PDF — nothing external before approval.</span><span class="chip c-done">live</span></div>
+    <div class="row"><span class="row__k">Review → approve → report</span><span class="row__v">Keyboard review, one-key correction, batch approve, commit gate + undo window, WeasyPrint PDF — nothing external before approval.</span><span class="chip c-done">live</span></div>
+    <div class="row"><span class="row__k">Review UI polish</span><span class="row__v">Relit as a light Fluent / Power-Platform surface + a dark-mode toggle; clean record-style cards, keyboard flow and trust signals unchanged.</span><span class="chip c-done">live</span></div>
+    <div class="row"><span class="row__k">Feedback loop</span><span class="row__v">Reviewer corrections + verdicts → tuning digest → drafted prompt-delta → open-as-PR → held-out eval. Every step human-gated, $0.</span><span class="chip c-done">live</span></div>
   </div>
 
   <h2>Honest open gaps</h2>
   <div class="rows">
     <div class="gap gap--crit"><div class="gap__h"><span class="tag">binding</span><span class="gap__t">Independent human-labelled held-out slice</span></div><p class="gap__d">60–80 cases labelled by someone who is neither the owner nor Claude. Gates the confidence number, the category score, and the review ordering — a better extractor can't beat Claude's own label inconsistency. Owner's data-source call.</p></div>
     <div class="gap gap--crit"><div class="gap__h"><span class="tag">moat</span><span class="gap__t">Convergence fails at its committed metric</span></div><p class="gap__d">Duplicate/synonym fields <b class="num">7.6%</b> (gate &lt;5%), new-field curve flat ~90% hapax. The self-converging-schema claim is unproven on real data.</p></div>
-    <div class="gap gap--crit"><div class="gap__h"><span class="tag">accuracy</span><span class="gap__t">§4 accuracy gates unmet</span></div><p class="gap__d">Governed core ~63–71% (gate ≥95%), category 74–82% (≥90), auto-route <code style="font-family:var(--mono)">gate_met=False</code> (≥98). Honest, not forced.</p></div>
-    <div class="gap gap--warn"><div class="gap__h"><span class="tag tag--warn">coverage</span><span class="gap__t">Arabic entirely absent</span></div><p class="gap__d"><b class="num">0 / 216</b> gold cases are Arabic/code-switched. The marquee differentiator is unbuilt and unmeasured — a separate project.</p></div>
-    <div class="gap gap--warn"><div class="gap__h"><span class="tag tag--warn">measurement</span><span class="gap__t">Most §4 metrics unmeasured</span></div><p class="gap__d">Zero-edit rate, ambiguous-flagged, sparse→actionable, review time, end-to-end latency, object-match pair — no numbers yet. Phase 8 is the scorer.</p></div>
-    <div class="gap gap--warn"><div class="gap__h"><span class="tag tag--warn">infra</span><span class="gap__t">Cloud path partly vaporware</span></div><p class="gap__d"><code style="font-family:var(--mono)">asr_cohere</code> / <code style="font-family:var(--mono)">embed_bge</code> modules missing; WhatsApp send is a stub. File-drop is the one working channel.</p></div>
+    <div class="gap gap--crit"><div class="gap__h"><span class="tag">accuracy</span><span class="gap__t">§4 accuracy gates unmet</span></div><p class="gap__d">Category <b class="num">77%</b> (≥90), zero-edit <b class="num">28%</b> (≥70), desired_outcome <b class="num">56%</b> (≥90), severity <b class="num">83%</b> (≥95); auto-route <code style="font-family:var(--mono)">gate_met=False</code>, τ=1.01. Honest, not forced — and self-graded until the independent labels land.</p></div>
+    <div class="gap gap--crit"><div class="gap__h"><span class="tag">measurement</span><span class="gap__t">≤30s review-time not yet human-measured</span></div><p class="gap__d">Under the τ=1.01 reframe (nothing auto-routes), time-to-approve is <em>the</em> load-bearing §4 number. Now instrumented (HUD + <code style="font-family:var(--mono)">/api/review-stats</code>) and a reviewer session is staged on a seeded tenant — a ~20-min human cold-read pass away, fully unblocked.</p></div>
+    <div class="gap gap--warn"><div class="gap__h"><span class="tag tag--warn">coverage</span><span class="gap__t">Arabic retired from §4; ~8 rows still unmeasured</span></div><p class="gap__d">Owner retired Arabic from §4 (voice-vs-text parity substituted; voice-first proven on a real iPhone). Object-match, latency, backfill rows remain measurable-but-unrun.</p></div>
+    <div class="gap gap--warn"><div class="gap__h"><span class="tag tag--warn">infra</span><span class="gap__t">Cloud path partly vaporware</span></div><p class="gap__d"><code style="font-family:var(--mono)">asr_cohere</code> / <code style="font-family:var(--mono)">embed_bge</code> modules missing; WhatsApp send is a stub. File-drop + WhatsApp-in are the working channels; local qwen3:14b is the live path.</p></div>
   </div>
 
   <h2>Next steps</h2>
   <div class="steps">
-    <div class="step step--blocked"><span class="step__n"></span><div><p class="step__t">Independent human-labelled held-out slice <span class="chip c-defer" style="margin-left:6px">owner / human</span></p><p class="step__d">The binding numbers constraint. Claude preps the blind sheet on go; owner picks re-label-existing-216 vs fresh design-partner data.</p></div></div>
-    <div class="step"><span class="step__n"></span><div><p class="step__t">Phase 8 — the §4 threshold scorer</p><p class="step__d">Measure the unmeasured over the ground-truth set: zero-edit rate, ambiguous-flagged, sparse→actionable, review time, latency, object-match.</p></div></div>
-    <div class="step"><span class="step__n"></span><div><p class="step__t">Async intake</p><p class="step__d">Replace the ~17s inline spinner with a background job + progress. UX, not blocking.</p></div></div>
-    <div class="step"><span class="step__n"></span><div><p class="step__t">Convergence remediation (the moat)</p><p class="step__d">Needs richer real recurring data + the dedup/mint proof to bend the composite curve — or the honest retraction stands.</p></div></div>
-    <div class="step"><span class="step__n"></span><div><p class="step__t">Arabic <span class="chip c-defer" style="margin-left:6px">separate project</span></p><p class="step__d">The differentiator. Needs the Gulf voice corpus (track T3), self-recorded under consent.</p></div></div>
+    <div class="step"><span class="step__n"></span><div><p class="step__t">Reviewer with a timer <span class="chip c-part" style="margin-left:6px">unblocked · staged</span></p><p class="step__d">The cheapest lever and the only one that yields the load-bearing §4 number. Tenant seeded, HUD live, session waiting — a ~20-min human cold-read pass. Read the median off <code style="font-family:var(--mono)">/api/review-stats</code>.</p></div></div>
+    <div class="step step--blocked"><span class="step__n"></span><div><p class="step__t">Independent human-labelled held-out slice <span class="chip c-defer" style="margin-left:6px">owner / human</span></p><p class="step__d">The binding numbers constraint — turns "77% agreement-with-Claude" into a real accuracy number. Blind sheet + scorer built; needs someone who is neither owner nor Claude. A bigger extractor is the wrong lever before this.</p></div></div>
+    <div class="step step--blocked"><span class="step__n"></span><div><p class="step__t">External gate — three strangers <span class="chip c-defer" style="margin-left:6px">owner / human</span></p><p class="step__d">The actual win condition (§8/§9): their own mess, no walkthrough, you silent. Win = someone asks the price before a feature. Tenant is pristine-ready.</p></div></div>
+    <div class="step"><span class="step__n"></span><div><p class="step__t">Convergence remediation (the moat)</p><p class="step__d">Needs richer real recurring single-domain data + the dedup/mint proof to bend the composite curve — or the honest retraction stands.</p></div></div>
+    <div class="step"><span class="step__n"></span><div><p class="step__t">Async intake + cloud impls</p><p class="step__d">Replace the ~17s inline spinner with a background job + progress; fill the <code style="font-family:var(--mono)">asr_cohere</code>/<code style="font-family:var(--mono)">embed_bge</code> stubs. Lower priority, not blocking.</p></div></div>
   </div>
 
   <h2>Run it</h2>
@@ -199,7 +202,9 @@
       <dt>Engine</dt><dd>cd engine &amp;&amp; uv run uvicorn app.main:app --port 8000</dd>
       <dt>UI</dt><dd>cd ui &amp;&amp; pnpm dev</dd>
       <dt>Open</dt><dd>localhost:5173/?tenant=&lt;uuid&gt;</dd>
-      <dt>Seed</dt><dd>python scripts/seed_review_demo.py</dd>
+      <dt>Seed demo</dt><dd>uv run python scripts/seed_portal_orders.py "Portal Demo Co"</dd>
+      <dt>Seed review</dt><dd>uv run python scripts/seed_review_cases.py "Portal Demo Co"</dd>
+      <dt>Reset</dt><dd>uv run python scripts/reset_demo_tenant.py "Portal Demo Co"</dd>
     </dl>
     <p style="font-size:12.5px;color:var(--muted);margin:0 0 12px">Note: the compose <code>engine</code>/<code>migrate</code> images carry stale code (Docker COPY-cache on the "Structured Chaos" path) — rebuild <code>--no-cache</code> before shipping the container.</p>
   </div>
