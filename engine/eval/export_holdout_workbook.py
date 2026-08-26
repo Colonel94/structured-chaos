@@ -1,4 +1,4 @@
-"""Export the labelling workbook's Cases sheet to the CSV the scorer consumes.
+"""Export the labelling workbook's Cases sheet to the CSV the scorer consumes, and run QA on it.
 
 `holdout_labels.xlsx` is the human source of truth (Cases + Option Sets + QA Summary, dropdown-validated).
 `score_holdout.py` reads `holdout_labels_<name>.csv`. This regenerates that CSV from the workbook so the
@@ -6,10 +6,16 @@ two never drift. Re-run after editing the workbook.
 
     cd engine && uv run --group dev python eval/export_holdout_workbook.py            # -> holdout_labels_owner.csv
     cd engine && uv run --group dev python eval/export_holdout_workbook.py alice      # -> holdout_labels_alice.csv
+    cd engine && uv run --group dev python eval/export_holdout_workbook.py --qa        # integrity + full distributions
+
+The --qa report covers what the workbook's QA Summary sheet omits (owner review 2026-08-26): severity and
+emotion distributions, missing-label counts per field, duplicate ids / narratives, source composition, and
+an out-of-vocabulary check of every gold cell against the Option Sets sheet.
 """
 
 from __future__ import annotations
 
+import collections
 import csv
 import sys
 from pathlib import Path
@@ -18,25 +24,106 @@ import openpyxl
 
 _DIR = Path(__file__).resolve().parent / "fixtures"
 _WORKBOOK = _DIR / "holdout_labels.xlsx"
+_GOLD = (
+    "gold_category",
+    "gold_desired_outcome",
+    "gold_severity_signal",
+    "gold_emotion_signal",
+)
 
 
-def main() -> None:
-    name = sys.argv[1] if len(sys.argv) > 1 else "owner"
-    out = _DIR / f"holdout_labels_{name}.csv"
+def _cases() -> tuple[list[str], list[tuple]]:
     wb = openpyxl.load_workbook(_WORKBOOK, data_only=True)
     rows = list(wb["Cases"].iter_rows(values_only=True))
     header = [(h or "").strip() for h in rows[0]]
-    n = 0
+    data = [r for r in rows[1:] if r is not None and r[0] not in (None, "")]
+    return header, data
+
+
+def _option_sets() -> dict[str, set[str]]:
+    wb = openpyxl.load_workbook(_WORKBOOK, data_only=True)
+    allowed: dict[str, set[str]] = collections.defaultdict(set)
+    for r in list(wb["Option Sets"].iter_rows(values_only=True))[1:]:
+        if r and r[0] and r[1]:
+            allowed[str(r[0]).strip()].add(str(r[1]).strip())
+    return allowed
+
+
+def export(name: str) -> None:
+    header, data = _cases()
+    out = _DIR / f"holdout_labels_{name}.csv"
     with out.open("w", encoding="utf-8", newline="") as f:
         w = csv.writer(f)
         w.writerow(header)
-        for r in rows[1:]:
-            if r is None or r[0] in (None, ""):
-                continue
+        for r in data:
             w.writerow(["" if c is None else str(c) for c in r])
-            n += 1
-    print(f"wrote {out} — {n} rows + header")
+    print(f"wrote {out} — {len(data)} rows + header")
+
+
+def qa() -> int:
+    header, data = _cases()
+    idx = {h: i for i, h in enumerate(header)}
+    allowed = _option_sets()
+    print(f"QA — {len(data)} cases\n" + "=" * 60)
+
+    # source composition
+    src: collections.Counter[str] = collections.Counter()
+    for r in data:
+        i = str(r[idx["id"]])
+        src["CFPB" if i.isdigit() else i.split("-")[0]] += 1
+    print("source:", dict(src))
+
+    # distributions + missing counts for all four gold fields
+    for col in _GOLD:
+        vals = [r[idx[col]] for r in data]
+        missing = sum(1 for v in vals if v in (None, ""))
+        dist = collections.Counter(str(v) for v in vals if v not in (None, ""))
+        print(f"\n{col}  (missing/blank: {missing})")
+        for k, v in dist.most_common():
+            print(f"   {v:3}  {k}")
+
+    problems = 0
+    # duplicate ids
+    ids = [str(r[idx["id"]]) for r in data]
+    dup_ids = [k for k, c in collections.Counter(ids).items() if c > 1]
+    if dup_ids:
+        problems += len(dup_ids)
+        print(f"\n⚠ DUPLICATE ids: {dup_ids}")
+    # duplicate narratives
+    narr = [str(r[idx["narrative"]]).strip() for r in data]
+    dup_narr = [k for k, c in collections.Counter(narr).items() if c > 1 and k]
+    if dup_narr:
+        problems += len(dup_narr)
+        print(
+            f"\n⚠ DUPLICATE narratives: {len(dup_narr)} (first 3: {[n[:60] for n in dup_narr[:3]]})"
+        )
+    # out-of-vocab gold cells vs Option Sets
+    oov: list[str] = []
+    for r in data:
+        for col in _GOLD:
+            v = r[idx[col]]
+            if v in (None, ""):
+                continue
+            if str(v).strip() not in allowed.get(col, set()):
+                oov.append(f"id={r[idx['id']]} {col}={v!r}")
+    if oov:
+        problems += len(oov)
+        print(f"\n⚠ OUT-OF-VOCAB gold cells ({len(oov)}):\n  " + "\n  ".join(oov[:20]))
+
+    print("\n" + "=" * 60)
+    print(
+        "QA PASS — no integrity problems" if problems == 0 else f"QA: {problems} problem(s) above"
+    )
+    return 1 if problems else 0
+
+
+def main() -> int:
+    args = sys.argv[1:]
+    if args and args[0] == "--qa":
+        return qa()
+    export(args[0] if args else "owner")
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

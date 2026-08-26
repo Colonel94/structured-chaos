@@ -49,6 +49,38 @@ live-testing (voice/image/text) → turn each failing case into a prompt/policy 
 
 ## 0. Current state & next actions  ← read this first every session; keep it current
 
+> ## ✅ 2026-08-27 TAXONOMY v0.2 EXPANDED + FULL 200-CASE SCORE (extract-v21)
+> - **Owner widened the governed taxonomy** (workbook `holdout_labels.xlsx` Option Sets): category 10→14
+>   (+transaction_processing, fraud_security, privacy_data, misleading_practice), desired_outcome 7→13
+>   (+correction, cancellation, restore_access, stop_contact, compensation, investigation), severity 4→5
+>   (+privacy_security), emotion 3→5 (+concerned, distressed). Propagated across the WHOLE system:
+>   `schema.py` enums, `prompt.py` (**extract-v21**, with the owner's definitions + boundary rules),
+>   `starter_taxonomy.yaml` (also was missing record_accuracy), `synthesis.py`, portal wording, and
+>   `policy_default.yaml` (new categories + privacy_security route **deterministically**, verified —
+>   catch-all still last). Calibration NOT re-fit: tau_auto=1.01 = auto-route gate OFF (all→review), so
+>   stale confidence is non-safety (ordering only); a proper re-fit needs its own model run + independent
+>   labels, deferred.
+> - **Full 200-case score (model extract-v21 vs OWNER gold, agreement — NOT independent correctness).**
+>   Coverage 200/200 (scorer now HARD-FAILS partial coverage — exit 3 unless ALLOW_PARTIAL=1). Numbers
+>   with majority-class baseline + lift:
+>   - category 72% (base 12% product_fault, **+59**) — strong
+>   - desired_outcome 78% (base 18% null, **+60**) — strong
+>   - severity 62% (base 54% financial_harm, **+8**) — WEAK, barely above baseline
+>   - emotion 48% (base 37% frustrated, **+12**) — WEAK (5-point scale; concerned/distressed subtle)
+>   - all-fields 16%.  n=200 but still DIRECTIONAL (rule of three) and owner-agreement, not correctness.
+> - **Gold is OWNER gold, not independent (owner review):** 66 real + 134 owner-authored SYNTHETIC =
+>   development evidence, independent of the extractor/me but NOT the third-party representative set the
+>   GA gate needs. The independent number (column 2) is still outstanding — hand the workbook to a
+>   non-builder. Do not present these as independent accuracy or market-readiness.
+> - **Runner/scorer now robust:** `extract_holdout.py` reads `holdout_labels_owner.csv`, incremental +
+>   resumable + observable (writes/flushes per case; ~15-25 s/case on the 4070, ~60-80 min for 200).
+>   `export_holdout_workbook.py --qa` = integrity report (dupes/OOV/missing/distributions; QA PASS).
+>   Rule saved: the extractor enum and its GRADER's label space must move together, and a widened gold
+>   caps measured accuracy until the extractor + calibration catch up (do not collapse gold — §10).
+> - **GIT:** all of the above uncommitted on branch `fix/elicit-qualifier-gate-b-readiness` at time of
+>   writing (owner review flagged the taxonomy files were uncommitted → not covered by remote checks).
+>   Committing now. `holdout_extractions.jsonl` regenerated (200 v21 rows).
+>
 > ## ✅ 2026-08-26 GATE-B VERIFICATION + REAL ELICIT BUG FIXED (aim-for-6/6 session)
 > - **The "3/6 CLEAN" claim was not actually true — Gate 1 (complete workflow) was silently broken.**
 >   `app/store/api.py::get_emergent_values_by_head` selected/ordered a non-existent

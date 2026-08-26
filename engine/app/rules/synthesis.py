@@ -28,6 +28,10 @@ _CATEGORY_PHRASE: dict[str, str] = {
     "staff_conduct": "a staff-conduct complaint",
     "access_availability": "an access or availability issue",
     "safety_health": "a safety or health concern",
+    "transaction_processing": "a payment or transaction-processing problem",
+    "fraud_security": "a fraud or account-security concern",
+    "privacy_data": "a privacy or personal-data concern",
+    "misleading_practice": "a misleading-practice complaint",
     "other": "a complaint",
     "UNCLEAR": "an as-yet-unclear complaint",
 }
@@ -38,6 +42,12 @@ _OUTCOME_PHRASE: dict[str, str] = {
     "acknowledgement": "an acknowledgement",
     "information": "an answer",
     "escalation": "escalation",
+    "correction": "a correction to the record",
+    "cancellation": "a cancellation",
+    "restore_access": "access restored",
+    "stop_contact": "contact to stop",
+    "compensation": "compensation",
+    "investigation": "an investigation",
     "other": "a resolution",
 }
 # What resolving each desired outcome concretely asks of the reviewer (the actionable half of next_step).
@@ -48,6 +58,12 @@ _OUTCOME_ACTION: dict[str, str] = {
     "acknowledgement": "acknowledge the complaint to the customer",
     "information": "get the customer the answer they asked for",
     "escalation": "escalate per policy",
+    "correction": "correct the inaccurate record",
+    "cancellation": "process the cancellation",
+    "restore_access": "restore the customer's access",
+    "stop_contact": "stop further contact and log the request",
+    "compensation": "assess and action compensation",
+    "investigation": "open an investigation and validate the claim",
     "other": "decide and action the resolution",
 }
 

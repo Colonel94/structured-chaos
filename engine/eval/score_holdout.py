@@ -1,9 +1,13 @@
-"""Score the held-out slice once the INDEPENDENT human labels come back (W1) — the four numbers.
+"""Score the held-out slice against the human labels — the four numbers.
 
-The binding constraint on the whole accuracy story: the existing gold is Claude-authored, so every accuracy
-figure is "agreement with the labeller", not "correctness" (CLAUDE.md §10 CORRECTION). This script turns
-that into a real number by comparing the model against a human who is neither the owner nor me, on 66 fresh
-held-out cases.
+WHAT THE CURRENT GOLD IS (be honest — CLAUDE.md §10, and the owner's review 2026-08-26): the filled
+labels are `holdout_labels_owner.csv`, exported from the OWNER's workbook — 200 cases, of which 66 are
+real (CFPB/NHTSA/Trustpilot) and 134 are owner-AUTHORED synthetic complaints. That makes this OWNER gold:
+independent of the extractor and of me (so it is real signal, far better than Claude-authored gold), but
+it is NOT the third-party INDEPENDENT, representative set the GA quality gate requires — synthetic gold is
+development evidence, not market-representative evidence. So `model vs owner` below is AGREEMENT WITH THE
+OWNER'S READING, not "correctness". The independent third-party number (column 2) is still the target and
+is still outstanding; hand the workbook to a non-builder labeller to get it.
 
 It computes the owner's four numbers, generically over however many label files you hand it:
   1. model vs OWNER gold          (agreement with the owner's own reading)
@@ -31,6 +35,7 @@ from __future__ import annotations
 
 import csv
 import json
+import os
 import sys
 from collections import Counter
 from itertools import combinations
@@ -247,6 +252,28 @@ def _repair_redo_diagnostic(sources: list[Source]) -> None:
             print(f"     {e}")
 
 
+def _coverage(model: Source, humans: list[Source]) -> bool:
+    """Print model-vs-gold coverage and return True iff EVERY gold-labelled id has a model prediction.
+    Without this, a '200-case score' silently reports only the model∩gold overlap (e.g. 66/200) while
+    exiting green — the exact mis-report this guard prevents. Official scoring requires full coverage.
+    """
+    ok = True
+    print("\nCOVERAGE — model predictions vs gold-labelled cases:")
+    for h in humans:
+        gold_ids = {cid for cid in h.ids if any(h.labelled(cid, f) for f in _FIELDS)}
+        missing = sorted(gold_ids - model.ids)
+        matched = len(gold_ids) - len(missing)
+        print(
+            f"   {h.name:<14}: {matched}/{len(gold_ids)} gold cases have a model prediction"
+            + ("" if not missing else "   ⚠ INCOMPLETE")
+        )
+        if missing:
+            ok = False
+            preview = ", ".join(missing[:12]) + (" …" if len(missing) > 12 else "")
+            print(f"                    {len(missing)} MISSING (no model extraction): {preview}")
+    return ok
+
+
 def main() -> int:
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8")  # type: ignore[union-attr]
@@ -283,8 +310,13 @@ def main() -> int:
     print(
         f"HELD-OUT ACCURACY — model ({sum(1 for _ in _MODEL.open())} cases) vs {len(humans)} human label set(s)"
     )
-    print("n≈66 → DIRECTIONAL (rule of three: a ≥99% claim needs ~300 clean obs). Report the pair.")
+    print(
+        "Still DIRECTIONAL (rule of three: a ≥99% claim needs ~300 clean obs) and agreement-with-owner, "
+        "not independent correctness. Report the pair, per field, with its n."
+    )
     print("=" * 78)
+
+    covered = _coverage(model, humans)
 
     # (1)&(2) model vs each human; (3)&(4) every human pair.
     for h in humans:
@@ -300,6 +332,18 @@ def main() -> int:
         "  1. model vs owner   2. model vs independent   3. owner vs independent   4. indep1 vs indep2"
     )
     print("=" * 78)
+    if not covered:
+        if os.environ.get("ALLOW_PARTIAL") == "1":
+            print(
+                "\n⚠ PARTIAL COVERAGE accepted (ALLOW_PARTIAL=1) — this is NOT an official score."
+            )
+            return 0
+        print(
+            "\n⛔ NOT AN OFFICIAL SCORE — model predictions are missing for some gold cases (see COVERAGE)."
+            "\n   Run eval/extract_holdout.py to complete coverage, or set ALLOW_PARTIAL=1 to force a "
+            "partial read."
+        )
+        return 3
     return 0
 
 

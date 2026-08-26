@@ -5,7 +5,10 @@ already passed. Independent labels and unassisted stranger sessions are not cont
 under winning-condition v0.2; they remain required before broad quality/onboarding claims. Freeze the
 commit, model, policy, inputs and thresholds before a run. There are **no session-capture spreadsheets**:
 a person using the product is measured by the product (see the last section); the only labelling artifact
-is `engine/eval/fixtures/holdout_labels.csv`.
+is the workbook `engine/eval/fixtures/holdout_labels.xlsx` (exported to `holdout_labels_<name>.csv` for
+scoring). Help requests, abandonment, and observer notes are the only things the instrumentation cannot
+see — they are recorded out-of-band as a short free-text note, never inferred from a successful
+`review_event` row.
 
 ## Independent holdout
 

@@ -28,7 +28,7 @@ def test_main_is_eval_neutral() -> None:
     """On main the addenda file is empty → no addenda, version unbumped, no header in the built prompt."""
     assert json.loads(P._ADDENDA_PATH.read_text(encoding="utf-8")) == []
     assert P._load_tuning_addenda() == []
-    assert P.PROMPT_VERSION == "extract-v20"
+    assert P.PROMPT_VERSION == "extract-v21"
     assert "ADDITIONAL DISAMBIGUATION" not in P.build_prompt("my order was late")
 
 

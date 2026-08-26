@@ -32,6 +32,10 @@ _CATEGORY_PHRASE = {
     "access_availability": "a problem accessing your account or service",
     "staff_conduct": "an issue with how you were treated",
     "safety_health": "a safety or health concern",
+    "transaction_processing": "a problem with a payment or transaction",
+    "fraud_security": "a fraud or account-security concern",
+    "privacy_data": "a privacy or personal-data concern",
+    "misleading_practice": "a concern about being misled",
     "other": "an issue",
 }
 _OUTCOME_PHRASE = {
@@ -41,6 +45,12 @@ _OUTCOME_PHRASE = {
     "escalation": "you'd like it escalated",
     "information": "you'd like an answer",
     "acknowledgement": "you'd like it acknowledged",
+    "correction": "you'd like your records corrected",
+    "cancellation": "you'd like to cancel",
+    "restore_access": "you'd like your access restored",
+    "stop_contact": "you'd like the contact to stop",
+    "compensation": "you'd like compensation",
+    "investigation": "you'd like it investigated",
     "other": "you've told us what you'd like",
 }
 

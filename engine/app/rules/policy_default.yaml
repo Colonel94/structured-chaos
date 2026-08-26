@@ -44,6 +44,13 @@ rules:
     sla_hours: 4
     rationale: "Financial harm reported — high priority, routed to finance/billing."
 
+  - id: privacy-security-severity
+    when: { severity: [privacy_security] }
+    priority: P2
+    routing: fraud_security
+    sla_hours: 4
+    rationale: "Identity, account-security, or privacy exposure — high priority, routed to the fraud and security team."
+
   - id: angry-any
     when: { emotion: [angry] }
     priority: P2
@@ -124,6 +131,34 @@ rules:
     routing: operations
     sla_hours: 12
     rationale: "An access or availability issue — routed to operations."
+
+  - id: transaction-processing
+    when: { category: [transaction_processing] }
+    priority: P3
+    routing: finance_billing
+    sla_hours: 12
+    rationale: "A payment or transaction-processing failure — routed to finance/billing."
+
+  - id: fraud-security
+    when: { category: [fraud_security] }
+    priority: P2
+    routing: fraud_security
+    sla_hours: 4
+    rationale: "A fraud, scam, or account-security complaint — high priority, routed to the fraud and security team."
+
+  - id: privacy-data
+    when: { category: [privacy_data] }
+    priority: P2
+    routing: privacy_compliance
+    sla_hours: 8
+    rationale: "A privacy or personal-data complaint — routed to privacy and compliance."
+
+  - id: misleading-practice
+    when: { category: [misleading_practice] }
+    priority: P3
+    routing: customer_care
+    sla_hours: 12
+    rationale: "A misleading-practice or bait-and-switch complaint — routed to customer care."
 
   # --- Catch-all: an uncategorised complaint (category 'other' or absent). MUST be last + unconditional. ---
   - id: default
