@@ -49,16 +49,27 @@ _FIELDS = list(_FIELD_MAP.values())
 _NULL_ON_BLANK = {
     "desired_outcome"
 }  # blank = a real "null" label (only if the source used the column)
+# The label space is the owner's governed taxonomy — the "Option Sets" sheet of
+# eval/fixtures/holdout_labels.xlsx (v0.2, 2026-08-26, tightened so complaints are not forced into
+# coarser buckets). It is a SUPERSET of the extractor's enums (app/extract/schema.py): the extractor
+# cannot yet emit transaction_processing / fraud_security / privacy_data / misleading_practice, the six
+# new outcomes, privacy_security, or concerned/distressed — so those gold rows will score as mismatches
+# until the governed enum is expanded and history re-extracted. That gap is the honest signal; do NOT
+# collapse gold to the extractor's coarser set to hide it (CLAUDE.md §10).
 _ALLOWED = {
     "category": {
         "product_fault",
         "service_fault",
         "delivery_fulfilment",
         "billing_charge",
+        "transaction_processing",
         "record_accuracy",
         "access_availability",
         "staff_conduct",
         "safety_health",
+        "fraud_security",
+        "privacy_data",
+        "misleading_practice",
         "other",
         "unclear",
     },
@@ -70,10 +81,22 @@ _ALLOWED = {
         "acknowledgement",
         "information",
         "escalation",
+        "correction",
+        "cancellation",
+        "restore_access",
+        "stop_contact",
+        "compensation",
+        "investigation",
         "other",
     },
-    "severity_signal": {"safety_health", "vulnerable_party", "financial_harm", "none"},
-    "emotion_signal": {"calm", "frustrated", "angry"},
+    "severity_signal": {
+        "safety_health",
+        "vulnerable_party",
+        "financial_harm",
+        "privacy_security",
+        "none",
+    },
+    "emotion_signal": {"calm", "concerned", "frustrated", "angry", "distressed"},
 }
 
 

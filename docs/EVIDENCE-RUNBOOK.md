@@ -9,9 +9,14 @@ is `engine/eval/fixtures/holdout_labels.csv`.
 
 ## Independent holdout
 
-Give only `engine/eval/fixtures/holdout_labels.csv` and its instructions to a non-builder labeller. Do not
-show model outputs. A second person adjudicates uncertain rows. Hash/freeze the completed file, then run
-`cd engine && uv run python eval/score_holdout.py`. Record disagreements as well as aggregate scores.
+Give only `engine/eval/fixtures/holdout_labels.xlsx` to a non-builder labeller — the **Cases** sheet is
+filled, **Option Sets** defines the allowed values (dropdown-validated) and their manager rules, and
+**QA Summary** tracks distribution. Do not show model outputs. A second person adjudicates uncertain rows.
+Export the completed Cases sheet to `engine/eval/fixtures/holdout_labels_<name>.csv` (e.g.
+`holdout_labels_owner.csv`), hash/freeze it, then run `cd engine && uv run python eval/score_holdout.py`.
+Record disagreements as well as aggregate scores. The gold taxonomy is a **superset** of the extractor's
+enums, so category/outcome accuracy is honestly capped until the governed enum is expanded and history
+re-extracted — that gap is the signal, not something to hide by collapsing gold.
 
 ## Cold reviewer timing
 
