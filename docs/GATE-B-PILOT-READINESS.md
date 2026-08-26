@@ -119,8 +119,10 @@ Do it without the builder narrating. Record every point of confusion — confusi
    overwrite of the original).
 6. Approve the case. Confirm you could **not** approve it while it was still processing.
 7. Produce the report/output. Confirm it only became available after approval.
-8. Record: total time, any moment you looked for a form, any field the system got confidently wrong,
-   any question it asked that you'd already answered.
+8. Don't hand-log your time — the system already did. Read `GET /api/review-stats` for count / median /
+   p90 (the ≤30s and ≤60s targets are scored from there, not a spreadsheet). Note only what the
+   instrumentation can't see: any moment you looked for a form, any field it got confidently wrong, any
+   question it asked that you'd already answered, and whether you needed help or gave up.
 
 Gate 6 is CLEAN when a non-builder completes steps 1–7 end to end and the step-8 notes contain no
 trust failure (untraceable value, confidently-wrong field, approval of an unprocessed case).

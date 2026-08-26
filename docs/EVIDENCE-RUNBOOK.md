@@ -14,9 +14,14 @@ show model outputs. A second person adjudicates uncertain rows. Hash/freeze the 
 ## Cold reviewer timing
 
 Use at least three people who have not used the product. Give one sentence: “Review these cases and
-approve only what matches the source.” Start the clock when the queue appears; stop per case at approval
-or abandonment. Record every correction, help request and error in `evidence/reviewer-session-template.csv`.
-Pass only if the representative-case median is at most 30 seconds; report p90 and sample size too.
+approve only what matches the source.” **The system instruments the session itself** — every approval
+writes an append-only `review_event` row carrying `review_ms` and `fields_edited`, and the live HUD
+shows the running median. After the session, read `GET /api/review-stats` and record the commit SHA,
+`count` (n), `median_ms` and `p90_ms`. Pass only if the representative-case median is at most 30
+seconds. Do **not** hand-log per-case times into a spreadsheet — a reviewer using the product *is* the
+measurement, and re-typing it back into a form is the exact thing this product exists to eliminate.
+The only things the instrumentation cannot see are **help requests, abandonment, and observer notes**;
+capture those three on a sticky note.
 
 ## Sparse and voice sets
 
@@ -24,8 +29,11 @@ Pass only if the representative-case median is at most 30 seconds; report p90 an
   the input and label whether the final case became actionable, reused stated data, asked for derivable
   data, captured outcome and was abandoned. Synthetic cases may test code but cannot pass the market gate.
 - Voice parity: record at least 30 paired cases where the same speaker provides the same facts in a typed
-  and a natural voice version. Include real phone containers/codecs/noise. Score governed fields using
-  `evidence/voice-pair-template.csv`; the absolute field-accuracy gap must be at most five percentage points.
+  and a natural voice version, over real phone containers/codecs/noise. Run both cases through extraction
+  and score EACH against the frozen gold with the same scorer as the holdout (`eval/score_holdout.py`);
+  the absolute field-accuracy gap is **computed by the scorer, not hand-counted**, and must be at most
+  five percentage points. The recording conditions (container/codec/noise) are inputs you choose when you
+  record, not measurements to log — so no per-pair spreadsheet is needed.
 
 ## Unassisted onboarding study
 
@@ -33,6 +41,19 @@ For each person: use their own messy input, provide no walkthrough, keep the bui
 time to first value plus exact unsolicited reactions in `evidence/stranger-session-template.csv`. Treat
 price questions and feature requests as discovery signals, not pass/fail software criteria. Consent to
 record and retention/deletion must be settled before the session.
+
+## What the system already measures (do not re-capture by hand)
+
+Before adding any capture template, check whether the product already instruments it. It does, for most
+of this: `review_event` + `GET /api/review-stats` give count/median/p90 review time and average fields
+edited; the append-only `field_correction` log + `GET /api/review-breakdown` give per-field correction
+pressure; the eval scorer gives field/category accuracy against gold. **A reviewer using the product is
+the measurement.** Only genuinely external observations justify manual capture — reactions, price
+questions, help requests, abandonment, observer notes — and those are a sticky note, not a 14-column
+spreadsheet. (The former `reviewer-session-template.csv` and `voice-pair-template.csv` were removed for
+exactly this reason: they re-typed instrumented data into a form, the thing this product exists to kill.
+Only `stranger-session-template.csv` remains, because reactions and price questions are not
+instrumentable.)
 
 ## Evidence integrity
 
