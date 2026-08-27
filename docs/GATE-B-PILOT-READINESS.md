@@ -1,14 +1,14 @@
 # Gate B — controlled-pilot readiness
 
 *Working artifact to drive `winning-condition.md §4` (Gate B) from 3/6 to a genuine 6/6.*
-*Last verified: 2026-08-26. Owner-fill slots are marked ⬜.*
+*Last verified: 2026-08-27 at revision `10b95cf`. Owner-fill slots are marked ⬜.*
 
 Gate B has six top-level gates. Three are code/product gates I can verify; three need real
 external inputs (a named partner, a named responder, a non-builder operator) that **cannot be
 fabricated** without voiding the gate. This document records the verified evidence and provides the
 ready-to-use templates for the human-gated remainder.
 
-## Scorecard (verified 2026-08-26)
+## Scorecard (verified 2026-08-27)
 
 | Gate | Status | Evidence |
 |---|---|---|
@@ -23,6 +23,10 @@ ready-to-use templates for the human-gated remainder.
 owner** to (4) name a pilot org and sign its policy, (5) name an incident responder and accept the CI
 security result, and (6) have one person who did not build this complete the acceptance run. None of
 those three are fabricatable — that is the point of the gate.
+
+Independent evaluation is no longer an open item: two non-builder domain experts completed all 200
+holdout cases. It informs quality and GA claims but, under `winning-condition.md` v0.2, is not one of the
+three remaining Gate B controls.
 
 ### Fix landed this session (was silently failing Gate 1)
 `app/store/api.py :: get_emergent_values_by_head` queried a non-existent `emergent_field.qualifier`

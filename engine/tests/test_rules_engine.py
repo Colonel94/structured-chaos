@@ -99,6 +99,27 @@ def test_record_accuracy_takes_the_billing_path() -> None:
     assert d.matched_rule_id == "billing-or-record" and d.routing == "finance_billing"
 
 
+@pytest.mark.parametrize(
+    ("category", "expected"),
+    [
+        ("transaction_processing", ("P3", "finance_billing", "transaction-processing", 12)),
+        ("fraud_security", ("P2", "fraud_security", "fraud-security", 4)),
+        ("privacy_data", ("P2", "privacy_compliance", "privacy-data", 8)),
+        ("misleading_practice", ("P3", "customer_care", "misleading-practice", 12)),
+    ],
+)
+def test_expanded_category_routes_are_deterministic(
+    category: str, expected: tuple[str, str, str, float]
+) -> None:
+    decision = _decide(category=category, severity_signal="none", emotion_signal="calm")
+    assert (
+        decision.priority,
+        decision.routing,
+        decision.matched_rule_id,
+        decision.sla_target_hours,
+    ) == expected
+
+
 def test_unclear_routes_to_triage_not_a_wrong_deadline() -> None:
     d = _decide(category="UNCLEAR", severity_signal="none", emotion_signal="calm")
     assert d.routing == "triage" and d.matched_rule_id == "unclear"

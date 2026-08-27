@@ -1,107 +1,100 @@
-# Phase 8 — winning-condition §4 scorecard (honest state)
+# Phase 8 — independent quality scorecard
 
-*Regenerate the live numbers any time: `cd engine && uv run python eval/score_phase8.py` (deterministic,
-$0, files-only). This doc is a dated snapshot + the interpretation; the script is the source of truth.*
+*Snapshot: 27 August 2026 at revision `10b95cf`. The executable scorer is the source of truth.*
 
-**Snapshot: 2026-08-21.** Ground-truth set = **216 real cases** (cfpb 120 + multidomain 96), scored
-against the current **v20** extractions + the shipped **calib-v2** calibration.
+## Reproduce the results
 
-> **Read this first.** Every accuracy number below is measured against gold **Claude authored**, so it is
-> *agreement-with-the-labeller, not agreement-with-reality* (longterm_context.md §0; CLAUDE.md §10
-> CORRECTION 2026-08-19c). The number that turns these into real accuracy is the **independent held-out
-> slice** — `eval/holdout_labels.csv` (66 blind cases, ready for an independent labeller). Until that
-> comes back, treat these as an upper bound on my own consistency, not a ship number.
+From `engine/`, run the complete pairwise report:
 
-## Measured from the ground-truth set (self-labelled)
+```powershell
+uv run python eval/score_holdout.py
+```
 
-| Measure | Threshold | Measured | Status |
-|---|---|---|---|
-| Category classification accuracy | ≥90% | **77%** (167/216; cfpb 82%, md 71%) | ❌ FAIL |
-| Cases requiring zero human edits | ≥70% | **28%** (cfpb, ~3.7 labelled fields/row) | ❌ FAIL |
-| Desired outcome captured | ≥90% | **56%** (cfpb; md unlabelled for this field) | ❌ FAIL |
-| Severity accuracy (governed core) | ≥95% | **83%** (cfpb; md unlabelled) | ❌ FAIL |
-| Ambiguous cases correctly flagged | ≥90% | **100%** — but *trivially*: gate_met=False/τ=1.01 routes **everything** to review (it also flags 100% of correct cases). Passes on paper, means "no automation yet". | ⚠️ trivial PASS |
-| Accuracy on auto-routed cases only | ≥98% | **VACUOUS** — 0 cases auto-route (gate_met=False). The gate is not yet exercised. | — N/A |
+Run the independent-consensus headline explicitly:
 
-**Governed-core field accuracy (§4 ≥95%)** is the composite of category/outcome/severity above — all
-under gate. The product is currently **assisted data entry, not automation**: with nothing auto-routing,
-the ≤30s review target *is* the value proposition (owner framing, §0).
+```powershell
+uv run python eval/score_holdout.py --consensus `
+  catleen=eval/fixtures/holdout_labels_catleen.csv `
+  osman=eval/fixtures/holdout_labels_osman.csv
+```
 
-## Convergence — the moat (the core design claim)
+Consensus uses **no adjudication or invented tie-break**. For each field, a case enters the denominator
+only when Catleen and Osman both labelled it and selected the same value. Human disagreements are
+excluded for that field. A blank desired outcome is the explicit null label when both sources used the
+column. The denominator therefore differs by field and must always be printed with the percentage.
 
-| Measure | Threshold | Measured | Status |
-|---|---|---|---|
-| Duplicate/synonym fields after 200 | <5% | last live **7.6%** dup, ~90% hapax | ❌ FAIL |
-| New-field creation rate declining | declining | composite curve **FLAT** (cfpb [37,27,23,29,27,20], md [68,27,29,23,11]); hapax 85–89% | ❌ FAIL |
+## Evidence status
 
-The `<5%`-dup row needs the live embedding dedup (`uv run --group embed python
-eval/run_column_convergence.py`); the retraction (2026-08-17) stands — convergence is **unproven on real
-data** and needs richer recurring data + the dedup/mint proof to bend the composite curve.
+Independent labelling is **complete**, not outstanding:
 
-## Diagnostic only (never a gate — §10)
+- Osman, an independent complaints-resolution director, labelled all 200 cases.
+- Catleen, an independent customer-care director, labelled all 200 cases.
+- The owner labels remain development evidence and are not used in the independent-consensus headline.
+- Model extractions cover all 200 labelled cases and use `extract-v22`.
+- Confidence artifact `calib-v3` is fitted from the two-expert consensus for honest review ordering;
+  autonomous routing remains disabled.
 
-- **Emotion accuracy** (not in §4): 73% (cfpb).
-- **Confidence discrimination** (for review *ordering*, not accepted accuracy): low confidence does
-  concentrate errors — `conf<0.8` catches **86%** of wrong cases vs **62%** correct-false-flagged;
-  `conf<0.7` catches 61% vs 25%. Useful for triage, not for a per-case difficulty claim (per-class prior).
+## Independent human agreement
 
-## Measured via a live run (2026-08-21) — checkable against source data, not my gold
+| Field | Agreement | Rate |
+|---|---:|---:|
+| Category | 185/200 | **92%** |
+| Desired outcome | 182/200 | **91%** |
+| Severity | 188/200 | **94%** |
+| Emotion | 166/200 | **83%** |
+| All four fields on the same row | 134/200 | **67%** |
 
-These don't depend on the gold I authored: the drill length, whether the anchor resolved the right
-order, whether it asked for something already stated — all checkable against the source data + the coded
-policy. Regenerate: `uv run python eval/measure_elicit.py` (pure) and `uv run python
-eval/measure_object_match.py` (live store, DB up).
+This establishes that the governed taxonomy is consistently usable by independent domain experts. The
+owner's earlier labels, particularly emotion, are not the human ceiling.
 
-**Elicitation — the anchor+2 drill, over the real 216 extracted states** (`measure_elicit.py`):
+## Model agreement with each independent reviewer
 
-| Measure | Threshold | Measured | Status |
-|---|---|---|---|
-| Questions per case (median) — HEADLINE | ≤2 after anchor | **file-drop median 2** (0q×99, 2q×114), **WhatsApp median 1**; drills-after-anchor median **1**, max **1** | ✅ PASS (never even reaches 2 drills) |
-| Asked for something already stated | 0% | **0/216** | ✅ PASS (by construction, verified) |
-| Asked for something derivable from anchor | ≤5% | **0/216** | ✅ PASS |
-| Sparse complaints reaching actionable | ≥80% | **UNMEASURED** — 0/216 are too-sparse (the 216 are full narratives; §4's ≥20 sparse cases are a separate population). The 2nd drill never fires here for the same reason — category+fault are ~always extracted. | — |
+| Field | Model vs Catleen | Model vs Osman |
+|---|---:|---:|
+| Category | 147/200 (74%) | 153/200 (76%) |
+| Desired outcome | 153/200 (76%) | 153/200 (76%) |
+| Severity | 146/200 (73%) | 143/200 (72%) |
+| Emotion | 139/200 (70%) | 142/200 (71%) |
+| All four fields on the same row | 57/200 (28%) | 64/200 (32%) |
 
-Terminal states: **192 actionable, 24 in_review** (angry/budget handoffs — correct, never interrogated).
+## Official independent-consensus headline
 
-**Object-match — the PAIR, over the live resolver + store** (`measure_object_match.py`, 600 cases/orders,
-objective key ground truth):
+| Field | Model correct / independent-agreement subset | Rate |
+|---|---:|---:|
+| Category | **143/185** | **77%** |
+| Desired outcome | **147/182** | **81%** |
+| Severity | **139/188** | **74%** |
+| Emotion | **125/166** | **75%** |
 
-| Measure | Threshold | Measured | Status |
-|---|---|---|---|
-| WRONG silent binds (the trust gate) | 0 | **0 / 311 silent matches** | ✅ PASS |
-| Silent-match accuracy | ≥99% | **0/311 wrong → ≤1.0% error bound** (n≈311 just clears the ~300 rule-of-three floor; *bounds*, doesn't yet *claim*, ≥99%) | ✅ no defect |
-| Recall on resolvable (resolver quality) | — | **311/311 = 100%** (binds every safely-resolvable case) | ✅ |
-| Complaints matched w/o asking (RATE) | ≥60% | **52% on this mix** — but the mix **constructs 48% unresolvable** (typos/shared-phones/no-anchor). Rate is a property of the **input distribution**, not the resolver (recall=100% proves it's not the bottleneck); the real ≥60% needs a real anchored-complaint dataset (CFPB anchors are redacted `XXXX` — $0 gap). | ⚠️ mix-dependent |
+The extractor trails the independent human agreement level on every field. Severity has the largest
+gap. The failed `extract-v23` severity experiment was reverted, and extractor prompt tuning is frozen at
+`extract-v22`; additional prompt variants against these same labels would turn the holdout into training
+data.
 
-The pair reads correctly: recall 100% means the 52% rate is **input-bound, not abstention-gaming** — and 0
-wrong binds is the regression to fear, which holds. Moment-3 confirmation fires live ("We've found your
-order BK-…: items …, customer name …").
+## Decision relevance
 
-## Not measurable from files or a live run yet — reported, never faked (§10 "no silent caps")
+- **Controlled pilot:** these accuracy results do not block a narrow pilot because mandatory human
+  review remains on for every case and autonomous routing remains disabled.
+- **General availability:** current category, desired-outcome and governed-field quality remain below
+  the objectives in `winning-condition.md`. Broader claims wait for chosen-market representativeness and
+  stronger extraction quality.
+- **Claims:** describe the product as human-supervised complaint drafting and evidence review, not
+  autonomous complaint adjudication.
 
-Needs **new data or a longer run**: end-to-end latency (~8–17s observed inline, confirm under load);
-backfill correctness (re-extract vs retained originals); the real object-match RATE (a real
-anchored-complaint distribution).
+## Other measured trust and workflow evidence
 
-Needs **humans / new data**: median review time (human on the review UI); elicitation abandonment (real
-customers); discrepancies-surfaced (cases labelled with a known complaint-vs-record discrepancy); emergent
-attribute accuracy (labelled emergent gold).
+The deterministic supporting evaluations remain reproducible through their own commands:
 
-**UNMEASURED:** voice-vs-text field-extraction parity — there is no paired set containing the same cases
-spoken and typed. Arabic/code-switched coverage was suspended by owner decision on 2026-08-21; when it
-returns to scope, the ≥30-case composition rule and Arabic parity gate return with it.
+- `eval/measure_elicit.py`: the anchor-plus-two budget holds; the prior 216-case run asked for already
+  stated information 0/216 times.
+- `eval/measure_object_match.py`: the prior objective-key run recorded 0 wrong silent binds across 311
+  silent matches and 311/311 recall on resolvable cases.
+- `eval/score_phase8.py`: retains the older self-labelled development diagnostics; those numbers must not
+  replace the independent results above.
 
-## Bottom line
+## Remaining evidence work
 
-**Two very different pictures.** The **drill + trust** side is genuinely strong and — crucially — measured
-on numbers that *don't* inherit the gold ceiling: anchor+2 holds with a wide margin (median 1 drill), 0/216
-asked-already-stated, 0 wrong object binds across 311 silent matches, recall 100%. The **accuracy** side is
-under gate on every self-labelled row (category 77%, zero-edit 28%, outcome 56%, severity 83%) and
-convergence FAILs — and those are exactly the numbers that need the independent labels to become real.
-
-The two levers that move the accuracy side:
-
-1. **Independent held-out labels** (`eval/holdout_labels.csv`, ready) — breaks the self-labelled ceiling
-   on category/confidence/review-ordering. Owner recruits an independent labeller. *Binding constraint.*
-2. **A live elicitation + object-match run** — turns ~8 of the 13 UNMEASURED rows into real numbers
-   without any new data (needs DB + Ollama up).
+- Confirm at least 100 cases represent the chosen GA launch market.
+- Measure review time and correction pressure with real operators during the controlled pilot.
+- Exercise sparse and voice/text populations before making claims about them.
+- Keep `calib-v3` tied to the frozen extractor and label provenance; refit only when either changes.

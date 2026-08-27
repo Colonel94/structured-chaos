@@ -5,21 +5,25 @@ already passed. Independent labels and unassisted stranger sessions are not cont
 under winning-condition v0.2; they remain required before broad quality/onboarding claims. Freeze the
 commit, model, policy, inputs and thresholds before a run. There are **no session-capture spreadsheets**:
 a person using the product is measured by the product (see the last section); the only labelling artifact
-is the workbook `engine/eval/fixtures/holdout_labels.xlsx` (exported to `holdout_labels_<name>.csv` for
+is the workbook `engine/eval/fixtures/holdout_labels_blank.xlsx` (exported to `holdout_labels_<name>.csv` for
 scoring). Help requests, abandonment, and observer notes are the only things the instrumentation cannot
 see — they are recorded out-of-band as a short free-text note, never inferred from a successful
 `review_event` row.
 
 ## Independent holdout
 
-Give only `engine/eval/fixtures/holdout_labels.xlsx` to a non-builder labeller — the **Cases** sheet is
-filled, **Option Sets** defines the allowed values (dropdown-validated) and their manager rules, and
-**QA Summary** tracks distribution. Do not show model outputs. A second person adjudicates uncertain rows.
+Give only `engine/eval/fixtures/holdout_labels_blank.xlsx` to a non-builder labeller — the **Cases** sheet's
+source columns are filled and its label columns are blank, **Option Sets** defines the allowed values
+(dropdown-validated) and their manager rules, and
+**QA Summary** tracks distribution. Do not show model outputs or another reviewer's labels. Preserve
+disagreements through scoring rather than adjudicating them away.
 Export the completed Cases sheet to `engine/eval/fixtures/holdout_labels_<name>.csv` (e.g.
 `holdout_labels_owner.csv`), hash/freeze it, then run `cd engine && uv run python eval/score_holdout.py`.
-Record disagreements as well as aggregate scores. The gold taxonomy is a **superset** of the extractor's
-enums, so category/outcome accuracy is honestly capped until the governed enum is expanded and history
-re-extracted — that gap is the signal, not something to hide by collapsing gold.
+For the independent-consensus headline, pass exactly two named exports: `uv run python
+eval/score_holdout.py --consensus first=eval/fixtures/holdout_labels_first.csv
+second=eval/fixtures/holdout_labels_second.csv`. The scorer includes a field only where both reviewers
+agree and prints every numerator and field-specific denominator. Record disagreements as well as
+aggregate scores; never collapse or remap gold to improve the result.
 
 ## Cold reviewer timing
 

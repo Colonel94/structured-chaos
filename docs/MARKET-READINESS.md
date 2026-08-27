@@ -1,6 +1,6 @@
 # Market readiness
 
-**Decision as of 26 August 2026:** engineering readiness passes. Controlled-pilot entry is **3/6
+**Decision as of 27 August 2026 (reviewed revision `10b95cf`):** engineering readiness passes. Controlled-pilot entry is **3/6
 clean**. The product can be evaluated with synthetic/redacted data and prepared for one narrow design
 partner; real customer data waits for the three remaining pilot-control bundles below.
 
@@ -22,6 +22,10 @@ general-availability evidence and market reactions.
   runbooks and automated security workflows.
 - A tested, responsive reviewer experience with explicit loading, empty, unavailable, processing and
   failure states.
+- Independent quality evidence from two domain experts over all 200 holdout cases. Human agreement is
+  92% category, 91% desired outcome, 94% severity and 83% emotion; this closes the self-grading gap.
+- `calib-v3` confidence reliability is fitted from the two-expert consensus; it supports review ordering
+  while autonomous routing remains disabled.
 
 ## Controlled-pilot scorecard
 
@@ -76,7 +80,8 @@ case. These are learning signals unless frozen as partner-specific gates before 
 
 ## Required before broader or self-serve launch
 
-- Independently evaluate at least 100 representative cases and publish frozen metric definitions.
+- Independent labelling of the current 200-case holdout is complete. Before GA, confirm that at least
+  100 cases represent the chosen launch market and publish the frozen metric definitions and results.
 - Validate the workflow with at least two organisations and three operators.
 - Complete invitations, membership revocation, password recovery, shared rate limiting, audit export and
   workspace administration.
@@ -87,8 +92,10 @@ case. These are learning signals unless frozen as partner-specific gates before 
 - Do not market “self-converging schema,” cross-domain parity or other experimental claims until their
   representative evidence thresholds pass.
 
-Independent holdout labels, cold reviewer sessions, sparse/voice sets and unassisted stranger tests remain
-valuable. They are now GA evidence and pilot-learning tools, not artificial blockers to the first bounded,
+Independent holdout labelling is complete. Current model agreement on the independent-consensus subsets
+is 143/185 category (77%), 147/182 desired outcome (81%), 139/188 severity (74%) and 125/166 emotion
+(75%). Cold reviewer sessions, chosen-market representativeness, sparse/voice sets and unassisted
+onboarding remain GA evidence and pilot-learning tools, not blockers to the first bounded,
 human-controlled engagement.
 
 ## Market sequence

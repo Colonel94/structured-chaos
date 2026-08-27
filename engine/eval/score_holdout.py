@@ -1,19 +1,8 @@
-"""Score the held-out slice against the human labels — the four numbers.
+"""Score the held-out slice against named human label sources.
 
-WHAT THE CURRENT GOLD IS (be honest — CLAUDE.md §10, and the owner's review 2026-08-26): the filled
-labels are `holdout_labels_owner.csv`, exported from the OWNER's workbook — 200 cases, of which 66 are
-real (CFPB/NHTSA/Trustpilot) and 134 are owner-AUTHORED synthetic complaints. That makes this OWNER gold:
-independent of the extractor and of me (so it is real signal, far better than Claude-authored gold), but
-it is NOT the third-party INDEPENDENT, representative set the GA quality gate requires — synthetic gold is
-development evidence, not market-representative evidence. So `model vs owner` below is AGREEMENT WITH THE
-OWNER'S READING, not "correctness". The independent third-party number (column 2) is still the target and
-is still outstanding; hand the workbook to a non-builder labeller to get it.
-
-It computes the owner's four numbers, generically over however many label files you hand it:
-  1. model vs OWNER gold          (agreement with the owner's own reading)
-  2. model vs INDEPENDENT          (the first honest, non-self-graded accuracy)
-  3. OWNER gold vs INDEPENDENT     (how much the two humans agree — the real ceiling)
-  4. INDEPENDENT-1 vs INDEPENDENT-2 (inter-annotator, if you can afford two)
+The repository contains owner development labels plus two completed independent reviews. Pairwise mode
+reports model↔human and human↔human agreement. Consensus mode produces the four reproducible headline
+model numbers using exactly two explicitly named independent label files.
 
 Plus the diagnostic the owner asked for (2026-08-22): the desired_outcome / repair_redo split. If the two
 HUMANS also disagree on repair_redo, the ENUM is wrong (repair_redo was overloaded with "correct a record"
@@ -29,6 +18,8 @@ Usage:
   uv run python eval/score_holdout.py
   # or name them explicitly:
   uv run python eval/score_holdout.py owner=fixtures/holdout_labels_owner.csv independent=fixtures/holdout_labels_alice.csv
+  # independent consensus: score only labels on which the two reviewers agree
+  uv run python eval/score_holdout.py --consensus catleen=fixtures/holdout_labels_catleen.csv osman=fixtures/holdout_labels_osman.csv
 """
 
 from __future__ import annotations
@@ -54,13 +45,8 @@ _FIELDS = list(_FIELD_MAP.values())
 _NULL_ON_BLANK = {
     "desired_outcome"
 }  # blank = a real "null" label (only if the source used the column)
-# The label space is the owner's governed taxonomy — the "Option Sets" sheet of
-# eval/fixtures/holdout_labels.xlsx (v0.2, 2026-08-26, tightened so complaints are not forced into
-# coarser buckets). It is a SUPERSET of the extractor's enums (app/extract/schema.py): the extractor
-# cannot yet emit transaction_processing / fraud_security / privacy_data / misleading_practice, the six
-# new outcomes, privacy_security, or concerned/distressed — so those gold rows will score as mismatches
-# until the governed enum is expanded and history re-extracted. That gap is the honest signal; do NOT
-# collapse gold to the extractor's coarser set to hide it (CLAUDE.md §10).
+# The label space is the governed taxonomy in the workbook's "Option Sets" sheet. Extract-v22 emits the
+# same values. Do not collapse or remap independent labels to improve agreement (CLAUDE.md §10).
 _ALLOWED = {
     "category": {
         "product_fault",
@@ -190,6 +176,45 @@ def _agreement(a: Source, b: Source, field: str) -> tuple[int, int]:
     return agree, total
 
 
+def _consensus_agreement(
+    model: Source, first: Source, second: Source, field: str
+) -> tuple[int, int]:
+    """Model matches and total on rows where both humans labelled *and agreed* for one field.
+
+    There is deliberately no adjudication or majority vote with only two reviewers. Human disagreements
+    are excluded, making the denominator the independently agreed subset for that field.
+    """
+    correct = total = 0
+    for cid in model.ids & first.ids & second.ids:
+        if not (first.labelled(cid, field) and second.labelled(cid, field)):
+            continue
+        if first.value(cid, field) != second.value(cid, field):
+            continue
+        total += 1
+        correct += int(model.value(cid, field) == first.value(cid, field))
+    return correct, total
+
+
+def _report_consensus(model: Source, first: Source, second: Source) -> None:
+    print("\n" + "=" * 78)
+    print(f"INDEPENDENT CONSENSUS — model vs {first.name} + {second.name}")
+    print("=" * 78)
+    print(
+        "RULE (no tie-break/adjudication): for each field, include a case only when both independent "
+        "reviewers labelled it and gave the same value; exclude their disagreements. A blank "
+        "desired_outcome is the explicit null label when both sources used that column."
+    )
+    for field in _FIELDS:
+        correct, total = _consensus_agreement(model, first, second, field)
+        if total:
+            print(
+                f"   {field:<16}: {correct}/{total} = {correct / total:.0%} "
+                f"model agreement  (consensus n={total})"
+            )
+        else:
+            print(f"   {field:<16}: no independently agreed rows")
+
+
 def _report_pair(a: Source, b: Source) -> None:
     print(f"\n### {a.name}  vs  {b.name}")
     per_field_all = []
@@ -281,19 +306,30 @@ def main() -> int:
         print(f"no model extractions at {_MODEL} — run eval/extract_holdout.py first")
         return 1
 
+    consensus_mode = "--consensus" in sys.argv[1:]
+
     # Discover label files: explicit `name=path` args, else fixtures/holdout_labels_<name>.csv.
     specs: list[tuple[str, Path]] = []
     for arg in sys.argv[1:]:
+        if arg == "--consensus":
+            continue
         if "=" in arg:
             name, path = arg.split("=", 1)
             specs.append((name, Path(path)))
+    if consensus_mode and len(specs) != 2:
+        print(
+            "--consensus requires exactly two explicit independent label CSVs: "
+            "--consensus first=path.csv second=path.csv"
+        )
+        return 2
     if not specs:
         for p in sorted(_DIR.glob("holdout_labels_*.csv")):
             specs.append((p.stem.replace("holdout_labels_", ""), p))
 
     if not specs:
         print(
-            "No filled label files found. Hand fixtures/holdout_labels.csv (+ its INSTRUCTIONS) to an\n"
+            "No filled label files found. Hand fixtures/holdout_labels_blank.xlsx (+ its INSTRUCTIONS) "
+            "to an\n"
             "independent labeller; save the returned file as fixtures/holdout_labels_<name>.csv (e.g.\n"
             "holdout_labels_owner.csv, holdout_labels_alice.csv), then re-run. The model side "
             f"({_MODEL.name}) is ready ({sum(1 for _ in _MODEL.open())} cases)."
@@ -306,17 +342,22 @@ def main() -> int:
     except ValueError as exc:
         print(f"INVALID LABEL FILE — no official score produced:\n{exc}")
         return 2
-    print("=" * 78)
-    print(
-        f"HELD-OUT ACCURACY — model ({sum(1 for _ in _MODEL.open())} cases) vs {len(humans)} human label set(s)"
-    )
-    print(
-        "Still DIRECTIONAL (rule of three: a ≥99% claim needs ~300 clean obs) and agreement-with-owner, "
-        "not independent correctness. Report the pair, per field, with its n."
-    )
-    print("=" * 78)
-
     covered = _coverage(model, humans)
+
+    if consensus_mode:
+        _report_consensus(model, humans[0], humans[1])
+        if covered:
+            return 0
+        print("\n⛔ NOT AN OFFICIAL SCORE — model predictions are missing for labelled cases.")
+        return 3
+
+    print("=" * 78)
+    print(
+        f"HELD-OUT AGREEMENT — model ({sum(1 for _ in _MODEL.open())} cases) vs "
+        f"{len(humans)} named human label set(s)"
+    )
+    print("Report the named pair, field, numerator and denominator; do not present agreement as certainty.")
+    print("=" * 78)
 
     # (1)&(2) model vs each human; (3)&(4) every human pair.
     for h in humans:
