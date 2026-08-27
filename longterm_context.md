@@ -56,16 +56,42 @@ live-testing (voice/image/text) → turn each failing case into a prompt/policy 
 > the real human ceiling is much higher than we thought, and the model is genuinely BELOW it (the earlier
 > "at the ceiling" comfort was an artifact of the owner's noisier pre-v22 labels).
 >
-> **IN FLIGHT (2026-08-27, do NOT assume the result): extract-v23 severity-under-call fix is BUILT +
-> COMMITTED (`3119cbe`) and the 200-case re-extraction is RUNNING** (`eval/extract_holdout.py`, ~60-80 min,
-> $0 local qwen3:14b). The fix decouples severity from category + adds precedence (safety_health >
-> vulnerable_party > privacy_security > financial_harm > none) + names implicit-money patterns — targeting
-> the 44/49 harm->none errors (29 financial_harm->none). **THE SCORE DOES NOT EXIST YET.** When the run
-> finishes: `./.venv/Scripts/python.exe eval/score_holdout.py`, then commit `holdout_extractions.jsonl` +
-> fill THIS block with the real numbers. Success test (report the PAIR): financial_harm recall UP **without**
-> tanking `none` precision or perturbing category/outcome/emotion ([[measure-extraction-changes-abstention-overfire]]);
-> target = close the model's severity gap toward the 94 independent ceiling (was 74 on consensus). If a
-> sibling field regressed, v23 stays or reverts on the evidence, not vibes. Do NOT re-label/tune gold (§10).
+> **RESULT — extract-v23 severity fix was TESTED, REGRESSED, and REVERTED (2026-08-27).** The extractor is
+> back at **extract-v22** (baseline restored: prompt v22 + `holdout_extractions.jsonl` v22, re-scored to
+> the identical pre-v23 numbers). v23 (decouple severity from category + precedence + name implicit-money)
+> was scored on the independent-consensus subset (catleen==osman = truest ground truth) and it is a NET
+> REGRESSION — nothing improved, three fields fell:
+> ```
+> field (consensus acc)   v22 -> v23
+> category                77 -> 75   (-2, sibling perturbation)
+> desired_outcome         81 -> 81   ( 0)
+> severity                74 -> 72   (-2)  <- the TARGET field got WORSE
+> emotion                 75 -> 72   (-3, same-pass contamination — [[measure-extraction-changes-abstention-overfire]])
+> ```
+> **Why (the PAIR, [[report-metric-pairs-and-n]]):** v23 DID kill the under-call — financial_harm recall
+> 63%->97% (harm->none 29->2). But precision CRATERED 65% (76/117): it now over-fires financial_harm onto
+> **26 genuine `none`**, **8 privacy_security**, **6 safety_health** consensus cases. Recall-up +
+> precision-down = regression; and it degrades the HIGHEST-severity classes (calls money on real safety/
+> privacy) — worse than the clean under-call it replaced. The lone "gain" (vs OWNER severity 61->74) is the
+> model's new over-fire ALIGNING with the owner's pre-v22 outlier over-labelling, not real signal (chasing
+> the outlier). Root cause of the over-shoot: the "implicit money" list was too broad (a refund merely
+> SOUGHT != financial_harm per the human guideline — money must be wrongly taken/withheld/owed/lost) AND
+> the precedence order (safety/privacy/vulnerable > financial) was drowned out by the loud money list.
+> **v24 hypothesis (OWNER DECISION — another ~60-80 min $0 loop, do NOT auto-run):** keep "judge severity
+> independently of category," but (a) NARROW financial_harm back to money actually taken/withheld/owed/lost
+> (drop "a refund/compensation is being sought" and "paid for a service" as sole triggers), and (b) HARD-
+> enforce safety/privacy/vulnerable OVER financial when co-present. Caveat (§10): this is now iteration 2 of
+> prompt-tuning against the SAME 200 set — one more targeted try is fair, but do NOT enter a grind loop
+> fitting the eval set; if v24 also fails to beat v22 on consensus, the honest read is the LOCAL extractor
+> (qwen3:14b) is at its severity ceiling and the lever is a stronger extractor, which is owner-gated on $0
+> ([[zero-budget-never-steer-to-cost]]) — not more prompt variants.
+>
+> **READINESS IMPACT: none from v23 (reverted); the extractor is unchanged at v22.** What DID advance:
+> the independent-ceiling evidence (two domain experts, 92/91/94/83) and the honest model-gap measurement
+> (consensus 77/81/74/75). Extractor accuracy is a GA/quality-evidence item, NOT an engineering-readiness
+> ship gate (CLAUDE.md §7 — that gate is the trust spine, which is green). So readiness is where it was; we
+> now have a sharper, independently-grounded picture of the one real quality gap (severity) and a scoped
+> next attempt for it.
 >
 > **WHERE WE ARE.** Branch `fix/elicit-qualifier-gate-b-readiness` — PR #2 OPEN
 > (https://github.com/Colonel94/structured-chaos/pull/2). Extractor at **extract-v22**. THREE label sets
@@ -102,7 +128,9 @@ live-testing (voice/image/text) → turn each failing case into a prompt/policy 
 > **owner gold is the outlier** — consider owner re-labelling emotion/severity under v22, or treating
 > catleen+osman as the reference ceiling and owner gold as DEV-only pre-v22; (3) calibration re-fit once
 > labels are stable; (4) GA representative set = Osman + Catleen are the start; synthetic 134 stay DEV-only;
-> (5) **the v23 severity-under-call fix** (harm→none bias) — do it ($0 local) then re-extract + re-score.
+> (5) ~~v23 severity fix~~ — **DONE: tested → net regression → REVERTED (see RESULT block above).** Open:
+> whether to spend one more $0 loop on the **v24** narrow-financial_harm + hard-precedence hypothesis, or
+> accept the local extractor's severity ceiling and treat "stronger extractor" as the (owner-gated) lever.
 >
 > ## ✅ 2026-08-27 SECOND INDEPENDENT LABELLER (Catleen, Director of Customer Care, 17y) — the ceiling FLIP
 > - **The clean measure §0 was waiting for landed and it CORRECTS the prior session's comfortable read**
