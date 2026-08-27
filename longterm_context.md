@@ -116,16 +116,20 @@ live-testing (voice/image/text) → turn each failing case into a prompt/policy 
 >
 > **GOTCHAS.** Prefer `./.venv/Scripts/python.exe` over `uv run` for one-offs — a bare `uv run`/`uv sync`
 > can PRUNE the `embed`(FlagEmbedding/BGE-M3)+`asr`(faster-whisper) groups; restore with
-> `uv sync --group dev --group embed --group asr`. Calibration is STALE for v22 but `tau_auto=1.01` =
-> auto-route OFF (all→review) so it's ordering-only, not safety; re-fit is deferred (needs its own model
-> run + independent labels). qwen3:14b ≈ 15–25 s/case on the 4070. Openpyxl reads the labelling workbook.
+> `uv sync --group dev --group embed --group asr`. **Calibration RE-FIT on the independent 2-expert
+> consensus (calib-v3, 2026-08-27)** — confidence is now a real reliability estimate (agreement with
+> Osman∩Catleen), not P(agrees-with-my-labels); `tau_auto=1.01`/`gate_met=False` kept (auto-route OFF,
+> all→review — honest, the ≥98% gate is unreachable at the extractor ceiling; ordering-only, not safety).
+> qwen3:14b ≈ 15–25 s/case on the 4070. Openpyxl reads the labelling workbook.
 >
 > **OWNER-DECISION FOLLOW-UPS (logged, not auto-actioned):** (1) ~~hard-collapse emotion 5→3~~ — **now
 > data-answered: KEEP the 5-point scale.** Two independents agree 83% on it under v22; the old 64% was
 > owner-specific noise, not scale-inherent. Collapsing would discard a reliably-labelable signal. (2)
 > **owner gold is the outlier** — consider owner re-labelling emotion/severity under v22, or treating
-> catleen+osman as the reference ceiling and owner gold as DEV-only pre-v22; (3) calibration re-fit once
-> labels are stable; (4) GA representative set = Osman + Catleen are the start; synthetic 134 stay DEV-only;
+> catleen+osman as the reference ceiling and owner gold as DEV-only pre-v22; (3) ~~calibration re-fit~~ —
+> **DONE: refit on the independent 2-expert consensus (calib-v3), `eval/fit_calibration.py` now defaults to
+> that source (`--spike` = legacy self-authored gold); confidence is a real reliability estimate**; (4) GA
+> representative set = Osman + Catleen are the start; synthetic 134 stay DEV-only;
 > (5) ~~v23 severity fix~~ — **DONE: tested → net regression → REVERTED (see RESULT block above).**
 > **DECIDED (owner directive, 2026-08-27): STOP the extractor prompt-tuning grind. Extractor FROZEN at
 > extract-v22. v24 DECLINED.** Two independent domain-expert reviews (Osman 20y + Catleen 17y) ARE the

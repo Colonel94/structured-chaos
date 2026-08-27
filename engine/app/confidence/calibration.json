@@ -1,62 +1,86 @@
 {
   "fields": {
     "category": {
-      "default": 0.7731,
+      "default": 0.773,
       "reliability": {
-        "access_availability": 0.7142857142857143,
-        "billing_charge": 0.8709677419354839,
-        "product_fault": 0.8260869565217391,
-        "record_accuracy": 0.8857142857142857,
-        "safety_health": 0.8235294117647058,
-        "service_fault": 0.7868852459016393
+        "access_availability": 0.8125,
+        "billing_charge": 0.9285714285714286,
+        "delivery_fulfilment": 0.7368421052631579,
+        "fraud_security": 0.7777777777777778,
+        "misleading_practice": 0.9090909090909091,
+        "product_fault": 0.5263157894736842,
+        "record_accuracy": 0.75,
+        "safety_health": 0.9473684210526315,
+        "service_fault": 0.8125,
+        "transaction_processing": 0.9
       },
       "support": {
-        "access_availability": 28,
-        "billing_charge": 31,
-        "product_fault": 23,
-        "record_accuracy": 35,
-        "safety_health": 17,
-        "service_fault": 61
+        "access_availability": 16,
+        "billing_charge": 14,
+        "delivery_fulfilment": 19,
+        "fraud_security": 18,
+        "misleading_practice": 11,
+        "product_fault": 19,
+        "record_accuracy": 20,
+        "safety_health": 19,
+        "service_fault": 16,
+        "transaction_processing": 10
       }
     },
     "desired_outcome": {
-      "default": 0.451,
+      "default": 0.8058,
       "reliability": {
-        "refund": 0.9166666666666666,
-        "repair_redo": 0.25
+        "acknowledgement": 0.4,
+        "correction": 0.9,
+        "investigation": 0.7222222222222222,
+        "refund": 0.8,
+        "repair_redo": 0.7692307692307693,
+        "replacement": 1.0,
+        "restore_access": 0.8461538461538461
       },
       "support": {
-        "refund": 12,
-        "repair_redo": 36
+        "acknowledgement": 10,
+        "correction": 20,
+        "investigation": 18,
+        "refund": 25,
+        "repair_redo": 13,
+        "replacement": 14,
+        "restore_access": 13
       }
     },
     "emotion_signal": {
-      "default": 0.7172,
+      "default": 0.753,
       "reliability": {
-        "angry": 0.48148148148148145,
-        "calm": 0.5555555555555556,
-        "frustrated": 0.8888888888888888
+        "angry": 0.9230769230769231,
+        "calm": 0.8235294117647058,
+        "concerned": 0.6455696202531646,
+        "frustrated": 0.8301886792452831
       },
       "support": {
-        "angry": 27,
-        "calm": 18,
-        "frustrated": 54
+        "angry": 13,
+        "calm": 17,
+        "concerned": 79,
+        "frustrated": 53
       }
     },
     "severity_signal": {
-      "default": 0.86,
+      "default": 0.7394,
       "reliability": {
-        "financial_harm": 0.855072463768116,
-        "none": 0.8666666666666667
+        "financial_harm": 0.9245283018867925,
+        "none": 0.5544554455445545,
+        "privacy_security": 1.0,
+        "safety_health": 1.0
       },
       "support": {
-        "financial_harm": 69,
-        "none": 30
+        "financial_harm": 53,
+        "none": 101,
+        "privacy_security": 12,
+        "safety_health": 20
       }
     }
   },
-  "fit_on": "gold: cfpb(n=120) + multidomain(n=96)",
+  "fit_on": "independent 2-expert consensus (catleen\u2229osman, holdout) \u2014 agreeing rows: category=185/200, desired_outcome=182/200, severity_signal=188/200, emotion_signal=166/200",
   "gate_met": false,
   "tau_auto": 1.01,
-  "version": "calib-v2"
+  "version": "calib-v3"
 }

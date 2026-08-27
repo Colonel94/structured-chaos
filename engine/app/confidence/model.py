@@ -9,12 +9,14 @@ attenuated by grounding, and forced to zero on explicit abstention (UNCLEAR / a 
 guess). Clean classes the model predicts reliably earn high confidence; the low-precision residual and the
 confusable cluster earn low confidence → review.
 
-Two honesty caveats the artifact carries (owner review 2026-08-19c): (a) "correct" means "agrees with the
-HUMAN GOLD used to fit" — the gold I authored — so confidence measures agreement-with-the-labeller, not
-agreement-with-reality; the ceiling is label consistency, and the fix is an INDEPENDENT human-labelled
-held-out slice, not a bigger extractor. (b) This is a per-CLASS prior: two cases in the same predicted
-class score identically except for grounding, so it drives class-level review TRIAGE, never a per-case
-difficulty ranking. Thin cells (n < _MIN_CELL_N) emit no number — they fall to the field default.
+Two honesty caveats the artifact carries: (a) "correct" means "agrees with the GOLD used to fit". As of
+calib-v3 (owner directive, 2026-08-27) that gold is the INDEPENDENT TWO-EXPERT CONSENSUS — the held-out
+cases where two independent domain-expert labellers (Osman, Catleen) agree — so confidence is now a genuine
+reliability estimate (agreement with independent experts), NOT the old P(agrees-with-my-self-authored-labels)
+that the 2026-08-19c review flagged. The residual bound is consensus coverage: a class is only calibrated
+where the two experts agreed enough times (≥ _MIN_CELL_N). (b) This is a per-CLASS prior: two cases in the
+same predicted class score identically except for grounding, so it drives class-level review TRIAGE, never a
+per-case difficulty ranking. Thin cells (n < _MIN_CELL_N) emit no number — they fall to the field default.
 
 This module is the RUNTIME: it loads a calibration artifact (fit offline on the labeled dev set by
 :func:`fit`, persisted to ``calibration.json``) and scores a field value. If no artifact is present it
