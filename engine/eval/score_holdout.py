@@ -356,7 +356,9 @@ def main() -> int:
         f"HELD-OUT AGREEMENT — model ({sum(1 for _ in _MODEL.open())} cases) vs "
         f"{len(humans)} named human label set(s)"
     )
-    print("Report the named pair, field, numerator and denominator; do not present agreement as certainty.")
+    print(
+        "Report the named pair, field, numerator and denominator; do not present agreement as certainty."
+    )
     print("=" * 78)
 
     # (1)&(2) model vs each human; (3)&(4) every human pair.

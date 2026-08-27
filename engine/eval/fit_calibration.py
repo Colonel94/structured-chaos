@@ -83,13 +83,21 @@ def _load_label_csv(path: Path) -> dict[str, dict[str, str]]:
     }
 
 
-def _load_consensus_rows() -> tuple[list[FitRow], list[str]]:
+def _load_consensus_rows(
+    cat_p: Path | None = None,
+    osm_p: Path | None = None,
+    model_p: Path | None = None,
+) -> tuple[list[FitRow], list[str]]:
     """Build rows from the INDEPENDENT two-expert consensus: model prediction vs the label the two
     independent experts AGREE on, for the held-out cases. Rows where they disagree (no consensus gold)
     are skipped. Grounding comes from the extraction's ``field_validity``.
+
+    Paths default to the committed fixtures; they are parameters so the loader's behaviour
+    (blank-outcome handling, disagreement exclusion, id-coverage, grounding) is directly testable.
     """
-    cat_p, osm_p = _FIX / "holdout_labels_catleen.csv", _FIX / "holdout_labels_osman.csv"
-    model_p = _FIX / "holdout_extractions.jsonl"
+    cat_p = cat_p if cat_p is not None else _FIX / "holdout_labels_catleen.csv"
+    osm_p = osm_p if osm_p is not None else _FIX / "holdout_labels_osman.csv"
+    model_p = model_p if model_p is not None else _FIX / "holdout_extractions.jsonl"
     if not (cat_p.exists() and osm_p.exists() and model_p.exists()):
         return [], []
     cat, osm = _load_label_csv(cat_p), _load_label_csv(osm_p)
