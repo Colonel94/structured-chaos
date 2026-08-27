@@ -54,11 +54,18 @@ live-testing (voice/image/text) → turn each failing case into a prompt/policy 
 > **THE ONE NEXT ACTION — the SECOND independent labeller landed (Catleen), and it FLIPPED the story.**
 > Two independent domain experts now agree with each OTHER far more than either agrees with the owner →
 > the real human ceiling is much higher than we thought, and the model is genuinely BELOW it (the earlier
-> "at the ceiling" comfort was an artifact of the owner's noisier pre-v22 labels). **Named next lever: a
-> severity-under-call prompt fix (v23)** — the model drops harm to `none` (44/49 severity errors are
-> harm→none, mostly financial_harm→none), directly against v22's "financial_harm has NO minimum" rule.
-> That is a $0/local (qwen3:14b) prompt change; acting on it means re-extract 200 (~60–80 min) + re-score
-> ([[measure-extraction-changes-abstention-overfire]]). Do NOT re-label/tune gold to inflate agreement (§10).
+> "at the ceiling" comfort was an artifact of the owner's noisier pre-v22 labels).
+>
+> **IN FLIGHT (2026-08-27, do NOT assume the result): extract-v23 severity-under-call fix is BUILT +
+> COMMITTED (`3119cbe`) and the 200-case re-extraction is RUNNING** (`eval/extract_holdout.py`, ~60-80 min,
+> $0 local qwen3:14b). The fix decouples severity from category + adds precedence (safety_health >
+> vulnerable_party > privacy_security > financial_harm > none) + names implicit-money patterns — targeting
+> the 44/49 harm->none errors (29 financial_harm->none). **THE SCORE DOES NOT EXIST YET.** When the run
+> finishes: `./.venv/Scripts/python.exe eval/score_holdout.py`, then commit `holdout_extractions.jsonl` +
+> fill THIS block with the real numbers. Success test (report the PAIR): financial_harm recall UP **without**
+> tanking `none` precision or perturbing category/outcome/emotion ([[measure-extraction-changes-abstention-overfire]]);
+> target = close the model's severity gap toward the 94 independent ceiling (was 74 on consensus). If a
+> sibling field regressed, v23 stays or reverts on the evidence, not vibes. Do NOT re-label/tune gold (§10).
 >
 > **WHERE WE ARE.** Branch `fix/elicit-qualifier-gate-b-readiness` — PR #2 OPEN
 > (https://github.com/Colonel94/structured-chaos/pull/2). Extractor at **extract-v22**. THREE label sets
