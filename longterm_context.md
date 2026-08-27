@@ -49,6 +49,47 @@ live-testing (voice/image/text) → turn each failing case into a prompt/policy 
 
 ## 0. Current state & next actions  ← read this first every session; keep it current
 
+> ## 🧭 SESSION HANDOFF (2026-08-27, post-/clear START HERE — detail in the dated blocks below)
+>
+> **THE ONE NEXT ACTION — the fresh independent labelling round is IN FLIGHT (owner recruiting a new
+> labeller).** The pack was sent: `engine/eval/fixtures/holdout_labels_blank.xlsx` +
+> `holdout_labels_INSTRUCTIONS.md` (both carry the v22 tie-breaks). When their filled file comes back:
+> ```
+> cd engine
+> ./.venv/Scripts/python.exe eval/export_holdout_workbook.py <name> --from <their-file>.xlsx   # -> holdout_labels_<name>.csv
+> ./.venv/Scripts/python.exe eval/score_holdout.py                                             # auto-discovers all holdout_labels_*.csv
+> ```
+> That yields the CLEAN result we don't yet have: **new-vs-owner + new-vs-osman** (did the tie-breaks
+> raise the ~86/90/86/64 human ceiling?) and **model-vs-new** (real accuracy under agreed guidelines).
+> This is THE number that decides where the extractor stands. Everything else below is context.
+>
+> **WHERE WE ARE.** Branch `fix/elicit-qualifier-gate-b-readiness` — **clean tree, all pushed**, PR #2
+> OPEN (https://github.com/Colonel94/structured-chaos/pull/2). Extractor at **extract-v22**. Eval gold =
+> 200-case OWNER workbook (`holdout_labels.xlsx`; 66 real + 134 owner-authored synthetic = DEV gold, NOT
+> independent) + **Osman** (independent CR Director, `holdout_labels_osman.csv`). Headline finding: the
+> model sits at **84–97% of the human inter-annotator ceiling**; emotion 62–71% is AT the 64% human
+> ceiling → the 5-point scale is the bottleneck, not the extractor (the §10 "is the ENUM wrong?" test,
+> answered on independent data). Do NOT read the raw %s as model weakness, and do NOT collapse gold.
+>
+> **RUN IT.** DB+MinIO: `docker compose -f deploy/docker-compose.yml up -d db minio`. Backend:
+> `cd engine && ./.venv/Scripts/python.exe -m uvicorn app.main:app --port 8000` (use `-m uvicorn`, NOT the
+> console script — else `uv sync` can't rewrite the locked exe). Worker (from REPO ROOT):
+> `./engine/.venv/Scripts/python.exe -m scripts.run_worker default --schedule`. UI: `cd ui && pnpm dev`
+> (:5173). Full suite: `cd engine && REQUIRE_DB=1 ./.venv/Scripts/python.exe -m pytest -q` → **283 pass /
+> 2 skip**. Eval: `extract_holdout.py` (re-extract 200, ~60–80 min, resumable/observable),
+> `export_holdout_workbook.py [--qa] [--from <xlsx>]`, `score_holdout.py` (HARD-FAILS partial coverage).
+>
+> **GOTCHAS.** Prefer `./.venv/Scripts/python.exe` over `uv run` for one-offs — a bare `uv run`/`uv sync`
+> can PRUNE the `embed`(FlagEmbedding/BGE-M3)+`asr`(faster-whisper) groups; restore with
+> `uv sync --group dev --group embed --group asr`. Calibration is STALE for v22 but `tau_auto=1.01` =
+> auto-route OFF (all→review) so it's ordering-only, not safety; re-fit is deferred (needs its own model
+> run + independent labels). qwen3:14b ≈ 15–25 s/case on the 4070. Openpyxl reads the labelling workbook.
+>
+> **OWNER-DECISION FOLLOW-UPS (logged, not auto-actioned):** (1) whether to hard-collapse emotion 5→3
+> (kept at 5 for now — collapsing discards the owner+Osman emotion gold); (2) calibration re-fit once
+> independent labels are stable; (3) the independent representative set for the GA gate (Osman + a fresh
+> labeller are the start; synthetic 134 stay DEV-only).
+>
 > ## ✅ 2026-08-27 OWNER-APPROVED TIE-BREAKS → extract-v22, propagated + re-scored (DIRECTIONAL)
 > - All six tie-breaks Osman surfaced are IMPLEMENTED and propagated to the three places together:
 >   prompt (**extract-v22**), `holdout_labels_INSTRUCTIONS.md` (Tie-break rules section), and the workbook
