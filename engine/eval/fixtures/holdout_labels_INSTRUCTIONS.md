@@ -43,6 +43,28 @@ cases). Label every row. Leave a cell EMPTY only to skip that one field for that
 - **gold_key_facts** — the concrete facts that SHOULD be captured, `;`-separated as `name=value`, e.g.
   `charged amount=$500; account status=closed`. NOT scored (a soft recall check) — you may skip it.
 
+## Tie-break rules (when two labels both seem to fit — decided rules, apply these)
+
+These resolve the overlaps that caused the most annotator disagreement in the first round:
+
+- **product_fault vs safety_health** — if a product/vehicle/item defect creates a PHYSICAL-SAFETY hazard
+  in use (loss of control, fire, allergen, injury/crash risk), pick **safety_health**; a defect with no
+  hazard is product_fault.
+- **record_accuracy vs fraud_security** — if the customer alleges the entry/charge/account is
+  UNAUTHORISED, not theirs, identity misuse, or someone else's doing → **fraud_security**; if they allege
+  it is merely WRONG / inaccurate / unverified / wrongly-dated (not fraudulent) → **record_accuracy**.
+- **billing_charge vs misleading_practice** — if the dispute is that the AMOUNT/fee is wrong →
+  **billing_charge**; if the grievance is that they were DECEIVED (misleading terms, hidden conditions,
+  bait-and-switch) into it → **misleading_practice**.
+- **desired_outcome — request now, not previously** — only a remedy the customer is requesting IN THIS
+  message counts. A remedy they merely RECOUNT as previously asked ("I asked for a refund last week"),
+  without restating it as their ask now, is NOT a stated outcome — leave EMPTY (null).
+- **financial_harm has NO minimum** — ANY disputed or wrongful monetary amount is `financial_harm`; a
+  small fee counts as much as a large one. Do not label severity `none` because the sum is small.
+- **emotion — the adjacent tones** — calm (no worry) → concerned (worry, no dissatisfaction) →
+  frustrated (dissatisfaction/exasperation) → angry (hostility/blame OUTWARD) ; distressed is fear/panic/
+  strain felt INWARD (even without blame). Pick the single dominant tone.
+
 ## Labelling principles (the ones that make the two-annotator agreement meaningful)
 
 1. Desired outcome is populated ONLY when the customer explicitly asks for something; the first requested

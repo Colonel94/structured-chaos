@@ -49,6 +49,29 @@ live-testing (voice/image/text) → turn each failing case into a prompt/policy 
 
 ## 0. Current state & next actions  ← read this first every session; keep it current
 
+> ## ✅ 2026-08-27 OWNER-APPROVED TIE-BREAKS → extract-v22, propagated + re-scored (DIRECTIONAL)
+> - All six tie-breaks Osman surfaced are IMPLEMENTED and propagated to the three places together:
+>   prompt (**extract-v22**), `holdout_labels_INSTRUCTIONS.md` (Tie-break rules section), and the workbook
+>   **Option Sets** (23 manager-rule cells; blank regenerated). Rules: product_fault<->safety_health
+>   (hazard wins), record_accuracy<->fraud_security (unauthorised vs merely-wrong), billing_charge<->
+>   misleading_practice (wrong-amount vs deception), desired_outcome = only a remedy requested IN THIS
+>   message (not one recounted as previously asked), financial_harm has NO minimum (kills the small-fee
+>   ambiguity), sharpened emotion adjacent-boundaries. **5-point emotion scale KEPT** (collapsing would
+>   discard the owner+Osman emotion gold; owner can still request a hard 5->3 as a separate re-label).
+> - **Re-score model-v22 vs the EXISTING (old-guideline) labels — DIRECTIONAL ONLY, not the tie-break
+>   lift** (owner+Osman labelled BEFORE the tie-breaks, so this is not the clean measure). vs Osman:
+>   category 74->76, desired_outcome 78->76, severity 72->72, **emotion 62->71**, all-fields 29->32.
+>   vs owner: category 72, outcome 76, severity 61, **emotion 48->53**. Mixed + modest exactly as
+>   predicted; emotion moved most (the boundary rules). Human ceiling (osman-vs-owner) UNCHANGED
+>   (86/90/86/64) because the humans did not re-label.
+> - **The CLEAN measure = a FRESH human round under v22.** Owner is recruiting a new independent labeller;
+>   the updated `holdout_labels_blank.xlsx` + INSTRUCTIONS (both carry the tie-breaks) were sent. The
+>   financial_harm floor + emotion boundaries + category tie-breaks are aimed at raising the HUMAN
+>   inter-annotator ceiling (esp. severity's 22 financial_harm/none splits and emotion's adjacency) —
+>   only visible once a fresh human labels under the new guidelines. Then: three-way agreement
+>   (new-vs-owner, new-vs-osman) + model-vs-new = the real lift.
+> - `holdout_extractions.jsonl` regenerated at v22 (200 rows). Full suite 283 pass. All committed.
+>
 > ## ✅ 2026-08-27 FIRST INDEPENDENT LABELS (Osman, CR Director, 20y) — the human ceiling
 > - **The binding lever landed.** Osman — independent (neither owner nor me), domain expert — labelled all
 >   200 cases blind. `holdout_labels_osman.csv`. Gives the two numbers that were always missing:
