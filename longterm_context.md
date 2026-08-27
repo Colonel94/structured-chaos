@@ -51,25 +51,29 @@ live-testing (voice/image/text) → turn each failing case into a prompt/policy 
 
 > ## 🧭 SESSION HANDOFF (2026-08-27, post-/clear START HERE — detail in the dated blocks below)
 >
-> **THE ONE NEXT ACTION — the fresh independent labelling round is IN FLIGHT (owner recruiting a new
-> labeller).** The pack was sent: `engine/eval/fixtures/holdout_labels_blank.xlsx` +
-> `holdout_labels_INSTRUCTIONS.md` (both carry the v22 tie-breaks). When their filled file comes back:
-> ```
-> cd engine
-> ./.venv/Scripts/python.exe eval/export_holdout_workbook.py <name> --from <their-file>.xlsx   # -> holdout_labels_<name>.csv
-> ./.venv/Scripts/python.exe eval/score_holdout.py                                             # auto-discovers all holdout_labels_*.csv
-> ```
-> That yields the CLEAN result we don't yet have: **new-vs-owner + new-vs-osman** (did the tie-breaks
-> raise the ~86/90/86/64 human ceiling?) and **model-vs-new** (real accuracy under agreed guidelines).
-> This is THE number that decides where the extractor stands. Everything else below is context.
+> **THE ONE NEXT ACTION — the SECOND independent labeller landed (Catleen), and it FLIPPED the story.**
+> Two independent domain experts now agree with each OTHER far more than either agrees with the owner →
+> the real human ceiling is much higher than we thought, and the model is genuinely BELOW it (the earlier
+> "at the ceiling" comfort was an artifact of the owner's noisier pre-v22 labels). **Named next lever: a
+> severity-under-call prompt fix (v23)** — the model drops harm to `none` (44/49 severity errors are
+> harm→none, mostly financial_harm→none), directly against v22's "financial_harm has NO minimum" rule.
+> That is a $0/local (qwen3:14b) prompt change; acting on it means re-extract 200 (~60–80 min) + re-score
+> ([[measure-extraction-changes-abstention-overfire]]). Do NOT re-label/tune gold to inflate agreement (§10).
 >
-> **WHERE WE ARE.** Branch `fix/elicit-qualifier-gate-b-readiness` — **clean tree, all pushed**, PR #2
-> OPEN (https://github.com/Colonel94/structured-chaos/pull/2). Extractor at **extract-v22**. Eval gold =
-> 200-case OWNER workbook (`holdout_labels.xlsx`; 66 real + 134 owner-authored synthetic = DEV gold, NOT
-> independent) + **Osman** (independent CR Director, `holdout_labels_osman.csv`). Headline finding: the
-> model sits at **84–97% of the human inter-annotator ceiling**; emotion 62–71% is AT the 64% human
-> ceiling → the 5-point scale is the bottleneck, not the extractor (the §10 "is the ENUM wrong?" test,
-> answered on independent data). Do NOT read the raw %s as model weakness, and do NOT collapse gold.
+> **WHERE WE ARE.** Branch `fix/elicit-qualifier-gate-b-readiness` — PR #2 OPEN
+> (https://github.com/Colonel94/structured-chaos/pull/2). Extractor at **extract-v22**. THREE label sets
+> now: OWNER workbook (`holdout_labels.xlsx`; 66 real + 134 owner-authored synthetic = DEV gold, pre-v22)
+> + **Osman** (independent CR Director 20y, pre-v22, `holdout_labels_osman.csv`) + **Catleen** (independent
+> Director of Customer Care 17y, v22, `holdout_labels_catleen.csv`). **CORRECTED headline (supersedes the
+> old "84–97% of ceiling / emotion at ceiling" read, which is now FALSIFIED):** the two independents agree
+> **cat 92 / outcome 91 / severity 94 / emotion 83** — that is the true ceiling, well above owner-vs-either
+> (86/90/86/**64**). On the independent-CONSENSUS subset (catleen==osman = truest ground truth) the model
+> scores **cat 77 / outcome 81 / severity 74 / emotion 75** — a real gap on every field, biggest on
+> SEVERITY (74 vs a 94 ceiling). The owner is the OUTLIER, not the ceiling (owner differs from the
+> independent consensus 12/8/12/**30%**; emotion 30% is why every "vs owner" emotion number was depressed).
+> **The 5-point emotion scale is NOT the bottleneck** — two independents hit 83% on it under v22; the low
+> 64% was owner-specific noise. The binding lever has FLIPPED from "fix the taxonomy" to "fix the
+> extractor" (the task is now proven reliably-labelable). Do NOT collapse gold.
 >
 > **RUN IT.** DB+MinIO: `docker compose -f deploy/docker-compose.yml up -d db minio`. Backend:
 > `cd engine && ./.venv/Scripts/python.exe -m uvicorn app.main:app --port 8000` (use `-m uvicorn`, NOT the
@@ -85,10 +89,43 @@ live-testing (voice/image/text) → turn each failing case into a prompt/policy 
 > auto-route OFF (all→review) so it's ordering-only, not safety; re-fit is deferred (needs its own model
 > run + independent labels). qwen3:14b ≈ 15–25 s/case on the 4070. Openpyxl reads the labelling workbook.
 >
-> **OWNER-DECISION FOLLOW-UPS (logged, not auto-actioned):** (1) whether to hard-collapse emotion 5→3
-> (kept at 5 for now — collapsing discards the owner+Osman emotion gold); (2) calibration re-fit once
-> independent labels are stable; (3) the independent representative set for the GA gate (Osman + a fresh
-> labeller are the start; synthetic 134 stay DEV-only).
+> **OWNER-DECISION FOLLOW-UPS (logged, not auto-actioned):** (1) ~~hard-collapse emotion 5→3~~ — **now
+> data-answered: KEEP the 5-point scale.** Two independents agree 83% on it under v22; the old 64% was
+> owner-specific noise, not scale-inherent. Collapsing would discard a reliably-labelable signal. (2)
+> **owner gold is the outlier** — consider owner re-labelling emotion/severity under v22, or treating
+> catleen+osman as the reference ceiling and owner gold as DEV-only pre-v22; (3) calibration re-fit once
+> labels are stable; (4) GA representative set = Osman + Catleen are the start; synthetic 134 stay DEV-only;
+> (5) **the v23 severity-under-call fix** (harm→none bias) — do it ($0 local) then re-extract + re-score.
+>
+> ## ✅ 2026-08-27 SECOND INDEPENDENT LABELLER (Catleen, Director of Customer Care, 17y) — the ceiling FLIP
+> - **The clean measure §0 was waiting for landed and it CORRECTS the prior session's comfortable read**
+>   (per [[comfortable-reframe-trap]] — leading with the harsh version). QA PASS on her workbook (200 cases,
+>   0 missing on cat/sev/emotion, 52 real null outcomes, no OOV). Exported → `holdout_labels_catleen.csv`.
+> - **The two independent domain experts (Catleen 17y v22 + Osman 20y pre-v22) agree with EACH OTHER:**
+>   category **92%**, desired_outcome **91%**, severity **94%**, emotion **83%**, all-fields **67%** (n=200).
+>   That is the true human ceiling — and it is FAR above owner-vs-either (86/90/86/**64**, all-fields 44).
+>   The earlier "human ceiling = 86/90/86/64, model at 84–97% of it, emotion AT the ceiling" story rested
+>   on the owner's noisier pre-v22 labels and is **falsified**.
+> - **Owner is the OUTLIER, not the ceiling.** On rows where the two independents agree, the owner differs
+>   12/8/12/**30%** (cat/outcome/sev/emotion). The 30% emotion divergence is exactly why every historical
+>   "model vs owner" emotion number (48–53%) was depressed. The owner reads emotion on a different axis and
+>   labelled pre-v22.
+> - **The model has a REAL gap below the now-proven-reliable ceiling.** On the independent-consensus subset
+>   (catleen==osman, the truest ground truth we have): category **77%** (ceiling 92), desired_outcome **81%**
+>   (91), severity **74%** (94), emotion **75%** (83). Every field trails; SEVERITY is the biggest deficit
+>   (~20 pts). Note the inversion vs the naive raw-% read: emotion (lowest raw agreement) is the model's
+>   CLOSEST field to ceiling (75/83 = 90%); severity is the FARThest.
+> - **The severity gap is a specific, fixable model bias: it UNDER-CALLS harm.** 44 of 49 severity errors
+>   are harm→`none`: **29 financial_harm→none**, 11 safety_health→none, 4 privacy_security→none. The model
+>   drops disputed amounts / small fees to `none` — directly against v22's "financial_harm has NO minimum".
+>   This is a prompt gap, not a capability ceiling → **extract-v23 severity fix** is the named lever.
+> - **Emotion model error is the adjacent-tone smear toward "concerned"** (15 frustrated→concerned, 9
+>   calm→concerned, 3 distressed→concerned) — the model over-hedges to "concerned". Lower priority (closest
+>   to ceiling). **repair_redo confirmed NOT overloaded** (catleen-osman: 0 disagreements touching it).
+> - **The binding lever FLIPPED.** Prior diagnosis (§10 upstream-ceiling): "fix the taxonomy, not the
+>   model." Now that two independents agree 92/91/94/83 under v22, the task is proven reliably-labelable →
+>   the lever is genuinely the EXTRACTOR (still $0/local qwen3:14b; cloud stays owner-gated,
+>   [[zero-budget-never-steer-to-cost]]). Do NOT re-label/tune gold to close the gap (§10 no-self-grading).
 >
 > ## ✅ 2026-08-27 OWNER-APPROVED TIE-BREAKS → extract-v22, propagated + re-scored (DIRECTIONAL)
 > - All six tie-breaks Osman surfaced are IMPLEMENTED and propagated to the three places together:
