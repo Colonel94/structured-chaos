@@ -51,6 +51,19 @@ live-testing (voice/image/text) → turn each failing case into a prompt/policy 
 
 > ## 🧭 SESSION HANDOFF (2026-08-27, post-/clear START HERE — detail in the dated blocks below)
 >
+> **PORTAL CSP BUG FIXED + live submission site running (2026-08-27, commit `86bcd9b`).** Running the
+> public submission portal (cloudflared tunnel → a portal instance on `127.0.0.1:8010`) exposed a real
+> bug: the standalone page `/p/s/{key}` passes the widget its config via an INLINE `<script>`, but the
+> app CSP is `script-src 'self'` (no `'unsafe-inline'`) → every real browser BLOCKED it → the widget
+> loaded with an empty embed key and a customer's submit 403'd. Fix: per-response CSP **nonce** on that
+> one inline script (`app/http_security.py` centralises the CSP; `_standalone_page` sets a nonce'd CSP
+> header — middleware uses `setdefault` so the route wins). Verified LIVE end-to-end: 0 console errors,
+> a real submission through the tunnel returned `200` + case `C-AAB775DA`. The portal instance on :8010 is
+> served by **my venv** now (`PORTAL_ENABLED=true PORTAL_SECRET=<gen> uvicorn app.main:app --port 8010`),
+> NOT the earlier codex-runtimes process (replaced). Submit URL pattern: `https://<tunnel>/p/s/<embed_key>`
+> (demo key `ek_Si0YzMkSan5NIHZQMVK0qisf` = "Structured Chaos Demo"). Note: trycloudflare URLs are
+> ephemeral (rotate on cloudflared restart); the :8010 instance + the shared worker must stay up.
+>
 > **THE ONE NEXT ACTION — the SECOND independent labeller landed (Catleen), and it FLIPPED the story.**
 > Two independent domain experts now agree with each OTHER far more than either agrees with the owner →
 > the real human ceiling is much higher than we thought, and the model is genuinely BELOW it (the earlier
