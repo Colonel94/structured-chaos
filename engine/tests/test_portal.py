@@ -534,3 +534,26 @@ def test_rate_limiter_unit() -> None:
     assert all(w.allow("k", limit=3, window_s=100) for _ in range(3))
     assert not w.allow("k", limit=3, window_s=100)  # 4th in the window → blocked
     assert w.allow("other", limit=3, window_s=100)  # a different key is independent
+
+
+def test_standalone_page_authorises_its_inline_config_with_a_csp_nonce() -> None:
+    """The widget's config is set by an INLINE <script>; the app CSP is script-src 'self' (no
+    'unsafe-inline'), so the standalone page must authorise that one script with a per-response nonce —
+    otherwise every real browser blocks it and the widget loads with NO embed key (a customer cannot
+    submit). Guard: the nonce on the tag matches the CSP header, and it is fresh per response."""
+    import re
+
+    client = TestClient(app)
+    r = client.get("/p/s/EK_nonce_demo")
+    assert r.status_code == 200
+    m = re.search(r'<script nonce="([^"]+)">', r.text)
+    assert m, "the inline config <script> must carry a nonce"
+    nonce = m.group(1)
+    assert nonce and nonce != "__NONCE__"  # the placeholder was substituted with a real value
+    assert "window.__ADAPTIVE_PORTAL__" in r.text  # the config the widget reads is present
+    csp = r.headers["content-security-policy"]
+    assert f"script-src 'self' 'nonce-{nonce}'" in csp  # the CSP authorises exactly this script
+    # a fresh nonce per response (never a fixed/reused value that would defeat the point)
+    r2 = client.get("/p/s/EK_nonce_demo")
+    n2 = re.search(r'<script nonce="([^"]+)">', r2.text)
+    assert n2 and n2.group(1) != nonce

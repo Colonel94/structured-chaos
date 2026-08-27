@@ -31,6 +31,7 @@ from ..api.routes import (
     get_factory,
 )  # reuse the agent API's factory dep (one test override)
 from ..config import settings
+from ..http_security import content_security_policy
 from ..obs.logging import get_logger
 from ..store.db import tenant_session
 from . import store
@@ -340,14 +341,23 @@ def _standalone_page(mode: str, value: str) -> HTMLResponse:
             "No account, no forms. We'll give you a link to check on it.",
         )
     )
+    # The widget's config is set by an INLINE <script>; the app's global CSP is script-src 'self' (no
+    # 'unsafe-inline'), which would block it — leaving the widget with no embed key (a customer could not
+    # submit). Authorise exactly this one inline script with a per-response nonce, and set a matching CSP
+    # header on THIS response (the global middleware uses setdefault, so this wins). The value is still
+    # json-escaped above — the nonce authorises the script, escaping keeps the reflected value inert.
+    nonce = secrets.token_urlsafe(16)
     html = (_STATIC / "standalone.html").read_text(encoding="utf-8")
     html = (
         html.replace("__MODE__", mode)
         .replace("__VALUE__", esc)
         .replace("__HEAD_TITLE__", head_title)
         .replace("__HEAD_SUB__", head_sub)
+        .replace("__NONCE__", nonce)
     )
-    return HTMLResponse(html)
+    resp = HTMLResponse(html)
+    resp.headers["Content-Security-Policy"] = content_security_policy(f"'self' 'nonce-{nonce}'")
+    return resp
 
 
 @router.get("/s/{key}")
