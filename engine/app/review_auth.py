@@ -17,7 +17,9 @@ from uuid import UUID
 from sqlalchemy import text
 from sqlalchemy.orm import Session, sessionmaker
 
-_EMAIL_RE = re.compile(r"^[^\s@]+@[^\s@]+\.[^\s@]+$")
+# Linear-time (no catastrophic backtracking): dot-free labels separated by literal dots. The old
+# r"[^\s@]+\.[^\s@]+" overlapped (`.` is also matched by [^\s@]) → polynomial ReDoS (CodeQL py/polynomial-redos).
+_EMAIL_RE = re.compile(r"^[^\s@]+@[^\s@.]+(?:\.[^\s@.]+)+$")
 SESSION_COOKIE = "adaptive_intake_session"
 CSRF_COOKIE = "adaptive_intake_csrf"
 

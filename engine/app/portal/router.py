@@ -13,6 +13,7 @@ Requires a worker (``scripts/run_worker.py default``) — the same worker the re
 
 from __future__ import annotations
 
+import json
 import secrets
 import time
 from collections import defaultdict, deque
@@ -325,7 +326,11 @@ def embed_js() -> Response:
 
 def _standalone_page(mode: str, value: str) -> HTMLResponse:
     """A full-page host for businesses with no website to embed on — same widget, mounted standalone."""
-    esc = value.replace('"', "").replace("<", "").replace(">", "")
+    # Emit the user value as a safe JS string literal (json.dumps handles quotes/backslashes/control
+    # chars), then neutralise the HTML-context breakout chars so it cannot escape the <script> block
+    # (`</script>`, `<!--`). This is the recognised sanitiser for a value reflected into inline JS —
+    # replaces the earlier char-stripping that CodeQL (rightly) did not treat as a sanitiser.
+    esc = json.dumps(value).replace("<", "\\u003c").replace(">", "\\u003e").replace("&", "\\u0026")
     # The outer page header reflects the mode: a "check on it" link must not read "Tell us what went wrong".
     head_title, head_sub = (
         ("Your case", "Here's where things stand.")
