@@ -189,14 +189,18 @@ async def main() -> int:
         f"qualifier retention      : {qr:.3f}   ({qualifiers_retained}/{emergent_kept} kept attrs carry a VERBATIM qualifier)"
     )
     print(f"emergent attrs kept/all  : {emergent_kept}/{candidates_all}")
-    print("\n-- HEAD ENUMERATION (NOT the gate — bounded by the closed 31-vocab, declines by construction) --")
+    print(
+        "\n-- HEAD ENUMERATION (NOT the gate — bounded by the closed 31-vocab, declines by construction) --"
+    )
     print(f"distinct heads (columns) : {len(seen_heads)}   (closed vocab, bounded by construction)")
     print(
         f"new-head per {_BUCKET}-bucket : {new_head_per_bucket}   <- declines because the enum is FINITE, not because anything converged"
     )
     print("\n-- COMPOSITE CURVE (THE REAL §4 GATE — currently FAILING: flat + ~90% hapax) --")
     hapax = sum(1 for v in name_support.values() if v == 1)
-    print(f"distinct composite names : {len(seen_names)}   (the qualifier_head space where sprawl actually lives)")
+    print(
+        f"distinct composite names : {len(seen_names)}   (the qualifier_head space where sprawl actually lives)"
+    )
     print(
         f"new-composite per {_BUCKET}   : {new_name_per_bucket}   <- MUST bend down to converge "
         f"(pre-Path-A was [48,52,74,64,77,63]); flat = unproven"

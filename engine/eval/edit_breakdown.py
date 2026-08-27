@@ -62,9 +62,7 @@ def _load(dataset: str) -> list[tuple[dict[str, str], set[str], dict[str, object
     }
     rows = list(csv.DictReader(labels.open(encoding="utf-8", newline="")))
     active_null_on_blank = {
-        col
-        for col in _NULL_ON_BLANK
-        if any(str(r.get(col, "") or "").strip() for r in rows)
+        col for col in _NULL_ON_BLANK if any(str(r.get(col, "") or "").strip() for r in rows)
     }
     out = []
     for row in rows:
@@ -118,22 +116,16 @@ def _report(dataset: str) -> None:
 
     print(f"\n{'=' * 78}\n[{dataset}]  {len(cases)} labelled cases")
     dens = sum(len(lab) for _g, lab, _p in cases) / len(cases)
-    print(
-        f"  mean labelled governed fields/row: {dens:.1f}  (zero-edit only counts rows with ≥2)"
-    )
+    print(f"  mean labelled governed fields/row: {dens:.1f}  (zero-edit only counts rows with ≥2)")
 
-    print(
-        "\n  PER-FIELD EDIT RATE (model ≠ gold, over rows a human labelled this field)"
-    )
+    print("\n  PER-FIELD EDIT RATE (model ≠ gold, over rows a human labelled this field)")
     for k in keys:
         n = labelled_n[k]
         if not n:
             print(f"    {k:<16}: no gold labelled")
             continue
         e = edits[k]
-        print(
-            f"    {k:<16}: edited {e}/{n} = {e / n:.0%}   (accuracy {(n - e) / n:.0%})"
-        )
+        print(f"    {k:<16}: edited {e}/{n} = {e / n:.0%}   (accuracy {(n - e) / n:.0%})")
 
     print("\n  DIRECTION of the errors (gold → model, top 6 per field)")
     for k in keys:
@@ -175,11 +167,7 @@ def _report(dataset: str) -> None:
                     flips += 1
             if flips:
                 # recompute the zero-edit rate over the rows that still have >=2 fields after the cut
-                denom = sum(
-                    1
-                    for _g, lab, _p in ze_rows
-                    if len([k for k in lab if k != cut]) >= 2
-                )
+                denom = sum(1 for _g, lab, _p in ze_rows if len([k for k in lab if k != cut]) >= 2)
                 new_zero_rate = (ze_ok + flips) / denom if denom else 0.0
                 print(
                     f"       cut {cut:<16}: +{flips} rows flip → zero-edit "
@@ -193,9 +181,7 @@ def _report(dataset: str) -> None:
 def main() -> int:
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8")  # type: ignore[union-attr]
-    print(
-        "W2 — PER-FIELD EDIT BREAKDOWN (decomposes the zero-edit gate; $0, files-only)"
-    )
+    print("W2 — PER-FIELD EDIT BREAKDOWN (decomposes the zero-edit gate; $0, files-only)")
     print(
         "gold is Claude-authored → 'edit' = disagrees-with-labeller, not with reality (see docstring)"
     )

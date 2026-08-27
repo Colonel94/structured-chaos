@@ -38,10 +38,16 @@ def _report(name: str, gold: dict[str, str], preds: dict[str, str]) -> tuple[int
     dist = Counter(gold.values())
     top, topn = dist.most_common(1)[0]
     n = sum(dist.values())
-    print(f"\n{name}: {hit}/{tot} = {hit / tot:.0%}   (majority '{top}' = {topn}/{n} = {topn / n:.0%})")
+    print(
+        f"\n{name}: {hit}/{tot} = {hit / tot:.0%}   (majority '{top}' = {topn}/{n} = {topn / n:.0%})"
+    )
     ra = dist.get("record_accuracy", 0)
     if ra:
-        rah = sum(int(preds.get(i) == "record_accuracy") for i, g in gold.items() if g == "record_accuracy" and i in preds)
+        rah = sum(
+            int(preds.get(i) == "record_accuracy")
+            for i, g in gold.items()
+            if g == "record_accuracy" and i in preds
+        )
         print(f"    record_accuracy recall: {rah}/{ra}   ({ra / n:.0%} of this set)")
     return hit, tot
 
@@ -49,9 +55,11 @@ def _report(name: str, gold: dict[str, str], preds: dict[str, str]) -> tuple[int
 def main() -> int:
     cg, cp = _gold(_FIX / "cfpb_labels.csv"), _preds(_FIX / "cfpb_extractions.jsonl")
     mg, mp = _gold(_FIX / "multidomain_labels.csv"), _preds(_FIX / "multidomain_extractions.jsonl")
-    print(f"===== COMBINED GOLD (v16) — CFPB {len(cg)} + multidomain {len(mg)} = {len(cg) + len(mg)} rows =====")
-    h1, t1 = _report("CFPB (finance)", cg, cp)
-    h2, t2 = _report("multidomain (9 sectors)", mg, mp)
+    print(
+        f"===== COMBINED GOLD (v16) — CFPB {len(cg)} + multidomain {len(mg)} = {len(cg) + len(mg)} rows ====="
+    )
+    _report("CFPB (finance)", cg, cp)
+    _report("multidomain (9 sectors)", mg, mp)
     both_g = {**{f"c:{k}": v for k, v in cg.items()}, **{f"m:{k}": v for k, v in mg.items()}}
     both_p = {**{f"c:{k}": v for k, v in cp.items()}, **{f"m:{k}": v for k, v in mp.items()}}
     _report("COMBINED (cross-domain)", both_g, both_p)

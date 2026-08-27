@@ -1393,16 +1393,25 @@ def get_field_values(session: Session, case_id: UUID, field_paths: Sequence[str]
     return {str(r[0]): str(r[1]) for r in rows if r[1] not in (None, "")}
 
 
-def get_emergent_values_by_head(session: Session, case_id: UUID, head: str) -> list[tuple[str, str]]:
+def get_emergent_values_by_head(
+    session: Session, case_id: UUID, head: str
+) -> list[tuple[str, str]]:
     """Current ``(qualifier, value)`` pairs for one typed emergent head on a case."""
+    # There is no physical ``qualifier`` column: ``field_name`` is the composite ``qualifier_head`` and
+    # ``head`` is the bare head, so the qualifier is field_name with the trailing ``_head`` stripped
+    # (mirrors the Python derivation in ``field_path[: -(len(head) + 1)]`` above). The bare-head row
+    # (``field_name = head``) has no qualifier → '' , and sorts last (was ``qualifier NULLS LAST``).
     rows = session.execute(
         text("""
-            SELECT COALESCE(e.qualifier, ''), f.value #>> '{}'
+            SELECT CASE WHEN e.field_name = e.head THEN ''
+                        ELSE left(e.field_name, length(e.field_name) - length(e.head) - 1)
+                   END AS qualifier,
+                   f.value #>> '{}'
               FROM field_current f
               JOIN emergent_field e
                 ON e.tenant_id = f.tenant_id AND e.field_name = f.field_path
              WHERE f.case_id = :cid AND e.head = :head AND f.value IS NOT NULL
-             ORDER BY e.qualifier NULLS LAST, e.field_name
+             ORDER BY (e.field_name = e.head), e.field_name
         """),
         {"cid": case_id, "head": head},
     ).all()

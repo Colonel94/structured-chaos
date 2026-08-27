@@ -112,14 +112,14 @@
 
 <div class="wrap">
   <header class="top">
-    <p class="eyebrow">Build &amp; sellability tracker · 26 Aug 2026</p>
+    <p class="eyebrow">Build &amp; sellability tracker · 27 Aug 2026</p>
     <h1>Adaptive Intake</h1>
     <p class="lede">A domain-agnostic AI that turns a stranger's messiest real case — text, a chat export,
       a voice note, a photo — into a complete, correctly prioritised, fully-traceable case they never
       typed. This tracks engineering, pilot-entry and general-availability readiness separately.</p>
     <div class="meta">
-      <span><b>reviewed</b> @ 0edfd47</span>
-      <span><b class="num">147</b> backend pass · <b class="num">2</b> UI pass</span>
+      <span><b>reviewed</b> @ 10b95cf</span>
+      <span>latest full suite <b class="num">283</b> pass · <b class="num">2</b> skip</span>
       <span>ruff · mypy · tsc · vitest · production build — clean</span>
       <span>engineering <b>pass</b> · pilot entry <b class="num">3/6</b></span>
     </div>
@@ -158,10 +158,10 @@
     <div class="phase"><div class="phase__h"><span class="phase__n">2</span><span class="chip c-part">partial</span></div><span class="phase__t">Engine + 4 backends</span><span class="phase__d">Wired; real backends not live-response tested.</span></div>
     <div class="phase"><div class="phase__h"><span class="phase__n">3</span><span class="chip c-part">partial</span></div><span class="phase__t">Intake + normalise</span><span class="phase__d">Text live; audio/OCR/PDF untested on host.</span></div>
     <div class="phase"><div class="phase__h"><span class="phase__n">4</span><span class="chip c-open">unproven</span></div><span class="phase__t">Extraction + the moat</span><span class="phase__d">Mechanisms built; convergence fails its metric.</span></div>
-    <div class="phase"><div class="phase__h"><span class="phase__n">5</span><span class="chip c-part">partial</span></div><span class="phase__t">Resolve + elicit</span><span class="phase__d">Anchor+2, silent bind, Moment 3 done; ≥99% self-graded.</span></div>
-    <div class="phase"><div class="phase__h"><span class="phase__n">6</span><span class="chip c-done">done</span></div><span class="phase__t">Confidence + rules</span><span class="phase__d">Rules engine solid; confidence honest, auto-route off.</span></div>
+    <div class="phase"><div class="phase__h"><span class="phase__n">5</span><span class="chip c-part">partial</span></div><span class="phase__t">Resolve + elicit</span><span class="phase__d">Anchor+2 and Moment 3 done; objective-key run found 0/311 wrong silent binds and 311/311 resolvable recall.</span></div>
+    <div class="phase"><div class="phase__h"><span class="phase__n">6</span><span class="chip c-done">done</span></div><span class="phase__t">Confidence + rules</span><span class="phase__d">Rules engine deterministic; calib-v3 refit on independent consensus; auto-route remains off.</span></div>
     <div class="phase"><div class="phase__h"><span class="phase__n">7</span><span class="chip c-done">done</span></div><span class="phase__t">Review UI + commit + report</span><span class="phase__d">Guided pilot access, service readiness, queue overview, feedback loop, undo, one-key correction, review-time HUD and responsive light/dark UI.</span></div>
-    <div class="phase"><div class="phase__h"><span class="phase__n">8</span><span class="chip c-part">diagnostic</span></div><span class="phase__t">Quality measurement</span><span class="phase__d">Scorers run; current self-authored results remain GA/claim diagnostics until independent pilot evidence lands.</span></div>
+    <div class="phase"><div class="phase__h"><span class="phase__n">8</span><span class="chip c-done">measured</span></div><span class="phase__t">Quality measurement</span><span class="phase__d">Two independent experts completed all 200 cases. Consensus model agreement: category 143/185, outcome 147/182, severity 139/188, emotion 125/166.</span></div>
     <div class="phase"><div class="phase__h"><span class="phase__n">9</span><span class="chip c-open">next</span></div><span class="phase__t">Controlled pilot</span><span class="phase__d">Close governance, operational evidence and one operator acceptance run; then start capped human-reviewed learning.</span></div>
   </div>
 
@@ -180,7 +180,7 @@
     <div class="gap gap--crit"><div class="gap__h"><span class="tag">pilot</span><span class="gap__t">Named governance and approved policy</span></div><p class="gap__d">A real-data pilot needs a named organisation, bounded workflow/channel/volume, approved SLA/escalation/retention policy, data basis and owners.</p></div>
     <div class="gap gap--crit"><div class="gap__h"><span class="tag">operations</span><span class="gap__t">Restore/security evidence and ownership</span></div><p class="gap__d">Run the existing drills and assign monitoring, incident, support and manual-fallback responsibility.</p></div>
     <div class="gap gap--crit"><div class="gap__h"><span class="tag">acceptance</span><span class="gap__t">One operator end-to-end run</span></div><p class="gap__d">A non-builder operator must complete a representative case. Normal onboarding help is allowed; confusion is captured and fixed.</p></div>
-    <div class="gap gap--warn"><div class="gap__h"><span class="tag tag--warn">GA evidence</span><span class="gap__t">Independent quality remains unmeasured</span></div><p class="gap__d">Category <b class="num">77%</b>, zero-edit <b class="num">28%</b> and desired outcome <b class="num">56%</b> remain self-authored diagnostics. They block broad accuracy claims, not a human-reviewed pilot.</p></div>
+    <div class="gap gap--warn"><div class="gap__h"><span class="tag tag--warn">GA quality</span><span class="gap__t">Independent quality is measured and below GA objectives</span></div><p class="gap__d">Independent-consensus model agreement is category <b class="num">143/185</b>, outcome <b class="num">147/182</b>, severity <b class="num">139/188</b> and emotion <b class="num">125/166</b>. This blocks broad accuracy claims, not a mandatory-human-review pilot.</p></div>
     <div class="gap gap--warn"><div class="gap__h"><span class="tag tag--warn">claim</span><span class="gap__t">Self-converging schema remains unproven</span></div><p class="gap__d">Duplicate/synonym fields are <b class="num">7.6%</b> and the new-field curve is flat. Do not market this experimental claim until representative evidence passes.</p></div>
     <div class="gap gap--warn"><div class="gap__h"><span class="tag tag--warn">coverage</span><span class="gap__t">Arabic retired from §4; ~8 rows still unmeasured</span></div><p class="gap__d">Owner retired Arabic from §4 (voice-vs-text parity substituted; voice-first proven on a real iPhone). Object-match, latency, backfill rows remain measurable-but-unrun.</p></div>
     <div class="gap gap--warn"><div class="gap__h"><span class="tag tag--warn">infra</span><span class="gap__t">Cloud path partly vaporware</span></div><p class="gap__d"><code style="font-family:var(--mono)">asr_cohere</code> / <code style="font-family:var(--mono)">embed_bge</code> modules missing; WhatsApp send is a stub. File-drop + WhatsApp-in are the working channels; local qwen3:14b is the live path.</p></div>

@@ -114,7 +114,9 @@ async def mint_for_tenant(
     the caller re-extracts the affected cases so the new column re-homes history. Idempotent-ish: a
     re-mint of the same cluster upserts the same head (register is an upsert) and the affected cases,
     already re-extracted under the vocab-aware key, are a no-op on the second pass."""
-    facts = [(cid, v) for cid, v in api.list_escape_valve_facts(session) if profile_value(v).is_concrete]
+    facts = [
+        (cid, v) for cid, v in api.list_escape_valve_facts(session) if profile_value(v).is_concrete
+    ]
     if len(facts) < PROMOTE_HEAD_N:
         return []
 
@@ -169,9 +171,13 @@ async def mint_for_tenant(
             source=f"other_cluster: {examples[:3]}",
             sensitivity=None if sensitivity == pii.NONE else sensitivity,
         )
-        existing = existing | {name}  # reserve the name (two clusters can't mint it; nor can a re-scan)
+        existing = existing | {
+            name
+        }  # reserve the name (two clusters can't mint it; nor can a re-scan)
         if sensitivity != pii.NONE:
-            log.info("mint.blocked_sensitive", head=name, sensitivity=sensitivity, support=len(cases))
+            log.info(
+                "mint.blocked_sensitive", head=name, sensitivity=sensitivity, support=len(cases)
+            )
             continue  # blocked — not added to the vocab, not re-homed
         minted.append((name, len(cases), cases))
         log.info("mint.head", head=name, support=len(cases))

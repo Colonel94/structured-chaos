@@ -2,21 +2,40 @@
 
 This pack makes pilot-learning and general-availability evidence repeatable without pretending it has
 already passed. Independent labels and unassisted stranger sessions are not controlled-pilot entry gates
-under winning-condition v0.2; they remain required before broad quality/onboarding claims. Copy templates
-into a dated evidence directory and freeze the commit, model, policy, inputs and thresholds before a run.
+under winning-condition v0.2; they remain required before broad quality/onboarding claims. Freeze the
+commit, model, policy, inputs and thresholds before a run. There are **no session-capture spreadsheets**:
+a person using the product is measured by the product (see the last section); the only labelling artifact
+is the workbook `engine/eval/fixtures/holdout_labels_blank.xlsx` (exported to `holdout_labels_<name>.csv` for
+scoring). Help requests, abandonment, and observer notes are the only things the instrumentation cannot
+see — they are recorded out-of-band as a short free-text note, never inferred from a successful
+`review_event` row.
 
 ## Independent holdout
 
-Give only `engine/eval/fixtures/holdout_labels.csv` and its instructions to a non-builder labeller. Do not
-show model outputs. A second person adjudicates uncertain rows. Hash/freeze the completed file, then run
-`cd engine && uv run python eval/score_holdout.py`. Record disagreements as well as aggregate scores.
+Give only `engine/eval/fixtures/holdout_labels_blank.xlsx` to a non-builder labeller — the **Cases** sheet's
+source columns are filled and its label columns are blank, **Option Sets** defines the allowed values
+(dropdown-validated) and their manager rules, and
+**QA Summary** tracks distribution. Do not show model outputs or another reviewer's labels. Preserve
+disagreements through scoring rather than adjudicating them away.
+Export the completed Cases sheet to `engine/eval/fixtures/holdout_labels_<name>.csv` (e.g.
+`holdout_labels_owner.csv`), hash/freeze it, then run `cd engine && uv run python eval/score_holdout.py`.
+For the independent-consensus headline, pass exactly two named exports: `uv run python
+eval/score_holdout.py --consensus first=eval/fixtures/holdout_labels_first.csv
+second=eval/fixtures/holdout_labels_second.csv`. The scorer includes a field only where both reviewers
+agree and prints every numerator and field-specific denominator. Record disagreements as well as
+aggregate scores; never collapse or remap gold to improve the result.
 
 ## Cold reviewer timing
 
 Use at least three people who have not used the product. Give one sentence: “Review these cases and
-approve only what matches the source.” Start the clock when the queue appears; stop per case at approval
-or abandonment. Record every correction, help request and error in `evidence/reviewer-session-template.csv`.
-Pass only if the representative-case median is at most 30 seconds; report p90 and sample size too.
+approve only what matches the source.” **The system instruments the session itself** — every approval
+writes an append-only `review_event` row carrying `review_ms` and `fields_edited`, and the live HUD
+shows the running median. After the session, read `GET /api/review-stats` and record the commit SHA,
+`count` (n), `median_ms` and `p90_ms`. Pass only if the representative-case median is at most 30
+seconds. Do **not** hand-log per-case times into a spreadsheet — a reviewer using the product *is* the
+measurement, and re-typing it back into a form is the exact thing this product exists to eliminate.
+The only things the instrumentation cannot see are **help requests, abandonment, and observer notes**;
+capture those three on a sticky note.
 
 ## Sparse and voice sets
 
@@ -24,15 +43,35 @@ Pass only if the representative-case median is at most 30 seconds; report p90 an
   the input and label whether the final case became actionable, reused stated data, asked for derivable
   data, captured outcome and was abandoned. Synthetic cases may test code but cannot pass the market gate.
 - Voice parity: record at least 30 paired cases where the same speaker provides the same facts in a typed
-  and a natural voice version. Include real phone containers/codecs/noise. Score governed fields using
-  `evidence/voice-pair-template.csv`; the absolute field-accuracy gap must be at most five percentage points.
+  and a natural voice version, over real phone containers/codecs/noise. Run both cases through extraction
+  and score EACH against the frozen gold with the same scorer as the holdout (`eval/score_holdout.py`);
+  the absolute field-accuracy gap is **computed by the scorer, not hand-counted**, and must be at most
+  five percentage points. The recording conditions (container/codec/noise) are inputs you choose when you
+  record, not measurements to log — so no per-pair spreadsheet is needed.
 
 ## Unassisted onboarding study
 
-For each person: use their own messy input, provide no walkthrough, keep the builder silent, and record
-time to first value plus exact unsolicited reactions in `evidence/stranger-session-template.csv`. Treat
-price questions and feature requests as discovery signals, not pass/fail software criteria. Consent to
-record and retention/deletion must be settled before the session.
+For each person: use their own messy input, provide no walkthrough, keep the builder silent. **They use
+the same product a reviewer does, so the session instruments itself** — the case lifecycle records intake
+→ review → approval → report and `review_event` records the time; read it off the API the same way (`GET
+/api/review-stats`, the case record), not a spreadsheet. The only things worth capturing by hand are the
+conversational signals the software cannot see — an unsolicited reaction, a price or feature question,
+whether they needed help or gave up — and those are a free-text note. Treat price questions and feature
+requests as discovery signals, not pass/fail software criteria. Consent to record and retention/deletion
+must be settled before the session.
+
+## What the system already measures (do not re-capture by hand)
+
+Before adding any capture template, check whether the product already instruments it. It does, for most
+of this: `review_event` + `GET /api/review-stats` give count/median/p90 review time and average fields
+edited; the append-only `field_correction` log + `GET /api/review-breakdown` give per-field correction
+pressure; the eval scorer gives field/category accuracy against gold. **A reviewer using the product is
+the measurement** — and so is a stranger onboarding, because they run the same product. Only genuinely
+external observations justify manual capture — reactions, price questions, help requests, abandonment,
+observer notes — and those are a free-text note, not a spreadsheet. (All three session templates —
+`reviewer-session-template.csv`, `voice-pair-template.csv` and `stranger-session-template.csv` — were
+removed for exactly this reason: a person using the self-instrumenting product never needs a structured
+capture form. The mechanical parts are in the API; the handful of external observations are a note.)
 
 ## Evidence integrity
 

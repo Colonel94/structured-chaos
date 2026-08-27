@@ -310,7 +310,8 @@ async def ingest_case(
     The worker owns the single production path from normalise → extract → rules + elicitation. Keeping GPU,
     ASR and OCR work out of the HTTP request prevents timeouts and avoids running a second copy of jobs that
     intake already enqueued transactionally. The review client polls the case until its decision is ready.
-    Tenant-scoped by the authenticated workspace (RLS); first-contact time is recorded before this returns."""
+    Tenant-scoped by the authenticated workspace (RLS); first-contact time is recorded before this returns.
+    """
     from ..backends.registry import get_blob
     from ..intake.ingest import ingest_messages
     from ..intake.models import InboundAttachment, InboundMessage, guess_mime

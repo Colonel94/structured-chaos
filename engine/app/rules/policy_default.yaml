@@ -11,7 +11,12 @@
 # emotion_signal. The final rule MUST be a catch-all ({}) so evaluation is total (every case gets a
 # decision). `sla_hours` sets the response deadline, measured from first_contact_at (the clock starts at
 # first contact, not at completeness — CLAUDE.md §3).
-version: default-v3  # v3 (2026-08-23): sentiment TRAJECTORY — route on the conversation's peak emotion + an escalating-trend rule (best practice: track sentiment over the interaction, act on escalation early). v2: category routing (delivery/product/service/staff/access)
+# Changelog:
+# - default-v4 (2026-08-27): add transaction-processing, fraud/security, privacy/data, and
+#   misleading-practice category routes.
+# - default-v3 (2026-08-23): route on peak emotion and add the escalating-emotion-trend rule.
+# - default-v2: add delivery, product, service, staff-conduct, and access category routes.
+version: default-v4
 
 rules:
   # --- Severity dominates: a checkable state (safety, a vulnerable party) beats arguable conduct. ---
@@ -43,6 +48,13 @@ rules:
     routing: finance_billing
     sla_hours: 4
     rationale: "Financial harm reported — high priority, routed to finance/billing."
+
+  - id: privacy-security-severity
+    when: { severity: [privacy_security] }
+    priority: P2
+    routing: fraud_security
+    sla_hours: 4
+    rationale: "Identity, account-security, or privacy exposure — high priority, routed to the fraud and security team."
 
   - id: angry-any
     when: { emotion: [angry] }
@@ -124,6 +136,34 @@ rules:
     routing: operations
     sla_hours: 12
     rationale: "An access or availability issue — routed to operations."
+
+  - id: transaction-processing
+    when: { category: [transaction_processing] }
+    priority: P3
+    routing: finance_billing
+    sla_hours: 12
+    rationale: "A payment or transaction-processing failure — routed to finance/billing."
+
+  - id: fraud-security
+    when: { category: [fraud_security] }
+    priority: P2
+    routing: fraud_security
+    sla_hours: 4
+    rationale: "A fraud, scam, or account-security complaint — high priority, routed to the fraud and security team."
+
+  - id: privacy-data
+    when: { category: [privacy_data] }
+    priority: P2
+    routing: privacy_compliance
+    sla_hours: 8
+    rationale: "A privacy or personal-data complaint — routed to privacy and compliance."
+
+  - id: misleading-practice
+    when: { category: [misleading_practice] }
+    priority: P3
+    routing: customer_care
+    sla_hours: 12
+    rationale: "A misleading-practice or bait-and-switch complaint — routed to customer care."
 
   # --- Catch-all: an uncategorised complaint (category 'other' or absent). MUST be last + unconditional. ---
   - id: default

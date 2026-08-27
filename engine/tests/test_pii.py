@@ -1,5 +1,6 @@
 """R5 — the PII / sensitivity gate. Unit (the deterministic classifier) + integration (a protected
-cluster is recorded but BARRED from the extraction vocabulary; a sensitive qualifier does not promote)."""
+cluster is recorded but BARRED from the extraction vocabulary; a sensitive qualifier does not promote).
+"""
 
 from __future__ import annotations
 
@@ -29,7 +30,9 @@ def test_classifier_flags_protected_and_spares_every_seed_head() -> None:
     assert pii.classify_sensitivity("fingerprint") == "biometric"
     assert pii.classify_sensitivity("password") == "credentials"
     assert pii.classify_sensitivity("account", ["123-45-6789"]) == "government_id"  # SSN in a value
-    assert pii.classify_sensitivity("payment", ["4111 1111 1111 1111"]) == "payment_card"  # Luhn card
+    assert (
+        pii.classify_sensitivity("payment", ["4111 1111 1111 1111"]) == "payment_card"
+    )  # Luhn card
     # A long NON-card number (fails Luhn) is not a card.
     assert pii.classify_sensitivity("identifier", ["1234567890123"]) == pii.NONE
     # No seed head is ever mis-flagged (that would break the universal vocabulary).
@@ -113,7 +116,12 @@ async def test_protected_cluster_is_recorded_but_barred_from_vocabulary(
 ) -> None:
     tenant = api.create_tenant(admin_session, "PII-Mint-Co")
     admin_session.commit()
-    vals = ["condition A concrete", "condition B concrete", "condition C detail", "condition D detail"]
+    vals = [
+        "condition A concrete",
+        "condition B concrete",
+        "condition C detail",
+        "condition D detail",
+    ]
     with tenant_session(tenant, factory=app_factory) as s:
         cases = [
             api.create_case(s, channel="file_drop", first_contact_at=_DT)
@@ -127,7 +135,9 @@ async def test_protected_cluster_is_recorded_but_barred_from_vocabulary(
 
     assert minted == []  # blocked → not returned as a usable minted head
     with tenant_session(tenant, factory=app_factory) as s:
-        assert "diagnosis" not in api.list_minted_heads(s)  # excluded from the extraction vocabulary
+        assert "diagnosis" not in api.list_minted_heads(
+            s
+        )  # excluded from the extraction vocabulary
         detail = {d[0]: d[3] for d in api.list_minted_heads_detail(s)}  # (head → sensitivity)
         assert detail.get("diagnosis") == "health"  # but RECORDED with its sensitivity (audit)
 
@@ -147,15 +157,31 @@ async def test_sensitive_qualifier_does_not_promote(
         for c in cases:
             name = compose_name("identifier", "ssn")
             doc = api.add_source_document(
-                s, case_id=c, sha256=_h(str(c)), blob_key=_h(str(c)), mime="text/plain",
-                channel="file_drop", byte_size=1, received_at=_DT,
+                s,
+                case_id=c,
+                sha256=_h(str(c)),
+                blob_key=_h(str(c)),
+                mime="text/plain",
+                channel="file_drop",
+                byte_size=1,
+                received_at=_DT,
             )
             api.record_extraction(
-                s, case_id=c, field_path=name, value="v", model="m", model_version="m",
-                prompt_version="p", run_id=uuid4(), confidence=0.5,
-                citations=[api.Citation(source_document_id=doc, role="primary")], layer="emergent",
+                s,
+                case_id=c,
+                field_path=name,
+                value="v",
+                model="m",
+                model_version="m",
+                prompt_version="p",
+                run_id=uuid4(),
+                confidence=0.5,
+                citations=[api.Citation(source_document_id=doc, role="primary")],
+                layer="emergent",
             )
-            api.register_emergent_field(s, field_name=name, field_name_hash=_h(name), head="identifier")
+            api.register_emergent_field(
+                s, field_name=name, field_name_hash=_h(name), head="identifier"
+            )
             api.register_emergent_head(s, head="identifier")
         concepts = promote(s)
 

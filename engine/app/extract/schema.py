@@ -30,20 +30,36 @@ from .head_nouns import HEAD_NOUNS
 #   96-row multi-domain gold has 2/96 = 2% record_accuracy vs 29/100 = 29% on CFPB. So it earns its
 #   place in the universal core (genuine cross-domain concept) but is concentrated in record-keeping-
 #   heavy domains (finance, credit). Treat as universal-but-finance-weighted, never as finance-only.
+# TAXONOMY v0.2 (owner governed-core expansion, 2026-08-26): the taxonomy was deliberately WIDENED so
+# complaints are not forced into coarser buckets, aligned 1:1 with the independent-labelling workbook's
+# "Option Sets" sheet (eval/fixtures/holdout_labels.xlsx). Four categories added — transaction_processing
+# (a payment/transfer/refund/deposit/withdrawal did not process/settle/reverse/arrive, distinct from a
+# WRONG amount = billing_charge), fraud_security (fraud/scam/account-takeover/unauthorized activity — now
+# its OWN class, superseding the old "unauthorised charge → billing_charge" sub-rule), privacy_data
+# (collection/disclosure/exposure of personal data, distinct from an INACCURATE record = record_accuracy),
+# and misleading_practice (materially misled by advertising/pricing/terms/bait-and-switch). The prompt
+# (extract-v21) carries the owner's definitions + boundary rules.
 TAXONOMY: tuple[str, ...] = (
     "product_fault",
     "service_fault",
     "delivery_fulfilment",
     "billing_charge",
+    "transaction_processing",
     "record_accuracy",
     "access_availability",
     "staff_conduct",
     "safety_health",
+    "fraud_security",
+    "privacy_data",
+    "misleading_practice",
     "other",
     "UNCLEAR",
 )
 
-# desired_outcome vocabulary (GOVERNED-CORE-SCHEMA §1 Block B) — nullable at extraction.
+# desired_outcome vocabulary (GOVERNED-CORE-SCHEMA §1 Block B) — nullable at extraction. v0.2 adds the
+# remedies the old 7-value set collapsed: correction (fix a record — was folded into repair_redo),
+# cancellation, restore_access, stop_contact, compensation (consequential loss beyond a refund), and
+# investigation (validate/investigate — was folded into information).
 DESIRED_OUTCOMES: tuple[str, ...] = (
     "refund",
     "replacement",
@@ -51,11 +67,24 @@ DESIRED_OUTCOMES: tuple[str, ...] = (
     "acknowledgement",
     "information",
     "escalation",
+    "correction",
+    "cancellation",
+    "restore_access",
+    "stop_contact",
+    "compensation",
+    "investigation",
     "other",
 )
 
-EMOTIONS: tuple[str, ...] = ("calm", "frustrated", "angry")
-SEVERITIES: tuple[str, ...] = ("safety_health", "vulnerable_party", "financial_harm", "none")
+# v0.2: emotion adds concerned/distressed (a 5-point tone scale); severity adds privacy_security.
+EMOTIONS: tuple[str, ...] = ("calm", "concerned", "frustrated", "angry", "distressed")
+SEVERITIES: tuple[str, ...] = (
+    "safety_health",
+    "vulnerable_party",
+    "financial_harm",
+    "privacy_security",
+    "none",
+)
 
 # The governed-core keys the extractor projects out of the model's JSON (Block A hint + Block B).
 GOVERNED_KEYS: tuple[str, ...] = (
@@ -67,13 +96,15 @@ GOVERNED_KEYS: tuple[str, ...] = (
     "anchor_value",
 )
 
+
 # The JSON schema Ollama constrains the output to (llama.cpp GBNF). Guarantees valid, typed JSON so
 # "refuse to guess" is a null, never a malformed field (EDD §5 — grammar-constrained decoding).
 def build_extraction_schema(heads: Sequence[str] = HEAD_NOUNS) -> dict[str, object]:
     """The extraction JSON schema for a given head vocabulary. ``heads`` is the tenant's EFFECTIVE head
     set = seed ``HEAD_NOUNS`` + any minted heads (head-minting) — so once a tenant mints a ``regulation``
     column the grammar lets the model emit it directly. Defaults to the seed so every existing caller is
-    unchanged. The head enum is what enforces the closed-then-emergent column space in code, not prose."""
+    unchanged. The head enum is what enforces the closed-then-emergent column space in code, not prose.
+    """
     return {
         "type": "object",
         "properties": {

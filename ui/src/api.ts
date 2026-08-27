@@ -125,8 +125,18 @@ export function setReviewerId(id: string): void {
   localStorage.setItem(REVIEWER_KEY, id.trim() || "reviewer");
 }
 
+// Same-origin guard: every request path is an app-relative "/api/..." literal. Rejecting absolute or
+// protocol-relative URLs stops a tainted id from ever retargeting the fetch off-origin
+// (CodeQL js/client-side-request-forgery).
+function relativePath(path: string): string {
+  if (!path.startsWith("/") || path.startsWith("//")) {
+    throw new Error("Refusing a non-relative request path");
+  }
+  return path;
+}
+
 async function get<T>(path: string): Promise<T> {
-  const res = await fetch(path, { headers: requestHeaders() });
+  const res = await fetch(relativePath(path), { headers: requestHeaders() });
   if (!res.ok) {
     const detail = await res.json().catch(() => ({}));
     throw new Error(detail.detail ?? `Request failed (${res.status})`);
@@ -292,7 +302,7 @@ export const docUrl = (docId: string): string => `/api/docs/${docId}`;
 /** Fetch a tenant-scoped binary route (report/CSV/source blob) with the X-Tenant-Id header, as an
  *  object URL a browser can open or embed. The caller revokes it when done. */
 export async function fetchBlobUrl(path: string): Promise<string> {
-  const res = await fetch(path, { headers: requestHeaders() });
+  const res = await fetch(relativePath(path), { headers: requestHeaders() });
   if (!res.ok) {
     const detail = await res.json().catch(() => ({}));
     throw new Error(detail.detail ?? `Request failed (${res.status})`);

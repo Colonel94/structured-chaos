@@ -26,11 +26,12 @@
     <noscript>
       This page needs JavaScript to submit your case. Please enable it, or email us instead.
     </noscript>
-    <script>
+    <script nonce="__NONCE__">
       // The router substitutes __MODE__ (submit|status) and __VALUE__ (the embed key or the case token).
+      // The nonce authorises this one inline script under the app's script-src 'self' CSP.
       window.__ADAPTIVE_PORTAL__ = {
         mode: "__MODE__",
-        value: "__VALUE__",
+        value: __VALUE__,
         api: location.origin + "/p",
         accent: "#2563eb",
       };

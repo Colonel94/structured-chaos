@@ -108,7 +108,8 @@ async def test_dedup_registry_is_head_scoped_and_idempotent(
 ) -> None:
     """The live qualifier-space pass (remediation R1): synonyms under the SAME head merge; an identical
     embedding under a DIFFERENT head does NOT merge (the closed head is the anchor); re-running is a
-    no-op (idempotent). This is the mechanism that turns qualifier sprawl into a converging schema."""
+    no-op (idempotent). This is the mechanism that turns qualifier sprawl into a converging schema.
+    """
     from app.schema.dedup import dedup_registry
 
     tenant = api.create_tenant(admin_session, "Registry-Co")
@@ -119,7 +120,9 @@ async def test_dedup_registry_is_head_scoped_and_idempotent(
             "total amount": _vec(1.0),
             "totaling amount": _vec(0.90),  # >=0.85, same head=amount -> merge into total_amount
             "owed amount": _vec(0.05),  # <0.70 -> admit new under amount
-            "total fee": _vec(1.0),  # identical vector, head=fee -> head-scoped, must seed separately
+            "total fee": _vec(
+                1.0
+            ),  # identical vector, head=fee -> head-scoped, must seed separately
         }
     )
     variants = [
@@ -131,7 +134,11 @@ async def test_dedup_registry_is_head_scoped_and_idempotent(
     with tenant_session(tenant, factory=app_factory) as s:
         for name, head in variants:
             h = api.compute_idempotency_key(
-                source_sha256=name, stage="f", model_version="m", prompt_version="p", code_version="c"
+                source_sha256=name,
+                stage="f",
+                model_version="m",
+                prompt_version="p",
+                code_version="c",
             )
             api.register_emergent_field(s, field_name=name, field_name_hash=h, head=head)
         methods = await dedup_registry(s, embedder=emb, llm=_LLM(same=False))  # type: ignore[arg-type]

@@ -32,6 +32,10 @@ _CATEGORY_PHRASE = {
     "access_availability": "a problem accessing your account or service",
     "staff_conduct": "an issue with how you were treated",
     "safety_health": "a safety or health concern",
+    "transaction_processing": "a problem with a payment or transaction",
+    "fraud_security": "a fraud or account-security concern",
+    "privacy_data": "a privacy or personal-data concern",
+    "misleading_practice": "a concern about being misled",
     "other": "an issue",
 }
 _OUTCOME_PHRASE = {
@@ -41,6 +45,12 @@ _OUTCOME_PHRASE = {
     "escalation": "you'd like it escalated",
     "information": "you'd like an answer",
     "acknowledgement": "you'd like it acknowledged",
+    "correction": "you'd like your records corrected",
+    "cancellation": "you'd like to cancel",
+    "restore_access": "you'd like your access restored",
+    "stop_contact": "you'd like the contact to stop",
+    "compensation": "you'd like compensation",
+    "investigation": "you'd like it investigated",
     "other": "you've told us what you'd like",
 }
 
@@ -63,17 +73,13 @@ _NEEDS_INPUT = (
 
 
 @contextmanager
-def embed_key_session(
-    embed_key: str, *, factory: sessionmaker[Session] = SessionFactory
-) -> Any:
+def embed_key_session(embed_key: str, *, factory: sessionmaker[Session] = SessionFactory) -> Any:
     """A session scoped by the ``app.embed_key`` GUC — the RLS policy then exposes exactly the one tenant
     row whose embed_key matches. Transaction-local (is_local=true), like ``tenant_session``.
     """
     session = factory()
     try:
-        session.execute(
-            text("SELECT set_config('app.embed_key', :k, true)"), {"k": embed_key}
-        )
+        session.execute(text("SELECT set_config('app.embed_key', :k, true)"), {"k": embed_key})
         yield session
         session.commit()
     except Exception:
@@ -143,9 +149,7 @@ def _processing_stage(session: Session, case_id: UUID, category: str | None) -> 
     if has_norm:
         return "understanding"
     has_audio = session.execute(
-        text(
-            "SELECT 1 FROM source_document WHERE case_id = :c AND mime LIKE 'audio/%' LIMIT 1"
-        ),
+        text("SELECT 1 FROM source_document WHERE case_id = :c AND mime LIKE 'audio/%' LIMIT 1"),
         {"c": case_id},
     ).first()
     return "transcribing" if has_audio else "received"
@@ -173,9 +177,7 @@ def _reprocessing(
     newest_in: datetime | None = row[0] if row else None
     processed_at: datetime | None = row[1] if row else None
     since = newest_in or first_contact_at
-    reproc = (
-        newest_in is not None and processed_at is not None and newest_in > processed_at
-    )
+    reproc = newest_in is not None and processed_at is not None and newest_in > processed_at
     return reproc, since
 
 
@@ -210,9 +212,7 @@ def public_status(
         return None
     case_state = str(row[0])
     first_contact_at: datetime = row[1]
-    gov = api.get_field_values(
-        session, case_id, ["category", "anchor_value", "desired_outcome"]
-    )
+    gov = api.get_field_values(session, case_id, ["category", "anchor_value", "desired_outcome"])
     ref = _reference(case_id)
 
     # PROCESSING FAILED: a durable pipeline stage exhausted its retries (an Ollama crash, a dropped job).
@@ -274,9 +274,7 @@ def public_status(
     # READY: elicitation has run → a status + maybe one question.
     pending = api.get_pending_question(session, case_id)
     elicit = session.execute(
-        text(
-            "SELECT external_mappings #> '{elicit,options}' FROM case_record WHERE id = :c"
-        ),
+        text("SELECT external_mappings #> '{elicit,options}' FROM case_record WHERE id = :c"),
         {"c": case_id},
     ).scalar()
     options = list(elicit) if isinstance(elicit, list) else None

@@ -17,6 +17,12 @@ archetypes:
   - key: billing_charge
     label: Billing / charge
     covers: [overcharge, wrong price, unexpected fee, refund not processed]
+  - key: transaction_processing
+    label: Transaction / processing
+    covers: [payment failed, transfer stuck, refund not arrived, deposit not credited, reversal failed]
+  - key: record_accuracy
+    label: Record accuracy
+    covers: [inaccurate record, wrong balance, credit-file error, unverified debt, wrong date]
   - key: access_availability
     label: Access / availability
     covers: [cannot book, unavailable, denied access, appointment problem]
@@ -27,6 +33,15 @@ archetypes:
     label: Safety / health
     covers: [allergen, injury risk, hygiene, gas/electrical hazard]
     deadline_bearing: true
+  - key: fraud_security
+    label: Fraud / security
+    covers: [unauthorized activity, scam, account takeover, phishing, stolen credentials]
+  - key: privacy_data
+    label: Privacy / data
+    covers: [data disclosed without consent, breach, improper retention, personal-data exposure]
+  - key: misleading_practice
+    label: Misleading practice
+    covers: [false advertising, hidden terms, bait-and-switch, misleading price or promise]
   - key: other
     label: Other
     covers: [genuine catch-all]

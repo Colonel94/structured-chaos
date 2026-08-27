@@ -16,6 +16,7 @@ from fastapi.staticfiles import StaticFiles
 from .api.routes import router as api_router
 from .api.whatsapp import router as whatsapp_router
 from .config import settings
+from .http_security import content_security_policy
 
 app = FastAPI(title="Adaptive Intake Engine", version="0.0.0")
 app.include_router(api_router)
@@ -44,13 +45,9 @@ async def release_headers_and_size_limit(
     response.headers.setdefault("X-Content-Type-Options", "nosniff")
     response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
     response.headers.setdefault("X-Frame-Options", "DENY")
-    response.headers.setdefault(
-        "Content-Security-Policy",
-        "default-src 'self'; connect-src 'self'; font-src 'self'; "
-        "img-src 'self' blob: data:; media-src 'self' blob:; object-src 'none'; "
-        "base-uri 'self'; frame-ancestors 'none'; form-action 'self'; "
-        "style-src 'self' 'unsafe-inline'; script-src 'self'",
-    )
+    # setdefault: a route may set its own CSP (e.g. the portal standalone page adds a per-response
+    # script nonce) and this global default must not clobber it. Single source of truth in http_security.
+    response.headers.setdefault("Content-Security-Policy", content_security_policy())
     if settings.app_env.strip().lower() in ("prod", "production"):
         response.headers.setdefault("Strict-Transport-Security", "max-age=31536000")
     return response

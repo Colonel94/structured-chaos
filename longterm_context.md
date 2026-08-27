@@ -49,6 +49,291 @@ live-testing (voice/image/text) → turn each failing case into a prompt/policy 
 
 ## 0. Current state & next actions  ← read this first every session; keep it current
 
+> ## 🧭 SESSION HANDOFF (updated 2026-08-28, post-/clear START HERE — detail in the dated blocks below)
+> *State snapshot only — next steps intentionally omitted (owner will provide them).*
+>
+> **PORTAL CSP BUG FIXED + live submission site running (2026-08-27, commit `86bcd9b`).** Running the
+> public submission portal (cloudflared tunnel → a portal instance on `127.0.0.1:8010`) exposed a real
+> bug: the standalone page `/p/s/{key}` passes the widget its config via an INLINE `<script>`, but the
+> app CSP is `script-src 'self'` (no `'unsafe-inline'`) → every real browser BLOCKED it → the widget
+> loaded with an empty embed key and a customer's submit 403'd. Fix: per-response CSP **nonce** on that
+> one inline script (`app/http_security.py` centralises the CSP; `_standalone_page` sets a nonce'd CSP
+> header — middleware uses `setdefault` so the route wins). Verified LIVE end-to-end: 0 console errors,
+> a real submission through the tunnel returned `200` + case `C-AAB775DA`. The portal instance on :8010 is
+> served by **my venv** now (`PORTAL_ENABLED=true PORTAL_SECRET=<gen> uvicorn app.main:app --port 8010`),
+> NOT the earlier codex-runtimes process (replaced). Submit URL pattern: `https://<tunnel>/p/s/<embed_key>`
+> (demo key `ek_Si0YzMkSan5NIHZQMVK0qisf` = "Structured Chaos Demo"). Note: trycloudflare URLs are
+> ephemeral (rotate on cloudflared restart); the :8010 instance + the shared worker must stay up.
+>
+> **KEY FINDING — the SECOND independent labeller (Catleen) FLIPPED the story.**
+> Two independent domain experts now agree with each OTHER far more than either agrees with the owner →
+> the real human ceiling is much higher than we thought, and the model is genuinely BELOW it (the earlier
+> "at the ceiling" comfort was an artifact of the owner's noisier pre-v22 labels).
+>
+> **RESULT — extract-v23 severity fix was TESTED, REGRESSED, and REVERTED (2026-08-27).** The extractor is
+> back at **extract-v22** (baseline restored: prompt v22 + `holdout_extractions.jsonl` v22, re-scored to
+> the identical pre-v23 numbers). v23 (decouple severity from category + precedence + name implicit-money)
+> was scored on the independent-consensus subset (catleen==osman = truest ground truth) and it is a NET
+> REGRESSION — nothing improved, three fields fell:
+> ```
+> field (consensus acc)   v22 -> v23
+> category                77 -> 75   (-2, sibling perturbation)
+> desired_outcome         81 -> 81   ( 0)
+> severity                74 -> 72   (-2)  <- the TARGET field got WORSE
+> emotion                 75 -> 72   (-3, same-pass contamination — [[measure-extraction-changes-abstention-overfire]])
+> ```
+> **Why (the PAIR, [[report-metric-pairs-and-n]]):** v23 DID kill the under-call — financial_harm recall
+> 63%->97% (harm->none 29->2). But precision CRATERED 65% (76/117): it now over-fires financial_harm onto
+> **26 genuine `none`**, **8 privacy_security**, **6 safety_health** consensus cases. Recall-up +
+> precision-down = regression; and it degrades the HIGHEST-severity classes (calls money on real safety/
+> privacy) — worse than the clean under-call it replaced. The lone "gain" (vs OWNER severity 61->74) is the
+> model's new over-fire ALIGNING with the owner's pre-v22 outlier over-labelling, not real signal (chasing
+> the outlier). Root cause of the over-shoot: the "implicit money" list was too broad (a refund merely
+> SOUGHT != financial_harm per the human guideline — money must be wrongly taken/withheld/owed/lost) AND
+> the precedence order (safety/privacy/vulnerable > financial) was drowned out by the loud money list.
+> **v24 hypothesis — DECLINED by owner (2026-08-27): STOP the tuning grind, do NOT run it.** (Recorded for
+> context only: it would have narrowed financial_harm to money actually taken/withheld/owed/lost + hard-
+> enforced safety/privacy/vulnerable > financial.) The owner's call: two independent expert reviews are the
+> evidence; iterating prompt variants against the same 200-case gold is fitting label noise, not raising
+> real accuracy (§10). Extractor stays at v22. Any future extractor-quality work = a stronger extractor
+> (owner-gated on $0), not more v-bumps. [[stop-extractor-tuning-grind-two-independent-reviews]]
+>
+> **READINESS IMPACT: none from v23 (reverted); the extractor is unchanged at v22.** What DID advance:
+> the independent-ceiling evidence (two domain experts, 92/91/94/83) and the honest model-gap measurement
+> (consensus 77/81/74/75). Extractor accuracy is a GA/quality-evidence item, NOT an engineering-readiness
+> ship gate (CLAUDE.md §7 — that gate is the trust spine, which is green). So readiness is where it was; we
+> now have a sharper, independently-grounded picture of the one real quality gap (severity).
+>
+> **WHERE WE ARE.** Branch `fix/elicit-qualifier-gate-b-readiness` — PR #2 OPEN
+> (https://github.com/Colonel94/structured-chaos/pull/2). Extractor at **extract-v22**. THREE label sets
+> now: OWNER workbook (`holdout_labels.xlsx`; 66 real + 134 owner-authored synthetic = DEV gold, pre-v22)
+> + **Osman** (independent CR Director 20y, pre-v22, `holdout_labels_osman.csv`) + **Catleen** (independent
+> Director of Customer Care 17y, v22, `holdout_labels_catleen.csv`). **CORRECTED headline (supersedes the
+> old "84–97% of ceiling / emotion at ceiling" read, which is now FALSIFIED):** the two independents agree
+> **cat 92 / outcome 91 / severity 94 / emotion 83** — that is the true ceiling, well above owner-vs-either
+> (86/90/86/**64**). On the independent-CONSENSUS subset (catleen==osman = truest ground truth) the model
+> scores **cat 77 / outcome 81 / severity 74 / emotion 75** — a real gap on every field, biggest on
+> SEVERITY (74 vs a 94 ceiling). The owner is the OUTLIER, not the ceiling (owner differs from the
+> independent consensus 12/8/12/**30%**; emotion 30% is why every "vs owner" emotion number was depressed).
+> **The 5-point emotion scale is NOT the bottleneck** — two independents hit 83% on it under v22; the low
+> 64% was owner-specific noise. The binding lever has FLIPPED from "fix the taxonomy" to "fix the
+> extractor" (the task is now proven reliably-labelable). Do NOT collapse gold.
+>
+> **GIT & CI STATE (2026-08-28).** Branch `fix/elicit-qualifier-gate-b-readiness` @ **`27e4694`**, all
+> pushed, PR #2 OPEN (`main` is NOT branch-protected → no required checks; PR reports MERGEABLE). Hosted CI
+> is GREEN on the branch — **engine, ui, CodeQL (py/js), repository-scan, dependency-review all pass**; the
+> only non-green is **`eval`/tuning-eval, which is QUEUED BY DESIGN** (`runs-on: [self-hosted, gpu]` — it
+> re-extracts ~216 cases on local Ollama; never GitHub-hosted; waits for the owner's GPU runner, non-blocking).
+> This session also landed, beyond the eval/calibration arc: the consensus-loader regression test
+> (`tests/test_fit_calibration.py`, 5 tests incl. a 721-row golden that reproduces calib-v3); three REAL
+> CodeQL security fixes on the branch (`de77658` — ReDoS email regex in `review_auth.py`, reflective XSS in
+> the portal, client-side SSRF guard in `ui/src/api.ts`, all verified); and one dismissed CodeQL **false
+> positive** (alert #4, clear-text-logging on `fit_calibration.py:161` — it logs a field-name enum + a
+> float, no secret). Portal CSP fix `86bcd9b` (see top block).
+>
+> **RUN IT.** DB+MinIO: `docker compose -f deploy/docker-compose.yml up -d db minio`. Backend:
+> `cd engine && ./.venv/Scripts/python.exe -m uvicorn app.main:app --port 8000` (use `-m uvicorn`, NOT the
+> console script — else `uv sync` can't rewrite the locked exe). Worker (from REPO ROOT):
+> `./engine/.venv/Scripts/python.exe -m scripts.run_worker default --schedule`. UI: `cd ui && pnpm dev`
+> (:5173). **Public portal (submission site):** a portal instance runs on `127.0.0.1:8010`
+> (`PORTAL_ENABLED=true PORTAL_SECRET=<gen> ./.venv/Scripts/python.exe -m uvicorn app.main:app --host
+> 127.0.0.1 --port 8010`) behind `scratchpad/tools/cloudflared.exe tunnel --url http://127.0.0.1:8010`;
+> submit URL = `https://<tunnel>/p/s/<embed_key>`. Full suite: `cd engine && REQUIRE_DB=1
+> ./.venv/Scripts/python.exe -m pytest -q` → **295 pass / 2 skip**. Eval: `extract_holdout.py` (re-extract
+> 200, ~60–80 min, resumable/observable), `export_holdout_workbook.py [--qa] [--from <xlsx>]`,
+> `score_holdout.py` (HARD-FAILS partial coverage; `--consensus a=.. b=..` for the two-independent number).
+>
+> **GOTCHAS.** Prefer `./.venv/Scripts/python.exe` over `uv run` for one-offs — a bare `uv run`/`uv sync`
+> can PRUNE the `embed`(FlagEmbedding/BGE-M3)+`asr`(faster-whisper) groups; restore with
+> `uv sync --group dev --group embed --group asr`. **Calibration RE-FIT on the independent 2-expert
+> consensus (calib-v3, 2026-08-27)** — confidence is now a real reliability estimate (agreement with
+> Osman∩Catleen), not P(agrees-with-my-labels); `tau_auto=1.01`/`gate_met=False` kept (auto-route OFF,
+> all→review — honest, the ≥98% gate is unreachable at the extractor ceiling; ordering-only, not safety).
+> qwen3:14b ≈ 15–25 s/case on the 4070. Openpyxl reads the labelling workbook.
+>
+> **LOGGED DECISIONS & OPEN QUESTIONS (record only — NOT a next-step list; owner will set next steps):**
+> (1) ~~hard-collapse emotion 5→3~~ — **DECIDED, data-answered: KEEP the 5-point scale.** Two independents
+> agree 83% on it under v22; the old 64% was owner-specific noise, not scale-inherent. Collapsing would
+> discard a reliably-labelable signal. (2) **owner gold is the OUTLIER** (differs from the two-independent
+> consensus 12/8/12/30%) — open question whether owner gold gets re-labelled under v22 or is treated as
+> DEV-only pre-v22 with catleen+osman as the reference ceiling; (3) ~~calibration re-fit~~ —
+> **DONE: refit on the independent 2-expert consensus (calib-v3), `eval/fit_calibration.py` now defaults to
+> that source (`--spike` = legacy self-authored gold); confidence is a real reliability estimate**; (4) GA
+> representative set = Osman + Catleen are the start; synthetic 134 stay DEV-only;
+> (5) ~~v23 severity fix~~ — **DONE: tested → net regression → REVERTED (see RESULT block above).**
+> **DECIDED (owner directive, 2026-08-27): STOP the extractor prompt-tuning grind. Extractor FROZEN at
+> extract-v22. v24 DECLINED.** Two independent domain-expert reviews (Osman 20y + Catleen 17y) ARE the
+> quality evidence we set out to get; the model gap is measured and honest; grinding more prompt variants
+> against the same 200-case gold optimises toward label inconsistency, not real accuracy (§10). Do NOT
+> propose another tuning loop. If extractor quality is ever revisited it is via a STRONGER extractor
+> (owner-gated on $0, [[zero-budget-never-steer-to-cost]]), never more v-bumps. See
+> [[stop-extractor-tuning-grind-two-independent-reviews]].
+>
+> ## ✅ 2026-08-27 SECOND INDEPENDENT LABELLER (Catleen, Director of Customer Care, 17y) — the ceiling FLIP
+> - **The clean measure §0 was waiting for landed and it CORRECTS the prior session's comfortable read**
+>   (per [[comfortable-reframe-trap]] — leading with the harsh version). QA PASS on her workbook (200 cases,
+>   0 missing on cat/sev/emotion, 52 real null outcomes, no OOV). Exported → `holdout_labels_catleen.csv`.
+> - **The two independent domain experts (Catleen 17y v22 + Osman 20y pre-v22) agree with EACH OTHER:**
+>   category **92%**, desired_outcome **91%**, severity **94%**, emotion **83%**, all-fields **67%** (n=200).
+>   That is the true human ceiling — and it is FAR above owner-vs-either (86/90/86/**64**, all-fields 44).
+>   The earlier "human ceiling = 86/90/86/64, model at 84–97% of it, emotion AT the ceiling" story rested
+>   on the owner's noisier pre-v22 labels and is **falsified**.
+> - **Owner is the OUTLIER, not the ceiling.** On rows where the two independents agree, the owner differs
+>   12/8/12/**30%** (cat/outcome/sev/emotion). The 30% emotion divergence is exactly why every historical
+>   "model vs owner" emotion number (48–53%) was depressed. The owner reads emotion on a different axis and
+>   labelled pre-v22.
+> - **The model has a REAL gap below the now-proven-reliable ceiling.** On the independent-consensus subset
+>   (catleen==osman, the truest ground truth we have): category **77%** (ceiling 92), desired_outcome **81%**
+>   (91), severity **74%** (94), emotion **75%** (83). Every field trails; SEVERITY is the biggest deficit
+>   (~20 pts). Note the inversion vs the naive raw-% read: emotion (lowest raw agreement) is the model's
+>   CLOSEST field to ceiling (75/83 = 90%); severity is the FARThest.
+> - **The severity gap is a specific, fixable model bias: it UNDER-CALLS harm.** 44 of 49 severity errors
+>   are harm→`none`: **29 financial_harm→none**, 11 safety_health→none, 4 privacy_security→none. The model
+>   drops disputed amounts / small fees to `none` — directly against v22's "financial_harm has NO minimum".
+>   This is a prompt gap, not a capability ceiling → **extract-v23 severity fix** is the named lever.
+> - **Emotion model error is the adjacent-tone smear toward "concerned"** (15 frustrated→concerned, 9
+>   calm→concerned, 3 distressed→concerned) — the model over-hedges to "concerned". Lower priority (closest
+>   to ceiling). **repair_redo confirmed NOT overloaded** (catleen-osman: 0 disagreements touching it).
+> - **The binding lever FLIPPED.** Prior diagnosis (§10 upstream-ceiling): "fix the taxonomy, not the
+>   model." Now that two independents agree 92/91/94/83 under v22, the task is proven reliably-labelable →
+>   the lever is genuinely the EXTRACTOR (still $0/local qwen3:14b; cloud stays owner-gated,
+>   [[zero-budget-never-steer-to-cost]]). Do NOT re-label/tune gold to close the gap (§10 no-self-grading).
+>
+> ## ✅ 2026-08-27 OWNER-APPROVED TIE-BREAKS → extract-v22, propagated + re-scored (DIRECTIONAL)
+> - All six tie-breaks Osman surfaced are IMPLEMENTED and propagated to the three places together:
+>   prompt (**extract-v22**), `holdout_labels_INSTRUCTIONS.md` (Tie-break rules section), and the workbook
+>   **Option Sets** (23 manager-rule cells; blank regenerated). Rules: product_fault<->safety_health
+>   (hazard wins), record_accuracy<->fraud_security (unauthorised vs merely-wrong), billing_charge<->
+>   misleading_practice (wrong-amount vs deception), desired_outcome = only a remedy requested IN THIS
+>   message (not one recounted as previously asked), financial_harm has NO minimum (kills the small-fee
+>   ambiguity), sharpened emotion adjacent-boundaries. **5-point emotion scale KEPT** (collapsing would
+>   discard the owner+Osman emotion gold; owner can still request a hard 5->3 as a separate re-label).
+> - **Re-score model-v22 vs the EXISTING (old-guideline) labels — DIRECTIONAL ONLY, not the tie-break
+>   lift** (owner+Osman labelled BEFORE the tie-breaks, so this is not the clean measure). vs Osman:
+>   category 74->76, desired_outcome 78->76, severity 72->72, **emotion 62->71**, all-fields 29->32.
+>   vs owner: category 72, outcome 76, severity 61, **emotion 48->53**. Mixed + modest exactly as
+>   predicted; emotion moved most (the boundary rules). Human ceiling (osman-vs-owner) UNCHANGED
+>   (86/90/86/64) because the humans did not re-label.
+> - **The CLEAN measure = a FRESH human round under v22.** Owner is recruiting a new independent labeller;
+>   the updated `holdout_labels_blank.xlsx` + INSTRUCTIONS (both carry the tie-breaks) were sent. The
+>   financial_harm floor + emotion boundaries + category tie-breaks are aimed at raising the HUMAN
+>   inter-annotator ceiling (esp. severity's 22 financial_harm/none splits and emotion's adjacency) —
+>   only visible once a fresh human labels under the new guidelines. Then: three-way agreement
+>   (new-vs-owner, new-vs-osman) + model-vs-new = the real lift.
+> - `holdout_extractions.jsonl` regenerated at v22 (200 rows). Full suite 283 pass. All committed.
+>
+> ## ✅ 2026-08-27 FIRST INDEPENDENT LABELS (Osman, CR Director, 20y) — the human ceiling
+> - **The binding lever landed.** Osman — independent (neither owner nor me), domain expert — labelled all
+>   200 cases blind. `holdout_labels_osman.csv`. Gives the two numbers that were always missing:
+>   **model vs independent** (real accuracy) and **owner vs independent** (the human ceiling).
+> - **Scores (n=200; agreement, still directional):**
+>   | field | model-vs-osman | model-vs-owner | **osman-vs-owner (HUMAN CEILING)** | model as % of ceiling |
+>   |---|---|---|---|---|
+>   | category | 74% | 72% | **86%** | 86% |
+>   | desired_outcome | 78% | 78% | **90%** | 87% |
+>   | severity | 72% | 62% | **86%** | 84% |
+>   | emotion | 62% | 48% | **64%** | **97%** |
+>   | all-fields | 29% | 16% | **44%** | — |
+> - **The reframe (do NOT read the raw % as model weakness):** two 20-year experts agree only 86/90/86/**64**%.
+>   The model sits at 84-97% OF THAT CEILING. **Emotion 62% is not a model failure — humans agree only 64% on
+>   the 5-point scale; the model is AT the ceiling.** The bottleneck is TAXONOMY UNDER-SPECIFICATION, not the
+>   extractor (the §10 "is the ENUM wrong, not the model?" test — answered on independent data).
+> - **Osman's gaps are DATA-CONFIRMED as the exact ceiling-limiters** (owner-vs-osman confusion): category
+>   28 disagreements led by **product_fault/safety_health ×12**, billing/record ×5, billing/misleading ×2
+>   (his named tie-break gaps); severity 29 disagreements are **financial_harm/none ×22** (his "is a small
+>   fee *material*?" gap); emotion 71 disagreements are ALL adjacent-scale (concerned/distressed, angry/
+>   frustrated…) → the 5-point scale is too fine to label reliably. repair_redo is NOT overloaded (only 4
+>   human disagreements touch it — the `correction` split worked).
+> - **NEXT (owner decisions, logged — do NOT self-resolve/re-label to inflate agreement, §10):** owner rules
+>   on the tie-breaks Osman named (product-vs-safety, record-vs-fraud, billing-vs-misleading, "material"
+>   financial-harm threshold, whether a previously-stated request counts as a desired_outcome), and whether
+>   the 5-point emotion scale collapses to 3. Once decided, propagate to Option Sets + INSTRUCTIONS + the
+>   extraction prompt TOGETHER, then a FRESH labelling round measures the lift. This is the real path to a
+>   higher ceiling — a better-defined task, not a cleverer model.
+>
+> ## ✅ 2026-08-27 TAXONOMY v0.2 EXPANDED + FULL 200-CASE SCORE (extract-v21)
+> - **Owner widened the governed taxonomy** (workbook `holdout_labels.xlsx` Option Sets): category 10→14
+>   (+transaction_processing, fraud_security, privacy_data, misleading_practice), desired_outcome 7→13
+>   (+correction, cancellation, restore_access, stop_contact, compensation, investigation), severity 4→5
+>   (+privacy_security), emotion 3→5 (+concerned, distressed). Propagated across the WHOLE system:
+>   `schema.py` enums, `prompt.py` (**extract-v21**, with the owner's definitions + boundary rules),
+>   `starter_taxonomy.yaml` (also was missing record_accuracy), `synthesis.py`, portal wording, and
+>   `policy_default.yaml` (new categories + privacy_security route **deterministically**, verified —
+>   catch-all still last). Calibration NOT re-fit: tau_auto=1.01 = auto-route gate OFF (all→review), so
+>   stale confidence is non-safety (ordering only); a proper re-fit needs its own model run + independent
+>   labels, deferred.
+> - **Full 200-case score (model extract-v21 vs OWNER gold, agreement — NOT independent correctness).**
+>   Coverage 200/200 (scorer now HARD-FAILS partial coverage — exit 3 unless ALLOW_PARTIAL=1). Numbers
+>   with majority-class baseline + lift:
+>   - category 72% (base 12% product_fault, **+59**) — strong
+>   - desired_outcome 78% (base 18% null, **+60**) — strong
+>   - severity 62% (base 54% financial_harm, **+8**) — WEAK, barely above baseline
+>   - emotion 48% (base 37% frustrated, **+12**) — WEAK (5-point scale; concerned/distressed subtle)
+>   - all-fields 16%.  n=200 but still DIRECTIONAL (rule of three) and owner-agreement, not correctness.
+> - **Gold is OWNER gold, not independent (owner review):** 66 real + 134 owner-authored SYNTHETIC =
+>   development evidence, independent of the extractor/me but NOT the third-party representative set the
+>   GA gate needs. The independent number (column 2) is still outstanding — hand the workbook to a
+>   non-builder. Do not present these as independent accuracy or market-readiness.
+> - **Runner/scorer now robust:** `extract_holdout.py` reads `holdout_labels_owner.csv`, incremental +
+>   resumable + observable (writes/flushes per case; ~15-25 s/case on the 4070, ~60-80 min for 200).
+>   `export_holdout_workbook.py --qa` = integrity report (dupes/OOV/missing/distributions; QA PASS).
+>   Rule saved: the extractor enum and its GRADER's label space must move together, and a widened gold
+>   caps measured accuracy until the extractor + calibration catch up (do not collapse gold — §10).
+> - **GIT:** all of the above uncommitted on branch `fix/elicit-qualifier-gate-b-readiness` at time of
+>   writing (owner review flagged the taxonomy files were uncommitted → not covered by remote checks).
+>   Committing now. `holdout_extractions.jsonl` regenerated (200 v21 rows).
+>
+> ## ✅ 2026-08-26 GATE-B VERIFICATION + REAL ELICIT BUG FIXED (aim-for-6/6 session)
+> - **The "3/6 CLEAN" claim was not actually true — Gate 1 (complete workflow) was silently broken.**
+>   `app/store/api.py::get_emergent_values_by_head` selected/ordered a non-existent
+>   `emergent_field.qualifier` column → the **elicit** path (anchor+2 drill) crashed with
+>   `psycopg UndefinedColumn`. Hidden because the seed path never calls elicit. **Fixed:** derive the
+>   qualifier from `field_name`/`head` in SQL (mirrors the Python `field_path[:-(len(head)+1)]`), bare
+>   head sorts last. Also fixed a stale test: `_seed_case` in `test_review_usability.py` skipped
+>   `decide_case`, so its case had no decision → the commit gate (correctly) refused it → the backdate
+>   tripped `case_commit_pair`. Added `decide_case` to the seed. **22 previously-failing tests now pass.**
+> - **Foundation now genuinely verified live:** full backend suite **283 passed / 2 skipped**; trust-spine
+>   21 green (`test_rls_isolation`, `test_provenance`, `test_idempotency`, `test_pii`,
+>   `test_pii_redaction`, `test_trust_coverage`); mypy clean (93 files); ruff clean on app+tests; **black
+>   reformatted 11 pre-existing-drift files** on the release surface (behaviour-preserving, suite still
+>   283 green); UI test + production build green.
+> - **Gate B-5 operational evidence — real drills run:** backup→restore→verify drill **PASSED** (stamp
+>   `20260826T121459Z`, restored counts 88/106/572/41 matched live, 0 errors); secret fail-closed tested
+>   (`test_config_secrets.py` 5 pass); CI security scan exists (`security.yml`: CodeQL + Trivy). Captured
+>   in new doc **`docs/GATE-B-PILOT-READINESS.md`** with the fallback runbook + Gate-4 governance template
+>   + Gate-6 operator-acceptance script.
+> - **HONEST CEILING on "6/6":** a true 6/6 on Gate B is NOT achievable by building alone. Gates 4
+>   (named pilot org + signed policy), 5 (named incident responder + accepted CI scan verdict) and 6
+>   (one **non-builder** operator run) each need a real external human and must not be fabricated
+>   (§10 no-self-grading). Buildable outcome reached: **gates 1/2/3 CLEAN (verified) + gate 5 technical
+>   evidence done**; 4 and 6 packaged ready in the doc. Owner actions to close 6/6 are the ⬜ slots there.
+> - **Also this session:** dev deps got pruned mid-session by an accidental `uv sync` (default group) and
+>   `.venv/pyvenv.cfg` was deleted; both restored (`uv sync --group dev --group embed --group asr`; note
+>   `FlagEmbedding`/BGE-M3 was never synced before, so the worker's schema-maintenance scans had been
+>   erroring — now installed). Seeded a synthetic **non-US-English** diverse demo tenant
+>   `11aa0e52-6d53-48d1-8383-f25884c903b0` (14 verticals; dev/demo only, NOT a gate) after the owner
+>   flagged the holdout is 55% US-finance/CFPB and English-only. Surfaced one extraction bug on it:
+>   an EU261 flight-delay case mis-categorised as `delivery_fulfilment`/`repair_redo`.
+> - **CSV-vs-instrumentation correction (owner, 2026-08-26):** the pilot review-time gap was NEVER "a
+>   CSV with rows in it" — the product self-instruments (`review_event` → `/api/review-stats`
+>   count/median/p90; `field_correction` → `/api/review-breakdown`; the eval scorer). `review_event`
+>   count=0/median=null = **nobody has cleared cases**, not an unfilled form; the moment one reviewer
+>   uses it for 20 min the number appears. Deleted **all three** session-capture templates
+>   (`reviewer-session-`, `voice-pair-`, `stranger-session-template.csv`) and the now-empty `evidence/`
+>   dir: a person using the self-instrumenting product never needs a capture form — a **stranger runs the
+>   same product a reviewer does**, so the session instruments itself; the few external observations
+>   (reaction, price question, help, abandonment) are a free-text note. Voice parity is scored by the eval
+>   harness against gold, not hand-counted. Rewrote `docs/EVIDENCE-RUNBOOK.md` accordingly. Rule saved:
+>   [[dont-recapture-instrumented-data]]. **The real Gate-6 blocker is the absence of a reviewer, not a
+>   spreadsheet.** (Independent GOLD labels in `holdout_labels.csv` are separate and still valid.)
+> - **RUN IT:** DB+MinIO via `docker compose -f deploy/docker-compose.yml up -d db minio`; backend
+>   `cd engine && ./.venv/Scripts/python.exe -m uvicorn app.main:app --port 8000` (use `-m uvicorn`, not
+>   the console script, so `uv sync` never locks it); worker from repo root
+>   `./engine/.venv/Scripts/python.exe -m scripts.run_worker default --schedule`; UI `cd ui && pnpm dev`
+>   (:5173). Full suite: `cd engine && REQUIRE_DB=1 ./.venv/Scripts/python.exe -m pytest -q`.
+> - **GIT:** uncommitted changes: `engine/app/store/api.py` (elicit fix), `engine/tests/test_review_usability.py`
+>   (seed fix), 11 black-reformatted files (app+tests), new `docs/GATE-B-PILOT-READINESS.md`. NOT yet committed.
+>
 > ## ✅ 2026-08-26 WINNING-CONDITION v0.2 — OWNER-AUTHORISED PRODUCT CORRECTION
 > - The owner explicitly reconsidered the old 1/6 all-or-nothing contract. It mixed engineering safety,
 >   controlled-pilot entry, GA evidence and market reactions, making safe learning with one design partner

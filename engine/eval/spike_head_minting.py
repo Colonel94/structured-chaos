@@ -27,7 +27,6 @@ from __future__ import annotations
 import asyncio
 import json
 import sys
-from collections import defaultdict
 from pathlib import Path
 
 from _dataset import DATASET
@@ -113,7 +112,9 @@ async def main() -> int:
         if best_sim >= tau:
             members[best].append(fi)
             n = len(members[best])
-            centroids[best] = [(c * (n - 1) + x) / n for c, x in zip(centroids[best], v, strict=True)]
+            centroids[best] = [
+                (c * (n - 1) + x) / n for c, x in zip(centroids[best], v, strict=True)
+            ]
         else:
             centroids.append(list(v))
             members.append([fi])
@@ -132,7 +133,9 @@ async def main() -> int:
     candidates.sort(key=lambda x: -x[1])
     print(f"\n===== MINT CANDIDATES (cluster spans >= {PROMOTE_HEAD_N} distinct cases) =====")
     if not candidates:
-        print("  NONE — no other/description cluster recurs enough to mint. Emergence has no fuel here.")
+        print(
+            "  NONE — no other/description cluster recurs enough to mint. Emergence has no fuel here."
+        )
     for name, ncases, nfacts, ex in candidates:
         print(f"  MINT head '{name}'  ({ncases} distinct cases, {nfacts} facts)")
         for e in ex:

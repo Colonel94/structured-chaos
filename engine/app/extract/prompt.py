@@ -15,7 +15,7 @@ from pathlib import Path
 from .head_nouns import HEAD_NOUNS
 
 # Bump on any change to the prompt text below.
-PROMPT_VERSION = "extract-v20"  # v20 (STRUCTURAL FIX, owner directive): service_fault was defined by CONDUCT, and conduct is present in EVERY complaint, so it bled into every category (lowest recall while posing as a peer). Fix = make service_fault EXPLICITLY RESIDUAL ("mishandled AND no other category's primary harm applies; the conduct itself is the harm"), and add the dominance rule THE BLOCK WINS — access_availability is a checkable STATE (blocked/frozen/closed/declined/withheld) and beats arguable service conduct when both apply; pure refusal with no block -> service_fault. Right for the product too (a block drives SLA/priority regardless of conduct). INTEGRITY: this rule is defensible on its own terms and was fixed BEFORE re-scoring; it will TRADE errors — if accuracy drops it STAYS (reverting on a fallen score = the 7th cheap-path instance). This is the LAST category prompt change: the close-call gold is owner-authored, so further grinding optimises toward label inconsistency (a gold ceiling, not a model ceiling). Category work done-for-now -> Phase 5. v19 was the off-finance synthesis; the two boundaries proved independent — v17 fixed safety (recall 11->15/17) but v18's safety tightening over-corrected into under-firing (back to 10/17), while v18 fixed delivery (service->delivery errors 8->4) that v17 barely touched. v19 keeps v17's recall-preserving SAFETY block (+ a one-line scam/fraud carve-out that killed v17's worst false-positive) AND v18's strict goods-logistics-only DELIVERY block — the best-performing general rule for each. No eval-case-specific examples (no test-set overfitting). No enum change; finance boundaries unchanged. v18 fixed delivery/broke safety; v17 first off-finance probe; v16 tightened service↔record_accuracy; v15 added record_accuracy (owner R6-C).
+PROMPT_VERSION = "extract-v22"  # v22 (owner-approved OVERLAP TIE-BREAKS from the independent-labelling review, 2026-08-27): added decided tie-breaks where two categories overlap (product_fault<->safety_health hazard wins; record_accuracy<->fraud_security by unauthorised-vs-merely-wrong; billing_charge<->misleading_practice by wrong-amount-vs-deception), desired_outcome counts only a remedy requested IN THIS message (not one merely recounted as previously asked), financial_harm has NO minimum (any disputed sum, small fee included — kills the financial_harm/none ambiguity), and sharpened emotion adjacent-boundary rules (calm/concerned/frustrated/angry/distressed) — scale kept at 5 (collapsing would discard the owner+Osman emotion gold). These resolve the exact owner-vs-Osman disagreement clusters (product/safety x12, financial_harm/none x22, adjacent-emotion). v21 (owner GOVERNED-CORE EXPANSION, 2026-08-26): taxonomy widened 1:1 to the labelling workbook's Option Sets — +transaction_processing / fraud_security / privacy_data / misleading_practice (category), +correction / cancellation / restore_access / stop_contact / compensation / investigation (desired_outcome), +privacy_security (severity), +concerned / distressed (emotion). Definitions + boundary rules follow the owner's Option Sets. NB: the "LAST category change" note below (v20) was about GRINDING existing boundaries toward owner-authored close-call gold; THIS is a NEW governed-core decision to EXPAND the enum (CLAUDE.md §4, human-controlled), not boundary-grinding. Deliberate remaps vs v20: record-correction repair_redo->correction; validate/prove a debt information->investigation; unauthorised transaction billing_charge->fraud_security. v20 (STRUCTURAL FIX, owner directive): service_fault was defined by CONDUCT, and conduct is present in EVERY complaint, so it bled into every category (lowest recall while posing as a peer). Fix = make service_fault EXPLICITLY RESIDUAL ("mishandled AND no other category's primary harm applies; the conduct itself is the harm"), and add the dominance rule THE BLOCK WINS — access_availability is a checkable STATE (blocked/frozen/closed/declined/withheld) and beats arguable service conduct when both apply; pure refusal with no block -> service_fault. Right for the product too (a block drives SLA/priority regardless of conduct). INTEGRITY: this rule is defensible on its own terms and was fixed BEFORE re-scoring; it will TRADE errors — if accuracy drops it STAYS (reverting on a fallen score = the 7th cheap-path instance). This is the LAST category prompt change: the close-call gold is owner-authored, so further grinding optimises toward label inconsistency (a gold ceiling, not a model ceiling). Category work done-for-now -> Phase 5. v19 was the off-finance synthesis; the two boundaries proved independent — v17 fixed safety (recall 11->15/17) but v18's safety tightening over-corrected into under-firing (back to 10/17), while v18 fixed delivery (service->delivery errors 8->4) that v17 barely touched. v19 keeps v17's recall-preserving SAFETY block (+ a one-line scam/fraud carve-out that killed v17's worst false-positive) AND v18's strict goods-logistics-only DELIVERY block — the best-performing general rule for each. No eval-case-specific examples (no test-set overfitting). No enum change; finance boundaries unchanged. v18 fixed delivery/broke safety; v17 first off-finance probe; v16 tightened service↔record_accuracy; v15 added record_accuracy (owner R6-C).
 
 _SYSTEM = """You extract a structured complaint case from a customer message. Extract ONLY what the \
 message states or directly implies. NEVER invent facts, names, numbers, or outcomes.
@@ -32,6 +32,12 @@ failed delivery, a safety hazard, a specific person's behaviour), pick THAT, nev
     delivery_fulfilment = a problem with delivery, shipping, or fulfilment of an order;
     billing_charge = a specific CHARGE, fee, amount, or balance is WRONG. The dispute is about THE \
 NUMBER (an overcharge, a fee, a debt wrongly owed, money to be returned);
+    transaction_processing = a payment, transfer, refund, deposit, or withdrawal did NOT process, \
+settle, reverse, or arrive correctly — the money-MOVEMENT itself failed (a transfer stuck, a refund that \
+never landed, a payment that won't go through, a deposit not credited). Distinct from billing_charge: \
+billing_charge is a WRONG amount; transaction_processing is a (possibly correct) amount that did not \
+COMPLETE. "It didn't go through / didn't arrive / won't reverse" -> transaction_processing; "the number \
+is wrong / I was overcharged" -> billing_charge;
     record_accuracy = a RECORD the company holds or publishes ABOUT THE CUSTOMER is inaccurate, \
 unverified, improperly disclosed, or improperly dated — a credit file entry, a tradeline, a reported \
 balance, a late marker, an account status. The ask is VERIFY / CORRECT / DELETE, not money. ("this is \
@@ -44,11 +50,33 @@ closed / declined / withheld, pick access_availability EVEN IF the company also 
 pure refusal with NO actual block is service_fault;
     staff_conduct = the behaviour/conduct of a specific person or agent is the complaint;
     safety_health = a genuine safety or health hazard;
+    fraud_security = fraud, a scam, account takeover, unauthorized activity, or a security compromise — \
+a charge or transaction the customer did NOT authorise, a scammer, a hacked/taken-over account, \
+phishing, or stolen credentials. This is its OWN class: an UNAUTHORISED transaction is fraud_security, \
+NOT billing_charge (billing_charge is a dispute over a KNOWN, authorised charge's amount);
+    privacy_data = the collection, disclosure, retention, or EXPOSURE of personal/sensitive data — data \
+shared or leaked without consent, a breach, or improper retention. Distinct from record_accuracy: \
+record_accuracy = the record is WRONG; privacy_data = the data was improperly collected, disclosed, or \
+exposed (it may be accurate, but should not have been shared);
+    misleading_practice = the customer was materially MISLED by advertising, pricing, terms, promises, \
+representations, or a bait-and-switch — deceived about what they would get. Distinct from billing_charge \
+(a wrong number) and service_fault (poor handling): here the core grievance is the DECEPTION itself;
     other = a real complaint that genuinely fits none of the above.
   Pick the least-bad fit. Use "UNCLEAR" ONLY when the message is too sparse to tell what kind of \
 complaint it is at all — a true last resort, NOT because the wording is unusual for the category.
-  FRAUD SUB-RULE: an unauthorised transaction is a wrong charge -> billing_charge, UNLESS the \
-customer's own framing is about the company's CONDUCT rather than the money (then service_fault).
+  FRAUD SUB-RULE: an unauthorised transaction, scam, account takeover, or security compromise -> \
+fraud_security (its OWN class). billing_charge is only for a KNOWN, authorised charge whose AMOUNT is \
+disputed; transaction_processing is a legitimate payment that FAILED to complete.
+  OVERLAP TIE-BREAKS (decided rules — apply in this order when two categories both seem to fit):
+   1. product_fault vs safety_health: if a product/vehicle/item defect creates a PHYSICAL-SAFETY hazard \
+in use, safety_health WINS (see the PRODUCT vs SAFETY_HEALTH rule below); a defect with no hazard is \
+product_fault.
+   2. record_accuracy vs fraud_security: if the customer alleges the entry, charge, or account is \
+UNAUTHORISED, not theirs, identity misuse, or someone else's doing -> fraud_security; if they allege it \
+is merely WRONG / inaccurate / unverified / wrongly-dated (but not fraudulent) -> record_accuracy.
+   3. billing_charge vs misleading_practice: if the dispute is that the AMOUNT or fee is wrong -> \
+billing_charge; if the grievance is that they were DECEIVED (misleading terms, hidden conditions, \
+bait-and-switch) into the charge -> misleading_practice.
   TIEBREAK (classify by the PRIMARY harm; service_fault is the RESIDUAL, chosen only when nothing else \
 fits): a currently blocked / frozen / closed / declined / withheld account or funds -> \
 access_availability (a checkable STATE beats arguable conduct); money back -> billing_charge; fix / \
@@ -65,7 +93,7 @@ PHYSICAL-SAFETY hazard in use — loss of control, cannot brake / steer / accele
 power in traffic, fire / electrical / gas / smoke, allergen, injury or crash risk — pick safety_health, \
 NOT product_fault, even though a product is involved. product_fault is a defect or poor quality with NO \
 safety hazard (it simply doesn't work well, is worn, or underperforms). A financial scam, fraud, or \
-money loss is NEVER safety_health (that is billing_charge or service_fault).
+money loss is NEVER safety_health (that is fraud_security, or billing_charge for a disputed amount).
   DELIVERY vs SERVICE (apply carefully): delivery_fulfilment is STRICTLY the shipment / logistics of \
 goods failing as the standalone grievance — a parcel that never arrived, arrived late, arrived damaged, \
 or was the wrong item, with no larger complaint around it. It is NOT a catch-all for anything involving \
@@ -77,31 +105,58 @@ service_fault, NOT delivery_fulfilment, EVEN IF an order, booking, or delivery a
 - desired_outcome: what the customer wants done — but ONLY if they explicitly ask for it. Decide \
 first: did they actually state a request or instruction (e.g. "I want a refund", "please reverse \
 this", "I am requesting...")? If the message only describes or disputes the problem, or vents, without \
-asking for a specific remedy, return null. Do NOT infer the remedy from the KIND of problem: a \
+asking for a specific remedy, return null. ONLY a remedy the customer is requesting IN THIS message \
+counts: if they merely RECOUNT a remedy they already asked for previously ("I asked for a refund last \
+week") without restating it as their ask now, that is NOT a stated outcome — return null unless they are \
+making the request again here. Do NOT infer the remedy from the KIND of problem: a \
 grievance about money is not, by itself, a request for a refund; filing or writing a complaint is not \
 a request for escalation. Only if a remedy IS stated, map it to one value:
-    refund = MONEY returned or reimbursed to the customer (a payment back); replacement = a new/remade \
-item; repair_redo = redo or fix the work, OR CORRECT A RECORD — fix, update, remove, or delete an \
-inaccurate entry, balance, or report item (e.g. "remove this from my credit report", "correct my \
-balance"); this is NOT a refund; escalation = warranty honoured, a manager, or formal escalation; \
-information = an answer, a status, or VALIDATION/PROOF/documentation of something (e.g. "validate this \
-debt", "verify this account"); acknowledgement = only an apology/recognition, nothing more; other = a \
-stated request that fits none of these.
-  Key distinction (the model tends to over-pick "refund"): a request to FIX, UPDATE, or DELETE an \
-inaccurate record/report is repair_redo, and a request to VALIDATE or PROVE a debt is information — \
-neither is a refund unless the customer ALSO asks for money back. If they state alternatives, choose \
-the one they state FIRST. The absence of a stated remedy is null, never "acknowledgement", \
-"escalation", or "other".
-- emotion_signal: calm | frustrated | angry, from the tone.
-- severity_signal: pick the SINGLE most serious that applies.
+    refund = MONEY returned or reimbursed already paid/charged; replacement = a new or remade item; \
+repair_redo = repair the issue or REDO the failed work/service (NOT correcting a record); \
+acknowledgement = only an apology, ownership, or formal acknowledgement, nothing more; information = \
+explain, clarify, verify status, or answer a question (NOT investigate — see investigation); escalation \
+= escalate to management, a regulator, a specialist, or disciplinary action; correction = CORRECT \
+inaccurate records, balances, reports, or administrative data — fix, update, remove, or delete an \
+inaccurate entry (e.g. "remove this from my credit report", "correct my balance"); cancellation = \
+cancel an account, order, contract, transaction, booking, or subscription; restore_access = restore \
+access to an account, funds, service, or blocked functionality (unlock, reopen, reinstate); \
+stop_contact = stop calls, messages, collection attempts, or other unwanted contact; compensation = pay \
+for consequential loss, inconvenience, or harm BEYOND a simple refund; investigation = INVESTIGATE or \
+VALIDATE the complaint, debt, transaction, or suspected wrongdoing (e.g. "validate this debt", "look \
+into this"); other = a stated request that fits none of these.
+  Key distinctions (the model tends to over-pick "refund"): FIX / UPDATE / DELETE an inaccurate record \
+-> correction; VALIDATE or INVESTIGATE a debt or claim -> investigation; UNLOCK / REOPEN a blocked \
+account -> restore_access; CANCEL a subscription or order -> cancellation; STOP contacting me -> \
+stop_contact; pay me for the loss or damage caused -> compensation. None of these is a refund unless \
+the customer ALSO asks for money back. If they state alternatives, choose the one they state FIRST. The \
+absence of a stated remedy is null, never a guessed value.
+- emotion_signal: the WRITER'S TONE, labelled INDEPENDENTLY from severity — a calm message can carry a \
+severe issue. calm (factual, neutral, restrained) | concerned (worried, uneasy, questioning, without \
+strong anger) | frustrated (clear dissatisfaction, exasperation, repeated effort, loss of patience) | \
+angry (strong blame, hostility, outrage, insults, demands) | distressed (fear, panic, shock, acute \
+worry, or emotional strain is prominent).
+  EMOTION BOUNDARIES (the adjacent tones are the hard calls — decide by these): calm vs concerned — calm \
+is neutral/factual with NO worry; the moment unease or worry shows, it is concerned. concerned vs \
+frustrated — concerned is worry about an outcome; frustrated adds DISSATISFACTION or exasperation \
+(often at repeated effort or the company's handling). frustrated vs angry — angry adds HOSTILITY, blame, \
+insults, or outrage aimed at the company. angry vs distressed — angry is hostility directed OUTWARD; \
+distressed is fear, panic, or emotional strain felt INWARD (even with no blame). Pick the single \
+dominant tone.
+- severity_signal: the SINGLE main severity DRIVER (do not upgrade normal inconvenience into severe \
+harm; judge the harm, not how angry the writer sounds).
     safety_health = a genuine safety/health hazard (allergen, injury risk, food poisoning, gas/\
-electrical/fire hazard);
-    vulnerable_party = a child, elderly, disabled, or otherwise vulnerable person is at risk;
+electrical/fire hazard, unsafe operation);
+    vulnerable_party = the severity is materially driven by a child, elderly, disabled, or otherwise \
+vulnerable person explicitly present;
     financial_harm = MONETARY harm of ANY kind — an unauthorized/disputed charge, an overcharge or \
 fee, money taken/withheld/frozen, a debt wrongly owed or reported, damaged credit, or a denied/\
-withheld refund or payment (not only a "charge");
-    none = no safety, vulnerability, or monetary harm (e.g. a late/damaged item with no hazard, or a \
-plain information request).
+withheld refund or payment (not only a "charge"). There is NO minimum: ANY disputed or wrongful \
+monetary amount is financial_harm — a small fee counts as much as a large one; never label "none" on a \
+monetary grievance because the sum is small;
+    privacy_security = identity, account security, sensitive information, or privacy EXPOSURE is the \
+main driver (a data breach, account-takeover risk, leaked or improperly disclosed personal data);
+    none = no safety, vulnerability, monetary, or privacy/security driver beyond normal service \
+inconvenience (e.g. a late/damaged item with no hazard, or a plain information request).
 - anchor_value: any explicit key the customer stated (order #, job #, booking/tracking ref), else null.
 - emergent_attributes: specific STRUCTURED facts worth putting in a table, each as \
 {"head","qualifier","value"}. A fact is ONE concrete value — a number, amount, date, name, status, or \

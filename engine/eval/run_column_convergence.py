@@ -97,7 +97,9 @@ async def main() -> int:
                 qual_cases[str(a.get("name") or f"{q}_{head}")].add(i)
 
     embedder = BGEEmbedding()
-    ev_vecs = {k: list(v) for k, v in zip(range(len(ev)), await embedder.embed([t for _i, t in ev]))}
+    ev_vecs = {
+        k: list(v) for k, v in zip(range(len(ev)), await embedder.embed([t for _i, t in ev]))
+    }
 
     seed_new: list[int] = []
     earned_new: list[int] = []
@@ -131,13 +133,23 @@ async def main() -> int:
         prev_earned = earned
 
     total_seed = len(seen_seed)
-    print(f"\nτ: mint={MINT_TAU} dedup=[{ADMIT_TAU},{MERGE_TAU}]  thresholds: head N={PROMOTE_HEAD_N} qual M={PROMOTE_QUALIFIER_M}")
-    print("\n-- SEED-head columns (DIAGNOSTIC — bounded by the 31-vocab, declines by construction) --")
+    print(
+        f"\nτ: mint={MINT_TAU} dedup=[{ADMIT_TAU},{MERGE_TAU}]  thresholds: head N={PROMOTE_HEAD_N} qual M={PROMOTE_QUALIFIER_M}"
+    )
+    print(
+        "\n-- SEED-head columns (DIAGNOSTIC — bounded by the 31-vocab, declines by construction) --"
+    )
     print(f"  new-seed-head per {_BUCKET} : {seed_new}   total seed heads used: {total_seed}")
     print("\n-- EARNED columns = minted + promoted (THE honest emergence signal) --")
     print(f"  new-earned per {_BUCKET}    : {earned_new}   total earned columns: {prev_earned}")
-    print(f"  total distinct COLUMNS     : {total_seed + prev_earned}  (seed {total_seed} + earned {prev_earned})")
-    bend = "PLATEAUS/declines → converges by emergence" if (earned_new[-1] <= max(earned_new[:1] or [0])) else "still rising → needs more data"
+    print(
+        f"  total distinct COLUMNS     : {total_seed + prev_earned}  (seed {total_seed} + earned {prev_earned})"
+    )
+    bend = (
+        "PLATEAUS/declines → converges by emergence"
+        if (earned_new[-1] <= max(earned_new[:1] or [0]))
+        else "still rising → needs more data"
+    )
     print(f"  earned-curve read          : {bend}")
     print(
         "\n  NOTE (honest): minted count is PRE-naming/PII (an UPPER bound on minted columns — PII would"
