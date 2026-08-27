@@ -49,7 +49,8 @@ live-testing (voice/image/text) → turn each failing case into a prompt/policy 
 
 ## 0. Current state & next actions  ← read this first every session; keep it current
 
-> ## 🧭 SESSION HANDOFF (2026-08-27, post-/clear START HERE — detail in the dated blocks below)
+> ## 🧭 SESSION HANDOFF (updated 2026-08-28, post-/clear START HERE — detail in the dated blocks below)
+> *State snapshot only — next steps intentionally omitted (owner will provide them).*
 >
 > **PORTAL CSP BUG FIXED + live submission site running (2026-08-27, commit `86bcd9b`).** Running the
 > public submission portal (cloudflared tunnel → a portal instance on `127.0.0.1:8010`) exposed a real
@@ -64,7 +65,7 @@ live-testing (voice/image/text) → turn each failing case into a prompt/policy 
 > (demo key `ek_Si0YzMkSan5NIHZQMVK0qisf` = "Structured Chaos Demo"). Note: trycloudflare URLs are
 > ephemeral (rotate on cloudflared restart); the :8010 instance + the shared worker must stay up.
 >
-> **THE ONE NEXT ACTION — the SECOND independent labeller landed (Catleen), and it FLIPPED the story.**
+> **KEY FINDING — the SECOND independent labeller (Catleen) FLIPPED the story.**
 > Two independent domain experts now agree with each OTHER far more than either agrees with the owner →
 > the real human ceiling is much higher than we thought, and the model is genuinely BELOW it (the earlier
 > "at the ceiling" comfort was an artifact of the owner's noisier pre-v22 labels).
@@ -101,8 +102,7 @@ live-testing (voice/image/text) → turn each failing case into a prompt/policy 
 > the independent-ceiling evidence (two domain experts, 92/91/94/83) and the honest model-gap measurement
 > (consensus 77/81/74/75). Extractor accuracy is a GA/quality-evidence item, NOT an engineering-readiness
 > ship gate (CLAUDE.md §7 — that gate is the trust spine, which is green). So readiness is where it was; we
-> now have a sharper, independently-grounded picture of the one real quality gap (severity) and a scoped
-> next attempt for it.
+> now have a sharper, independently-grounded picture of the one real quality gap (severity).
 >
 > **WHERE WE ARE.** Branch `fix/elicit-qualifier-gate-b-readiness` — PR #2 OPEN
 > (https://github.com/Colonel94/structured-chaos/pull/2). Extractor at **extract-v22**. THREE label sets
@@ -119,13 +119,29 @@ live-testing (voice/image/text) → turn each failing case into a prompt/policy 
 > 64% was owner-specific noise. The binding lever has FLIPPED from "fix the taxonomy" to "fix the
 > extractor" (the task is now proven reliably-labelable). Do NOT collapse gold.
 >
+> **GIT & CI STATE (2026-08-28).** Branch `fix/elicit-qualifier-gate-b-readiness` @ **`27e4694`**, all
+> pushed, PR #2 OPEN (`main` is NOT branch-protected → no required checks; PR reports MERGEABLE). Hosted CI
+> is GREEN on the branch — **engine, ui, CodeQL (py/js), repository-scan, dependency-review all pass**; the
+> only non-green is **`eval`/tuning-eval, which is QUEUED BY DESIGN** (`runs-on: [self-hosted, gpu]` — it
+> re-extracts ~216 cases on local Ollama; never GitHub-hosted; waits for the owner's GPU runner, non-blocking).
+> This session also landed, beyond the eval/calibration arc: the consensus-loader regression test
+> (`tests/test_fit_calibration.py`, 5 tests incl. a 721-row golden that reproduces calib-v3); three REAL
+> CodeQL security fixes on the branch (`de77658` — ReDoS email regex in `review_auth.py`, reflective XSS in
+> the portal, client-side SSRF guard in `ui/src/api.ts`, all verified); and one dismissed CodeQL **false
+> positive** (alert #4, clear-text-logging on `fit_calibration.py:161` — it logs a field-name enum + a
+> float, no secret). Portal CSP fix `86bcd9b` (see top block).
+>
 > **RUN IT.** DB+MinIO: `docker compose -f deploy/docker-compose.yml up -d db minio`. Backend:
 > `cd engine && ./.venv/Scripts/python.exe -m uvicorn app.main:app --port 8000` (use `-m uvicorn`, NOT the
 > console script — else `uv sync` can't rewrite the locked exe). Worker (from REPO ROOT):
 > `./engine/.venv/Scripts/python.exe -m scripts.run_worker default --schedule`. UI: `cd ui && pnpm dev`
-> (:5173). Full suite: `cd engine && REQUIRE_DB=1 ./.venv/Scripts/python.exe -m pytest -q` → **283 pass /
-> 2 skip**. Eval: `extract_holdout.py` (re-extract 200, ~60–80 min, resumable/observable),
-> `export_holdout_workbook.py [--qa] [--from <xlsx>]`, `score_holdout.py` (HARD-FAILS partial coverage).
+> (:5173). **Public portal (submission site):** a portal instance runs on `127.0.0.1:8010`
+> (`PORTAL_ENABLED=true PORTAL_SECRET=<gen> ./.venv/Scripts/python.exe -m uvicorn app.main:app --host
+> 127.0.0.1 --port 8010`) behind `scratchpad/tools/cloudflared.exe tunnel --url http://127.0.0.1:8010`;
+> submit URL = `https://<tunnel>/p/s/<embed_key>`. Full suite: `cd engine && REQUIRE_DB=1
+> ./.venv/Scripts/python.exe -m pytest -q` → **295 pass / 2 skip**. Eval: `extract_holdout.py` (re-extract
+> 200, ~60–80 min, resumable/observable), `export_holdout_workbook.py [--qa] [--from <xlsx>]`,
+> `score_holdout.py` (HARD-FAILS partial coverage; `--consensus a=.. b=..` for the two-independent number).
 >
 > **GOTCHAS.** Prefer `./.venv/Scripts/python.exe` over `uv run` for one-offs — a bare `uv run`/`uv sync`
 > can PRUNE the `embed`(FlagEmbedding/BGE-M3)+`asr`(faster-whisper) groups; restore with
@@ -135,11 +151,12 @@ live-testing (voice/image/text) → turn each failing case into a prompt/policy 
 > all→review — honest, the ≥98% gate is unreachable at the extractor ceiling; ordering-only, not safety).
 > qwen3:14b ≈ 15–25 s/case on the 4070. Openpyxl reads the labelling workbook.
 >
-> **OWNER-DECISION FOLLOW-UPS (logged, not auto-actioned):** (1) ~~hard-collapse emotion 5→3~~ — **now
-> data-answered: KEEP the 5-point scale.** Two independents agree 83% on it under v22; the old 64% was
-> owner-specific noise, not scale-inherent. Collapsing would discard a reliably-labelable signal. (2)
-> **owner gold is the outlier** — consider owner re-labelling emotion/severity under v22, or treating
-> catleen+osman as the reference ceiling and owner gold as DEV-only pre-v22; (3) ~~calibration re-fit~~ —
+> **LOGGED DECISIONS & OPEN QUESTIONS (record only — NOT a next-step list; owner will set next steps):**
+> (1) ~~hard-collapse emotion 5→3~~ — **DECIDED, data-answered: KEEP the 5-point scale.** Two independents
+> agree 83% on it under v22; the old 64% was owner-specific noise, not scale-inherent. Collapsing would
+> discard a reliably-labelable signal. (2) **owner gold is the OUTLIER** (differs from the two-independent
+> consensus 12/8/12/30%) — open question whether owner gold gets re-labelled under v22 or is treated as
+> DEV-only pre-v22 with catleen+osman as the reference ceiling; (3) ~~calibration re-fit~~ —
 > **DONE: refit on the independent 2-expert consensus (calib-v3), `eval/fit_calibration.py` now defaults to
 > that source (`--spike` = legacy self-authored gold); confidence is a real reliability estimate**; (4) GA
 > representative set = Osman + Catleen are the start; synthetic 134 stay DEV-only;
