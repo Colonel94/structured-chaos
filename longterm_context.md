@@ -77,14 +77,12 @@ live-testing (voice/image/text) → turn each failing case into a prompt/policy 
 > the outlier). Root cause of the over-shoot: the "implicit money" list was too broad (a refund merely
 > SOUGHT != financial_harm per the human guideline — money must be wrongly taken/withheld/owed/lost) AND
 > the precedence order (safety/privacy/vulnerable > financial) was drowned out by the loud money list.
-> **v24 hypothesis (OWNER DECISION — another ~60-80 min $0 loop, do NOT auto-run):** keep "judge severity
-> independently of category," but (a) NARROW financial_harm back to money actually taken/withheld/owed/lost
-> (drop "a refund/compensation is being sought" and "paid for a service" as sole triggers), and (b) HARD-
-> enforce safety/privacy/vulnerable OVER financial when co-present. Caveat (§10): this is now iteration 2 of
-> prompt-tuning against the SAME 200 set — one more targeted try is fair, but do NOT enter a grind loop
-> fitting the eval set; if v24 also fails to beat v22 on consensus, the honest read is the LOCAL extractor
-> (qwen3:14b) is at its severity ceiling and the lever is a stronger extractor, which is owner-gated on $0
-> ([[zero-budget-never-steer-to-cost]]) — not more prompt variants.
+> **v24 hypothesis — DECLINED by owner (2026-08-27): STOP the tuning grind, do NOT run it.** (Recorded for
+> context only: it would have narrowed financial_harm to money actually taken/withheld/owed/lost + hard-
+> enforced safety/privacy/vulnerable > financial.) The owner's call: two independent expert reviews are the
+> evidence; iterating prompt variants against the same 200-case gold is fitting label noise, not raising
+> real accuracy (§10). Extractor stays at v22. Any future extractor-quality work = a stronger extractor
+> (owner-gated on $0), not more v-bumps. [[stop-extractor-tuning-grind-two-independent-reviews]]
 >
 > **READINESS IMPACT: none from v23 (reverted); the extractor is unchanged at v22.** What DID advance:
 > the independent-ceiling evidence (two domain experts, 92/91/94/83) and the honest model-gap measurement
@@ -128,9 +126,14 @@ live-testing (voice/image/text) → turn each failing case into a prompt/policy 
 > **owner gold is the outlier** — consider owner re-labelling emotion/severity under v22, or treating
 > catleen+osman as the reference ceiling and owner gold as DEV-only pre-v22; (3) calibration re-fit once
 > labels are stable; (4) GA representative set = Osman + Catleen are the start; synthetic 134 stay DEV-only;
-> (5) ~~v23 severity fix~~ — **DONE: tested → net regression → REVERTED (see RESULT block above).** Open:
-> whether to spend one more $0 loop on the **v24** narrow-financial_harm + hard-precedence hypothesis, or
-> accept the local extractor's severity ceiling and treat "stronger extractor" as the (owner-gated) lever.
+> (5) ~~v23 severity fix~~ — **DONE: tested → net regression → REVERTED (see RESULT block above).**
+> **DECIDED (owner directive, 2026-08-27): STOP the extractor prompt-tuning grind. Extractor FROZEN at
+> extract-v22. v24 DECLINED.** Two independent domain-expert reviews (Osman 20y + Catleen 17y) ARE the
+> quality evidence we set out to get; the model gap is measured and honest; grinding more prompt variants
+> against the same 200-case gold optimises toward label inconsistency, not real accuracy (§10). Do NOT
+> propose another tuning loop. If extractor quality is ever revisited it is via a STRONGER extractor
+> (owner-gated on $0, [[zero-budget-never-steer-to-cost]]), never more v-bumps. See
+> [[stop-extractor-tuning-grind-two-independent-reviews]].
 >
 > ## ✅ 2026-08-27 SECOND INDEPENDENT LABELLER (Catleen, Director of Customer Care, 17y) — the ceiling FLIP
 > - **The clean measure §0 was waiting for landed and it CORRECTS the prior session's comfortable read**
