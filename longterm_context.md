@@ -49,6 +49,35 @@ live-testing (voice/image/text) → turn each failing case into a prompt/policy 
 
 ## 0. Current state & next actions  ← read this first every session; keep it current
 
+> ## ✅ 2026-08-27 FIRST INDEPENDENT LABELS (Osman, CR Director, 20y) — the human ceiling
+> - **The binding lever landed.** Osman — independent (neither owner nor me), domain expert — labelled all
+>   200 cases blind. `holdout_labels_osman.csv`. Gives the two numbers that were always missing:
+>   **model vs independent** (real accuracy) and **owner vs independent** (the human ceiling).
+> - **Scores (n=200; agreement, still directional):**
+>   | field | model-vs-osman | model-vs-owner | **osman-vs-owner (HUMAN CEILING)** | model as % of ceiling |
+>   |---|---|---|---|---|
+>   | category | 74% | 72% | **86%** | 86% |
+>   | desired_outcome | 78% | 78% | **90%** | 87% |
+>   | severity | 72% | 62% | **86%** | 84% |
+>   | emotion | 62% | 48% | **64%** | **97%** |
+>   | all-fields | 29% | 16% | **44%** | — |
+> - **The reframe (do NOT read the raw % as model weakness):** two 20-year experts agree only 86/90/86/**64**%.
+>   The model sits at 84-97% OF THAT CEILING. **Emotion 62% is not a model failure — humans agree only 64% on
+>   the 5-point scale; the model is AT the ceiling.** The bottleneck is TAXONOMY UNDER-SPECIFICATION, not the
+>   extractor (the §10 "is the ENUM wrong, not the model?" test — answered on independent data).
+> - **Osman's gaps are DATA-CONFIRMED as the exact ceiling-limiters** (owner-vs-osman confusion): category
+>   28 disagreements led by **product_fault/safety_health ×12**, billing/record ×5, billing/misleading ×2
+>   (his named tie-break gaps); severity 29 disagreements are **financial_harm/none ×22** (his "is a small
+>   fee *material*?" gap); emotion 71 disagreements are ALL adjacent-scale (concerned/distressed, angry/
+>   frustrated…) → the 5-point scale is too fine to label reliably. repair_redo is NOT overloaded (only 4
+>   human disagreements touch it — the `correction` split worked).
+> - **NEXT (owner decisions, logged — do NOT self-resolve/re-label to inflate agreement, §10):** owner rules
+>   on the tie-breaks Osman named (product-vs-safety, record-vs-fraud, billing-vs-misleading, "material"
+>   financial-harm threshold, whether a previously-stated request counts as a desired_outcome), and whether
+>   the 5-point emotion scale collapses to 3. Once decided, propagate to Option Sets + INSTRUCTIONS + the
+>   extraction prompt TOGETHER, then a FRESH labelling round measures the lift. This is the real path to a
+>   higher ceiling — a better-defined task, not a cleverer model.
+>
 > ## ✅ 2026-08-27 TAXONOMY v0.2 EXPANDED + FULL 200-CASE SCORE (extract-v21)
 > - **Owner widened the governed taxonomy** (workbook `holdout_labels.xlsx` Option Sets): category 10→14
 >   (+transaction_processing, fraud_security, privacy_data, misleading_practice), desired_outcome 7→13
