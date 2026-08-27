@@ -1,16 +1,20 @@
-"""Export the labelling workbook's Cases sheet to the CSV the scorer consumes, and run QA on it.
+"""Export a labelling workbook's Cases sheet to the CSV the scorer consumes, and run QA on it.
 
-`holdout_labels.xlsx` is the human source of truth (Cases + Option Sets + QA Summary, dropdown-validated).
-`score_holdout.py` reads `holdout_labels_<name>.csv`. This regenerates that CSV from the workbook so the
-two never drift. Re-run after editing the workbook.
+`holdout_labels.xlsx` is the owner source of truth (Cases + Option Sets + QA Summary, dropdown-validated).
+`score_holdout.py` reads `holdout_labels_<name>.csv`. This regenerates that CSV from a workbook so the two
+never drift. Re-run after editing the workbook.
 
-    cd engine && uv run --group dev python eval/export_holdout_workbook.py            # -> holdout_labels_owner.csv
-    cd engine && uv run --group dev python eval/export_holdout_workbook.py alice      # -> holdout_labels_alice.csv
-    cd engine && uv run --group dev python eval/export_holdout_workbook.py --qa        # integrity + full distributions
+    cd engine && uv run --group dev python eval/export_holdout_workbook.py                 # -> holdout_labels_owner.csv
+    cd engine && uv run --group dev python eval/export_holdout_workbook.py alice --from eval/fixtures/holdout_labels_alice_returned.xlsx
+                                                                                            # -> holdout_labels_alice.csv (an independent labeller's returned file)
+    cd engine && uv run --group dev python eval/export_holdout_workbook.py --qa             # integrity + full distributions of the default workbook
+    cd engine && uv run --group dev python eval/export_holdout_workbook.py --qa --from <path>
 
-The --qa report covers what the workbook's QA Summary sheet omits (owner review 2026-08-26): severity and
-emotion distributions, missing-label counts per field, duplicate ids / narratives, source composition, and
-an out-of-vocabulary check of every gold cell against the Option Sets sheet.
+`--from <path>` points at any returned workbook (same Cases/Option Sets layout) — this is how an
+INDEPENDENT labeller's file becomes `holdout_labels_<name>.csv` (column 2 of the four numbers) without
+overwriting the owner's. The --qa report covers what the workbook's QA Summary omits (owner review
+2026-08-26): severity/emotion distributions, missing-label counts per field, duplicate ids/narratives,
+source composition, and an out-of-vocabulary check of every gold cell against the Option Sets sheet.
 """
 
 from __future__ import annotations
@@ -32,16 +36,16 @@ _GOLD = (
 )
 
 
-def _cases() -> tuple[list[str], list[tuple]]:
-    wb = openpyxl.load_workbook(_WORKBOOK, data_only=True)
+def _cases(workbook: Path) -> tuple[list[str], list[tuple]]:
+    wb = openpyxl.load_workbook(workbook, data_only=True)
     rows = list(wb["Cases"].iter_rows(values_only=True))
     header = [(h or "").strip() for h in rows[0]]
     data = [r for r in rows[1:] if r is not None and r[0] not in (None, "")]
     return header, data
 
 
-def _option_sets() -> dict[str, set[str]]:
-    wb = openpyxl.load_workbook(_WORKBOOK, data_only=True)
+def _option_sets(workbook: Path) -> dict[str, set[str]]:
+    wb = openpyxl.load_workbook(workbook, data_only=True)
     allowed: dict[str, set[str]] = collections.defaultdict(set)
     for r in list(wb["Option Sets"].iter_rows(values_only=True))[1:]:
         if r and r[0] and r[1]:
@@ -49,22 +53,22 @@ def _option_sets() -> dict[str, set[str]]:
     return allowed
 
 
-def export(name: str) -> None:
-    header, data = _cases()
+def export(name: str, workbook: Path) -> None:
+    header, data = _cases(workbook)
     out = _DIR / f"holdout_labels_{name}.csv"
     with out.open("w", encoding="utf-8", newline="") as f:
         w = csv.writer(f)
         w.writerow(header)
         for r in data:
             w.writerow(["" if c is None else str(c) for c in r])
-    print(f"wrote {out} — {len(data)} rows + header")
+    print(f"wrote {out} — {len(data)} rows + header  (from {workbook.name})")
 
 
-def qa() -> int:
-    header, data = _cases()
+def qa(workbook: Path) -> int:
+    header, data = _cases(workbook)
     idx = {h: i for i, h in enumerate(header)}
-    allowed = _option_sets()
-    print(f"QA — {len(data)} cases\n" + "=" * 60)
+    allowed = _option_sets(workbook)
+    print(f"QA — {workbook.name} — {len(data)} cases\n" + "=" * 60)
 
     # source composition
     src: collections.Counter[str] = collections.Counter()
@@ -117,11 +121,29 @@ def qa() -> int:
     return 1 if problems else 0
 
 
+def _parse(argv: list[str]) -> tuple[str, Path, bool]:
+    """(name, workbook, do_qa). `--from <path>` overrides the default workbook; the first bare token is
+    the label-source name (the CSV becomes holdout_labels_<name>.csv)."""
+    name, workbook, do_qa = "owner", _WORKBOOK, False
+    it = iter(argv)
+    for a in it:
+        if a == "--qa":
+            do_qa = True
+        elif a == "--from":
+            workbook = Path(next(it))
+        elif not a.startswith("-"):
+            name = a
+    return name, workbook, do_qa
+
+
 def main() -> int:
-    args = sys.argv[1:]
-    if args and args[0] == "--qa":
-        return qa()
-    export(args[0] if args else "owner")
+    name, workbook, do_qa = _parse(sys.argv[1:])
+    if not workbook.exists():
+        print(f"no workbook at {workbook}")
+        return 1
+    if do_qa:
+        return qa(workbook)
+    export(name, workbook)
     return 0
 
 
