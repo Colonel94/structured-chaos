@@ -1,1 +1,13 @@
-[]
+[
+  {
+    "delta": "When a complaint involves delays or failures in delivering a product or fulfilling an order (e.g., late delivery, missing items), label it as delivery_fulfilment. Label it as service_fault only when the issue stems from poor customer interaction, support, or handling after delivery has occurred.",
+    "title": "Clarify delivery_fulfilment vs service_fault boundaries",
+    "rationale": "Reviewers repeatedly re-labelled late-delivery complaints as service_fault; anchoring on the timing/nature of the problem reduces that confusion without over-firing.",
+    "based_on": [
+      "category: delivery_fulfilment -> service_fault (x2)",
+      "feedback [inaccurate]: kept reading late-delivery complaints as a service-handling issue - tighten the delivery vs service boundary"
+    ],
+    "added_at": "20260824-131802",
+    "active": true
+  }
+]
